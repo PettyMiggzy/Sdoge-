@@ -17,18 +17,19 @@ python3 -m http.server 8811
 - `index.html` — single-page site (hero, highlights, about, community, tokenomics/treasury/contract, roadmap, how-to-buy, FAQ)
 - `assets/css/style.css` — all styling
 - `assets/js/main.js` — nav toggle, FAQ accordion, copy-address button
-- `assets/img/` — logo, hero/community/CTA artwork, social share image
-  (`hero-space.jpg`, `moon-buggy.jpg`, and `signpost-pool.jpg` were
-  AI-generated via the Venice API using the existing art as a style
-  reference, to match the character design consistently; `logo.jpg` and
-  `social-share.jpg` were supplied directly)
+- `assets/img/` — logo, hero/community/CTA artwork, social share image,
+  card/chart icons. `hero-space.jpg`, `moon-buggy.jpg`, `signpost-pool.jpg`,
+  and the four `icon-*.jpg` badges were AI-generated via the Venice API
+  using the existing art as a style reference, to match the character
+  design consistently; `logo.jpg` and `social-share.jpg` were supplied
+  directly. No stock emoji are used anywhere on the page.
 
 ## Still placeholder — fill in before launch
 
 - **Contract address** (`#contractAddress` in `index.html`) — currently "TBA",
   wired to refuse copying until replaced with the real deployed address.
-- **Social links** (footer + community section) — X/Discord point at `#`;
-  Telegram is live (`t.me/stabledoge1`).
+- **Social links** (footer + community section) — Discord points at `#`;
+  X (`x.com/stabledoge1`) and Telegram (`t.me/stabledoge1`) are live.
 - **Chart embed** (`#chart`, inside How to Buy) — placeholder panel; drop in
   a Dexscreener/Argus iframe once the pool is live.
 - **Treasury panel** (`#tokenomics`) — wired with empty (`—`) states; needs a
