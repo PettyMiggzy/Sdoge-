@@ -14,22 +14,24 @@ python3 -m http.server 8811
 
 ## Structure
 
-- `index.html` — single-page site (hero, tokenomics, treasury, how-to-buy, chart, FAQ)
+- `index.html` — single-page site (hero, highlights, about, community, tokenomics/treasury/contract, roadmap, how-to-buy, FAQ)
 - `assets/css/style.css` — all styling
 - `assets/js/main.js` — nav toggle, FAQ accordion, copy-address button
-- `assets/img/` — logo + hero banner artwork
+- `assets/img/` — logo, hero/community artwork, social share image
 
 ## Still placeholder — fill in before launch
 
 - **Contract address** (`#contractAddress` in `index.html`) — currently "TBA",
   wired to refuse copying until replaced with the real deployed address.
-- **Social links** (footer) — X/Telegram currently point at `#`.
-- **Chart embed** (`#chart`) — placeholder panel; drop in a Dexscreener/Argus
-  iframe once the pool is live.
-- **Treasury dashboard** (`#treasury`) — UI is wired with empty (`—`) states;
-  needs a data source (contract reads) once the Treasury contract is deployed.
-- **Wallet connect / redeem button** — currently `disabled`; needs real wallet
-  connect + contract call once the Treasury contract exists.
+- **Social links** (footer + community section) — X/Discord point at `#`;
+  Telegram is live (`t.me/stabledoge1`).
+- **Chart embed** (`#chart`, inside How to Buy) — placeholder panel; drop in
+  a Dexscreener/Argus iframe once the pool is live.
+- **Treasury panel** (`#tokenomics`) — wired with empty (`—`) states; needs a
+  data source (contract reads) once the Treasury contract is deployed.
+- **og:image / twitter:image** — currently a relative path; must become an
+  absolute production URL before the link preview will render on
+  Telegram/X/Discord.
 
 ## Note on copy
 

@@ -3,25 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>$SDOGE — The Stable Doge | Real Yield Meme Token on Arc</title>
-<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USYC treasury. Same good boy, more stability. Fixed supply, 1% tax, buyback & burn, redeemable NAV." />
+<title>$SDOGE — The Stable Doge | Stable. Simple. On Arc.</title>
+<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USYC treasury. Stable, simple, on Arc — fixed supply, 1% tax, buyback & burn, redeemable NAV." />
 
 <!-- Social share preview. og:image must be an absolute URL for Telegram/Twitter/Discord
      crawlers to fetch it — replace with the real production URL before launch,
      e.g. https://yourdomain.com/assets/img/social-share.jpg -->
 <meta property="og:type" content="website" />
 <meta property="og:title" content="$SDOGE — The Stable Doge" />
-<meta property="og:description" content="Same good boy. More stability. A meme token on Arc backed by a real USYC treasury." />
+<meta property="og:description" content="Stable. Simple. On Arc. A meme token backed by a real USYC treasury." />
 <meta property="og:image" content="assets/img/social-share.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="$SDOGE — The Stable Doge" />
-<meta name="twitter:description" content="Same good boy. More stability. A meme token on Arc backed by a real USYC treasury." />
+<meta name="twitter:description" content="Stable. Simple. On Arc. A meme token backed by a real USYC treasury." />
 <meta name="twitter:image" content="assets/img/social-share.jpg" />
 
 <link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body>
@@ -39,28 +39,37 @@
     </button>
 
     <div class="navbar__links" id="navLinks">
+      <a href="#top">Home</a>
       <a href="#about">About</a>
       <a href="#tokenomics">Tokenomics</a>
-      <a href="#treasury">Treasury</a>
-      <a href="#how-to-buy">How to Buy</a>
-      <a href="#faq">FAQ</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#community">Community</a>
       <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    </div>
+
+    <div class="navbar__chain">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3 21 20H3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+      <span>ARC</span>
     </div>
   </div>
 </nav>
 
 <!-- ===== HERO ===== -->
 <header class="hero" id="top">
-  <div class="hero__bg" style="background-image:url('assets/img/hero-banner.jpg')"></div>
+  <div class="hero__bg" style="background-image:url('assets/img/social-share.jpg')"></div>
   <div class="hero__overlay"></div>
 
   <div class="container hero__inner">
     <div class="pill">
       <span class="pill__dot"></span> Live on Arc &middot; Launching via Argus
     </div>
+
     <h1 class="hero__title">
-      Same Good Boy.<br/><span class="text-gradient">More Stability.</span>
+      SDOGE
+      <span class="hero__title-sub">The Stable Doge</span>
     </h1>
+    <p class="hero__tagline">STABLE &nbsp;.&nbsp; SIMPLE &nbsp;.&nbsp; ON ARC</p>
+
     <p class="hero__subtitle">
       $SDOGE is the first Doge with a real treasury. A meme on the outside,
       a USYC-backed reserve on the inside — every trade feeds a treasury
@@ -68,29 +77,14 @@
     </p>
 
     <div class="hero__cta">
-      <a href="#buy" class="btn btn--primary">Buy on Argus</a>
-      <a href="#chart" class="btn btn--ghost">View Chart</a>
-      <a href="#treasury" class="btn btn--ghost">See the Treasury</a>
+      <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
+      <a href="#chart" class="btn btn--ghost">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        View Chart
+      </a>
     </div>
 
-    <div class="hero__stats">
-      <div class="stat">
-        <span class="stat__value">1,000,000,000</span>
-        <span class="stat__label">Fixed Supply</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value">1%</span>
-        <span class="stat__label">Buy/Sell Tax</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value">USYC</span>
-        <span class="stat__label">Treasury Reserve Asset</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value">Arc</span>
-        <span class="stat__label">Native Chain (USDC gas)</span>
-      </div>
-    </div>
+    <p class="hero__sticky-note">Same vibes.<br/>More stability.</p>
   </div>
 
   <div class="ticker">
@@ -117,8 +111,44 @@
 
 <main>
 
+  <!-- ===== HIGHLIGHTS ===== -->
+  <section class="section section--tight">
+    <div class="container">
+      <div class="feature-row">
+        <div class="feature-card">
+          <div class="feature-card__icon">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+          </div>
+          <h3>Stable Value</h3>
+          <p>Built for stability. Backed by a real USYC treasury, not just a chart.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg>
+          </div>
+          <h3>On Arc</h3>
+          <p>Fast, low fees, USDC-native gas — next-generation infrastructure.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4c-2 0-3.5 1.5-3.5 3.5S10 11 12 11s3.5-1.5 3.5-3.5S14 4 12 4zM5 20c0-3.5 3-6 7-6s7 2.5 7 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Doge Energy</h3>
+          <p>Same good boy vibes. More discipline behind the scenes.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon">
+            <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="8" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2 20c0-3 2.5-5 6-5s6 2 6 5M11 20c0-3 2.5-5 6-5s6 2 6 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Strong Community</h3>
+          <p>For everyone. Fair bonding-curve launch, 0% team allocation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== ABOUT ===== -->
-  <section class="section" id="about">
+  <section class="section section--alt" id="about">
     <div class="container">
       <p class="eyebrow">Why $SDOGE</p>
       <h2 class="section__title">Meme energy. Treasury discipline.</h2>
@@ -154,119 +184,128 @@
     </div>
   </section>
 
-  <!-- ===== TOKENOMICS ===== -->
+  <!-- ===== COMMUNITY / SPLIT BANNER ===== -->
+  <section class="split-banner" id="community">
+    <div class="split-banner__image" style="background-image:url('assets/img/hero-banner.jpg')"></div>
+    <div class="split-banner__panel">
+      <p class="eyebrow">The Stable Doge</p>
+      <h2 class="split-banner__title">All the fun.<br/>None of the stress.</h2>
+      <p>$SDOGE combines the iconic Doge energy with a real treasury
+      reserve, launched on Arc. A meme you can actually hold.</p>
+      <div class="hero__cta">
+        <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
+        <a href="https://t.me/stabledoge1" target="_blank" rel="noopener" class="btn btn--ghost">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 4 2 11.5l6 2M21 4 15 20l-7-6.5M21 4 8 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          Join Community
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TOKENOMICS / TREASURY / CONTRACT ===== -->
   <section class="section section--alt" id="tokenomics">
     <div class="container">
       <p class="eyebrow">Tokenomics</p>
       <h2 class="section__title">Simple by design. Boring on purpose.</h2>
       <p class="section__lead">
         No hidden wallets, no team allocation games, no future minting.
-        One tax, split two ways, forever.
+        One tax, split two ways, forever — and instead of a fake peg, a
+        Treasury NAV that's designed to climb.
       </p>
 
-      <div class="tax-split">
-        <div class="tax-split__ring" style="--p1: 60; --p2: 40;">
-          <div class="tax-split__center">
-            <span class="tax-split__number">1%</span>
-            <span class="tax-split__caption">total tax</span>
-          </div>
-        </div>
-        <div class="tax-split__legend">
-          <div class="legend-item">
-            <span class="legend-dot legend-dot--treasury"></span>
-            <div>
-              <strong>0.6% → Treasury</strong>
-              <p>Swapped and deposited into the USYC reserve. Compounds automatically — no claiming, no dividends, just NAV that's designed to climb.</p>
+      <div class="tri-panel">
+        <div class="tri-card">
+          <h3 class="tri-card__title">Tokenomics</h3>
+          <div class="tax-split">
+            <div class="tax-split__ring" style="--p1: 60; --p2: 40;">
+              <div class="tax-split__center">
+                <span class="tax-split__number">1%</span>
+                <span class="tax-split__caption">total tax</span>
+              </div>
+            </div>
+            <div class="tax-split__legend">
+              <div class="legend-item">
+                <span class="legend-dot legend-dot--treasury"></span>
+                <span>Treasury <strong>60%</strong></span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-dot legend-dot--burn"></span>
+                <span>Buyback &amp; Burn <strong>40%</strong></span>
+              </div>
             </div>
           </div>
-          <div class="legend-item">
-            <span class="legend-dot legend-dot--burn"></span>
-            <div>
-              <strong>0.4% → Buyback &amp; Burn</strong>
-              <p>Used to buy $SDOGE on the open market and send it to a dead address. Circulating supply only ever goes down.</p>
-            </div>
-          </div>
+          <div class="tri-card__foot">Total Supply: 1,000,000,000 (fixed, non-mintable)</div>
         </div>
-      </div>
 
-      <div class="specs">
-        <div class="specs__row">
-          <span>Total Supply</span>
-          <span>1,000,000,000 $SDOGE (fixed, non-mintable)</span>
+        <div class="tri-card">
+          <h3 class="tri-card__title">Treasury</h3>
+          <div class="tri-card__stat">
+            <span class="tri-card__value">—</span>
+            <span class="tri-card__change">NAV live at launch</span>
+          </div>
+          <div class="sparkline-placeholder">Chart populates once the Treasury is funded on-chain</div>
+          <div class="tri-card__badge">
+            <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+            Reserve Asset: USYC on Arc
+          </div>
         </div>
-        <div class="specs__row">
-          <span>Buy / Sell Tax</span>
-          <span>1% (0.6% Treasury / 0.4% Buyback &amp; Burn)</span>
-        </div>
-        <div class="specs__row">
-          <span>Chain</span>
-          <span>Arc — Circle's USDC-native L1 (Chain ID 5042)</span>
-        </div>
-        <div class="specs__row">
-          <span>Launch Venue</span>
-          <span>Argus.world bonding curve → Uniswap v4 on Arc</span>
-        </div>
-        <div class="specs__row">
-          <span>Treasury Reserve Asset</span>
-          <span>USYC (Circle tokenized short-term Treasury fund)</span>
-        </div>
-        <div class="specs__row">
-          <span>Team Allocation</span>
-          <span>0% — fair launch via bonding curve</span>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ===== TREASURY / NAV ===== -->
-  <section class="section" id="treasury">
-    <div class="container">
-      <p class="eyebrow">Treasury &amp; NAV</p>
-      <h2 class="section__title">The floor is an asset, not a hope.</h2>
-      <p class="section__lead">
-        Instead of paying out "yield" like a security dividend, the Treasury
-        auto-compounds USYC income back into reserves — raising the
-        redeemable value behind every token over time. Holders can always
-        burn $SDOGE for a proportional slice of the Treasury.
-      </p>
-
-      <div class="dashboard">
-        <div class="dashboard__header">
-          <span class="badge badge--pending">Live at launch — preview layout</span>
-        </div>
-        <div class="dashboard__grid">
-          <div class="dashboard__card">
-            <span class="dashboard__label">Treasury Reserve (USYC)</span>
-            <span class="dashboard__value">—</span>
-            <span class="dashboard__hint">Populated on-chain at launch</span>
+        <div class="tri-card">
+          <h3 class="tri-card__title">
+            Contract
+            <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          </h3>
+          <div class="contract-box__row contract-box__row--tight">
+            <code id="contractAddress">TBA — published at launch</code>
+            <button class="btn btn--ghost btn--small" id="copyBtn">Copy</button>
           </div>
-          <div class="dashboard__card">
-            <span class="dashboard__label">NAV per $SDOGE</span>
-            <span class="dashboard__value">—</span>
-            <span class="dashboard__hint">Treasury value ÷ circulating supply</span>
-          </div>
-          <div class="dashboard__card">
-            <span class="dashboard__label">Total Burned</span>
-            <span class="dashboard__value">—</span>
-            <span class="dashboard__hint">Cumulative buyback &amp; burn</span>
-          </div>
-          <div class="dashboard__card">
-            <span class="dashboard__label">Circulating Supply</span>
-            <span class="dashboard__value">—</span>
-            <span class="dashboard__hint">1,000,000,000 at genesis</span>
+          <div class="tri-card__rows">
+            <div><span>Network</span><span>Arc</span></div>
+            <div><span>Pair</span><span>SDOGE / USDC</span></div>
+            <div><span>Liquidity</span><span>Bonding curve → Uniswap v4</span></div>
+            <div><span>Tax</span><span>1% / 1%</span></div>
           </div>
         </div>
-        <button class="btn btn--primary btn--wide" id="redeemBtn" disabled>
-          Connect Wallet to Redeem (available post-launch)
-        </button>
       </div>
 
       <p class="fine-print">
         Design goal, not a promise: the mechanism is built so the Treasury
         floor trends up as USYC accrues, but reserve value can still move
         with market conditions and smart-contract risk. Nothing here is
-        financial advice or a guaranteed return — see the disclaimer below.
+        financial advice, a price peg, or a guaranteed return — see the
+        disclaimer below.
       </p>
+    </div>
+  </section>
+
+  <!-- ===== ROADMAP ===== -->
+  <section class="section" id="roadmap">
+    <div class="container">
+      <p class="eyebrow">Roadmap</p>
+      <h2 class="section__title">Where we're headed, in order.</h2>
+
+      <div class="roadmap">
+        <div class="roadmap__item">
+          <span class="roadmap__phase">Phase 1</span>
+          <h3>Liftoff</h3>
+          <p>Fair launch via the Argus bonding curve on Arc. Liquidity opens on Uniswap v4, socials go live.</p>
+        </div>
+        <div class="roadmap__item">
+          <span class="roadmap__phase">Phase 2</span>
+          <h3>Treasury Online</h3>
+          <p>Treasury contract deployed, USYC reserve funded from trading tax, NAV tracking goes live on this site.</p>
+        </div>
+        <div class="roadmap__item">
+          <span class="roadmap__phase">Phase 3</span>
+          <h3>Redemption</h3>
+          <p>Burn-to-redeem enabled — holders can claim their proportional share of the Treasury on demand.</p>
+        </div>
+        <div class="roadmap__item">
+          <span class="roadmap__phase">Phase 4</span>
+          <h3>Beyond</h3>
+          <p>Wider listings, deeper liquidity, continued buyback &amp; burn. Good boy keeps growing.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -303,34 +342,17 @@
         Always verify the official contract address and Argus link before
         trading — never trust a link from a DM, comment, or search ad.
       </div>
-    </div>
-  </section>
 
-  <!-- ===== CHART / BUY ===== -->
-  <section class="section" id="chart">
-    <div class="container">
-      <p class="eyebrow">Chart &amp; Contract</p>
-      <h2 class="section__title">Trade $SDOGE</h2>
-
-      <div class="chart-panel">
+      <div class="chart-panel" id="chart">
         <div class="chart-panel__placeholder" id="buy">
           <p>📈 Live chart embeds here once $SDOGE is trading on Argus / Uniswap v4.</p>
-        </div>
-
-        <div class="contract-box">
-          <span class="contract-box__label">Contract Address</span>
-          <div class="contract-box__row">
-            <code id="contractAddress">TBA — published at launch</code>
-            <button class="btn btn--ghost btn--small" id="copyBtn">Copy</button>
-          </div>
-          <p class="contract-box__hint">This page will be updated with the real, verified contract address the moment $SDOGE goes live. Anything posted elsewhere before that is not us.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ===== FAQ ===== -->
-  <section class="section section--alt" id="faq">
+  <section class="section" id="faq">
     <div class="container">
       <p class="eyebrow">FAQ</p>
       <h2 class="section__title">Questions, answered plainly</h2>
@@ -367,6 +389,15 @@
           </div>
         </div>
         <div class="accordion__item">
+          <button class="accordion__trigger">Is $SDOGE pegged to $1? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>No. $SDOGE is a meme token that trades freely on the open
+            market — its price floats. "Stable" refers to the Treasury
+            floor mechanism, not a hard dollar peg. Never assume a fixed
+            price.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
           <button class="accordion__trigger">Can the floor really "never go to zero"? <span>+</span></button>
           <div class="accordion__panel">
             <p>It's our tagline, not a legal guarantee. The mechanism is
@@ -386,6 +417,16 @@
     </div>
   </section>
 
+  <!-- ===== CTA BANNER ===== -->
+  <section class="cta-banner">
+    <div class="cta-banner__bg" style="background-image:url('assets/img/social-share.jpg')"></div>
+    <div class="cta-banner__overlay"></div>
+    <div class="container cta-banner__inner">
+      <h2>A more stable tomorrow.</h2>
+      <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
+    </div>
+  </section>
+
 </main>
 
 <!-- ===== FOOTER ===== -->
@@ -393,40 +434,49 @@
   <div class="container footer__inner">
     <div class="footer__brand">
       <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
-      <span class="brand__name">$SDOGE</span>
-      <p>The Stable Doge. Same good boy, more stability.</p>
+      <div>
+        <span class="brand__name">$SDOGE</span>
+        <p>The Stable Doge — on Arc.</p>
+      </div>
     </div>
 
-    <div class="footer__links">
-      <div>
-        <h4>Explore</h4>
-        <a href="#about">About</a>
-        <a href="#tokenomics">Tokenomics</a>
-        <a href="#treasury">Treasury</a>
-        <a href="#faq">FAQ</a>
-      </div>
-      <div>
-        <h4>Community</h4>
-        <a href="#">X / Twitter (coming soon)</a>
-        <a href="https://t.me/stabledoge1" target="_blank" rel="noopener">Telegram</a>
-        <a href="#">Argus.world</a>
-      </div>
+    <nav class="footer__nav">
+      <a href="#top">Home</a>
+      <a href="#about">About</a>
+      <a href="#tokenomics">Tokenomics</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#community">Community</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+
+    <div class="footer__social">
+      <a href="#" aria-label="X / Twitter (coming soon)">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4l7.5 9.5L4.5 20h2.2l6-6.8 4.6 6.8H21l-7.8-10L20 4h-2.2l-5.5 6.2L7.8 4H4z" fill="currentColor"/></svg>
+      </a>
+      <a href="https://t.me/stabledoge1" target="_blank" rel="noopener" aria-label="Telegram">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 4 2 11.5l6 2M21 4 15 20l-7-6.5M21 4 8 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="#" aria-label="Discord (coming soon)">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 6c-2.5.7-4 2-4 2s-2 3-2 8c0 0 1.8 2 5 2l1-1.6M16 6c2.5.7 4 2 4 2s2 3 2 8c0 0-1.8 2-5 2l-1-1.6M6 15.5c3.5 1.6 8.5 1.6 12 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="9" cy="13" r="1.3" fill="currentColor"/><circle cx="15" cy="13" r="1.3" fill="currentColor"/></svg>
+      </a>
     </div>
+
+    <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
   </div>
 
   <div class="container">
     <p class="disclaimer">
       <strong>Risk disclaimer:</strong> $SDOGE is an experimental meme
       token on the Arc network. It is not a security, not an investment
-      product, and not backed, endorsed, or issued by Circle or any
-      issuer of USDC/USYC. Cryptocurrency involves substantial risk,
-      including total loss of funds. Smart contracts may contain bugs;
-      treasury value can fluctuate with market and protocol conditions.
-      Nothing on this site is financial, legal, or tax advice. Always
-      verify contract addresses and links from official sources only, and
-      do your own research before buying.
+      product, not a stablecoin, and not backed, endorsed, or issued by
+      Circle or any issuer of USDC/USYC. Cryptocurrency involves
+      substantial risk, including total loss of funds. Smart contracts
+      may contain bugs; treasury value and token price can both
+      fluctuate. Nothing on this site is financial, legal, or tax advice.
+      Always verify contract addresses and links from official sources
+      only, and do your own research before buying.
     </p>
-    <p class="copyright">© <span id="year"></span> $SDOGE. Good boy always stays.</p>
+    <p class="copyright">© <span id="year"></span> $SDOGE. All rights reserved. Stable. Simple. On Arc.</p>
   </div>
 </footer>
 
