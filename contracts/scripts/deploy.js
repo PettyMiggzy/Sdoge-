@@ -33,12 +33,13 @@ async function main() {
       );
     } else {
       await (await staking.setNotifier(notifierAddress)).wait();
-      console.log("  notifier:", notifierAddress, "(treasury/fund-staking.js's hot wallet)");
+      console.log("  notifier:", notifierAddress, "(hot wallet allowed to call notifyRewardAmount()/sweepTokens())");
     }
   } else {
     console.log(
       "\nSTAKING_NOTIFIER_ADDRESS not set - notifier left disabled. The owner must call " +
-        "setNotifier(taxWalletAddress) before treasury/fund-staking.js can fund rewards."
+        "setNotifier(address) before anything but the owner itself can call notifyRewardAmount() " +
+        "or sweepTokens() - see contracts/README.md."
     );
   }
 

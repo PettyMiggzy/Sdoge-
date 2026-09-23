@@ -7,84 +7,147 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title SDOGEStaking
-/// @notice Stake $SDOGE, earn a direct share of the 1% trade tax (paid out
-///         as native USDC) - not yield the treasury earns elsewhere. The
-///         same tax that funds the Treasury and Buyback also funds this.
+/// @notice Stake $SDOGE into one of 5 fixed lock tiers (7/30/90/180/365
+///         days), earn native USDC. Longer locks earn faster (a per-tier
+///         multiplier on the reward rate), not just longer.
+///
+/// Withdraw before your stake's tier matures and you forfeit ALL of that
+/// stake's currently-accrued, unclaimed reward AND pay earlyWithdrawPenaltyBps
+/// (default 15%) of the principal you're withdrawing. Both the forfeited
+/// reward (native USDC) and the forfeited principal (SDOGE) stay in this
+/// contract to fund everyone else's rewards - impatient stakers fund
+/// patient ones, at zero cost to the project or Treasury. This is a real
+/// design choice, not a minor detail: combined with reward forfeiture, it
+/// is a harsher exit penalty than most staking contracts use. Deliberate,
+/// per explicit instruction - not something to soften without asking.
 ///
 /// Arc's native currency IS USDC (like ETH on mainnet) - NOT an ERC-20 - so
 /// rewards are handled as native value (payable / call{value:}), while the
-/// staked SDOGE is a normal ERC-20. This is the standard Synthetix
-/// StakingRewards accrual model (per-second rewardRate, a
-/// rewardPerToken accumulator so reward math is O(1) regardless of staker
-/// count), adapted for a native-currency reward instead of an ERC-20 one.
+/// staked SDOGE is a normal ERC-20.
 ///
-/// This contract never sources revenue itself - it only distributes
-/// whatever native USDC is sent via notifyRewardAmount(). That's called
-/// either by the owner directly, or by a separate `notifier` address the
-/// owner designates - deliberately split so the owner key can stay a cold
-/// multisig while `notifier` is a hot key an automated keeper holds,
-/// scoped to just this one action.
+/// Reward accounting uses ONE global accumulator over "weighted shares"
+/// (amount * tier multiplier) rather than raw staked amount - the standard
+/// Synthetix StakingRewards shape (per-second rewardRate, a
+/// rewardPerWeightedShare accumulator, O(1) per action regardless of
+/// staker count), extended so a higher-tier token counts for more without
+/// needing a separate pool per tier.
 ///
-/// One source of that USDC is fully self-funded and needs no treasury
-/// money or outside yield at all: an early-withdrawal penalty. Withdraw
-/// within `earlyWithdrawWindow` of your last stake and `earlyWithdrawPenaltyBps`
-/// of what you're withdrawing stays behind in the staking token instead of
-/// going to you, tracked separately in `pendingPenalties`. Sweeping that out
-/// (via `sweepPenalties`) and converting it to USDC for notifyRewardAmount()
-/// is the same "accumulate, then feed the reward stream" shape already used
-/// for tax revenue - impatient stakers fund patient ones, at zero cost to
-/// the project.
+/// A user can hold multiple simultaneous stakes (even in the same tier,
+/// e.g. adding to a position later without disturbing an earlier one) -
+/// each is tracked as its own numbered position with its own unlock time
+/// and reward checkpoint, not merged into a single per-user balance.
+///
+/// NFT staking (holding an NFT to boost a stake's reward, per the original
+/// plan) is NOT implemented here - the collection doesn't exist yet and
+/// bolting on that logic against an undesigned collection would mean
+/// guessing. The intent, recorded for whoever builds it later: a staked
+/// NFT would return to the wallet that staked it (not subject to the
+/// multi-wallet withdrawal split below, since it isn't fungible) and would
+/// add a second, separate reward stream or multiplier - not replace this
+/// one.
 contract SDOGEStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable stakingToken;
 
+    // ---------- Tiers ----------
+
+    uint8 public constant NUM_TIERS = 5;
+    uint256 public constant BPS_DENOMINATOR = 10000;
+    uint256 public constant PRECISION = 1e18;
+    uint256 public constant MAX_WITHDRAW_RECIPIENTS = 4;
+    uint256 public constant MAX_EARLY_WITHDRAW_PENALTY_BPS = 3000; // 30% cap
+    uint256 public constant MAX_TIER_MULTIPLIER_BPS = 100000; // 10x cap
+
+    /// @notice Lock duration per tier index, in seconds. Index = tier id
+    ///         used everywhere below (0 = 7 days, ... 4 = 365 days).
+    ///         Owner-tunable going forward; changing this never affects the
+    ///         unlockTime already stored on an existing stake.
+    uint256[NUM_TIERS] public tierDuration = [uint256(7 days), 30 days, 90 days, 180 days, 365 days];
+
+    /// @notice Reward-rate multiplier per tier, in basis points (10000 =
+    ///         1.0x). Proposed defaults: 1.0x / 1.2x / 1.5x / 2.0x / 3.0x -
+    ///         longer locks earn meaningfully faster per token, not just
+    ///         longer. Tunable via setTierMultiplier, capped at 10x so a
+    ///         mistake (or a compromised owner) can't wildly misprice the
+    ///         pool against itself.
+    uint256[NUM_TIERS] public tierMultiplierBps = [uint256(10000), 12000, 15000, 20000, 30000];
+
+    // ---------- Early withdrawal penalty ----------
+
+    uint256 public earlyWithdrawPenaltyBps = 1500; // 15%, applies to principal only
+
+    // ---------- Per-stake accounting ----------
+
+    struct StakeInfo {
+        address owner;
+        uint8 tier;
+        uint256 amount; // principal still locked in this stake
+        uint256 weighted; // amount * tierMultiplierBps[tier] / BPS_DENOMINATOR
+        uint256 startTime;
+        uint256 unlockTime;
+        uint256 rewardPerWeightedSharePaid;
+        uint256 accruedReward; // settled, unpaid native USDC owed on this stake
+        bool closed;
+    }
+
+    uint256 public nextStakeId = 1;
+    mapping(uint256 => StakeInfo) public stakes;
+    mapping(address => uint256[]) public stakeIdsByUser;
+
+    uint256 public totalPrincipalStaked;
+    uint256 public totalWeightedSupply;
+
+    // ---------- Global reward accrual (native USDC, over weighted shares) ----------
+
     uint256 public rewardsDuration = 7 days;
     uint256 public periodFinish;
     uint256 public rewardRate;
     uint256 public lastUpdateTime;
-    uint256 public rewardPerTokenStored;
+    uint256 public rewardPerWeightedShareStored;
 
-    mapping(address => uint256) public userRewardPerTokenPaid;
-    mapping(address => uint256) public rewards;
+    /// @notice Native USDC not yet folded into the active reward rate:
+    ///         forfeited-early-withdrawal rewards plus permissionless
+    ///         contributeUSDC() calls. Auto-included the next time
+    ///         notifyRewardAmount() runs.
+    uint256 public unallocatedUsdc;
 
-    uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
+    /// @notice SDOGE not yet swept out: forfeited-early-withdrawal
+    ///         principal penalties plus permissionless contributeTokens()
+    ///         calls. Always <= this contract's stakingToken balance minus
+    ///         totalPrincipalStaked - i.e. it can never be stakers'
+    ///         principal, only what's already been forfeited or donated.
+    uint256 public unallocatedTokens;
 
-    /// @notice Address allowed to call notifyRewardAmount() in addition to
-    ///         the owner. address(0) (the default) means only the owner can.
+    /// @notice Address allowed to call notifyRewardAmount() / sweepTokens()
+    ///         in addition to the owner. address(0) (the default) means
+    ///         only the owner can.
     address public notifier;
 
-    /// @notice Penalty on withdrawals made within earlyWithdrawWindow of the
-    ///         staker's last stake() call, in basis points of the amount
-    ///         withdrawn. Capped at 30% (see setEarlyWithdrawSettings) so
-    ///         even a compromised owner can't turn this punitive.
-    uint256 public earlyWithdrawPenaltyBps = 1500; // 15%
-    uint256 public earlyWithdrawWindow = 7 days;
-    uint256 public constant MAX_EARLY_WITHDRAW_PENALTY_BPS = 3000;
+    // ---------- Events ----------
 
-    /// @dev Resets on every stake() - a top-up restarts the window for the
-    ///      staker's whole balance rather than tracking per-deposit lots.
-    ///      Simpler and cheaper; documented here because it's a real
-    ///      behavioral tradeoff, not hidden as an oversight.
-    mapping(address => uint256) public lastStakeTime;
-
-    /// @notice Forfeited early-withdrawal penalties, held in the staking
-    ///         token, not yet swept out. Always <= this contract's
-    ///         stakingToken balance minus _totalSupply - i.e. it can never
-    ///         be stakers' principal, only what's already been forfeited.
-    uint256 public pendingPenalties;
-
-    event Staked(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
-    event RewardPaid(address indexed user, uint256 amount);
+    event Staked(
+        address indexed user,
+        uint256 indexed stakeId,
+        uint8 tier,
+        uint256 amount,
+        uint256 weighted,
+        uint256 unlockTime
+    );
+    event Withdrawn(address indexed user, uint256 indexed stakeId, uint256 amount, uint256 payout, bool early);
+    event RewardPaid(address indexed user, uint256 indexed stakeId, uint256 amount);
+    event RewardForfeited(address indexed user, uint256 indexed stakeId, uint256 amount);
+    event EarlyWithdrawPenalty(address indexed user, uint256 indexed stakeId, uint256 penaltyAmount);
     event RewardAdded(uint256 amount, uint256 newRewardRate, uint256 periodFinish);
     event RewardsDurationUpdated(uint256 newDuration);
-    event ERC20Recovered(address indexed token, uint256 amount);
+    event EarlyWithdrawPenaltyBpsUpdated(uint256 penaltyBps);
+    event TierMultiplierUpdated(uint8 indexed tier, uint256 multiplierBps);
+    event TierDurationUpdated(uint8 indexed tier, uint256 duration);
     event NotifierUpdated(address indexed previousNotifier, address indexed newNotifier);
-    event EarlyWithdrawPenalty(address indexed user, uint256 penaltyAmount);
-    event EarlyWithdrawSettingsUpdated(uint256 penaltyBps, uint256 window);
-    event PenaltiesSwept(address indexed to, uint256 amount);
+    event ERC20Recovered(address indexed token, uint256 amount);
+    event TokensSwept(address indexed to, uint256 amount);
+    event UsdcContributed(address indexed from, uint256 amount);
+    event TokensContributed(address indexed from, uint256 amount);
 
     modifier onlyOwnerOrNotifier() {
         require(msg.sender == owner() || msg.sender == notifier, "not owner or notifier");
@@ -98,27 +161,27 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
 
     // ---------- Views ----------
 
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) external view returns (uint256) {
-        return _balances[account];
-    }
-
     function lastTimeRewardApplicable() public view returns (uint256) {
         return block.timestamp < periodFinish ? block.timestamp : periodFinish;
     }
 
-    function rewardPerToken() public view returns (uint256) {
-        if (_totalSupply == 0) return rewardPerTokenStored;
+    function rewardPerWeightedShare() public view returns (uint256) {
+        if (totalWeightedSupply == 0) return rewardPerWeightedShareStored;
         uint256 elapsed = lastTimeRewardApplicable() - lastUpdateTime;
-        return rewardPerTokenStored + (elapsed * rewardRate * 1e18) / _totalSupply;
+        return rewardPerWeightedShareStored + (elapsed * rewardRate * PRECISION) / totalWeightedSupply;
     }
 
-    function earned(address account) public view returns (uint256) {
-        uint256 perTokenDelta = rewardPerToken() - userRewardPerTokenPaid[account];
-        return (_balances[account] * perTokenDelta) / 1e18 + rewards[account];
+    /// @notice Read-only preview of what withdrawing/claiming this stake
+    ///         right now would pay out, before any early-withdrawal
+    ///         forfeiture is applied.
+    function pendingReward(uint256 stakeId) public view returns (uint256) {
+        StakeInfo storage s = stakes[stakeId];
+        uint256 delta = rewardPerWeightedShare() - s.rewardPerWeightedSharePaid;
+        return s.accruedReward + (s.weighted * delta) / PRECISION;
+    }
+
+    function getStakeIds(address user) external view returns (uint256[] memory) {
+        return stakeIdsByUser[user];
     }
 
     /// @notice Reward projected over a full rewardsDuration at the current
@@ -127,101 +190,254 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         return rewardRate * rewardsDuration;
     }
 
-    // ---------- Mutating ----------
+    // ---------- Internal reward accounting ----------
 
-    modifier updateReward(address account) {
-        rewardPerTokenStored = rewardPerToken();
+    function _updateGlobalReward() internal {
+        rewardPerWeightedShareStored = rewardPerWeightedShare();
         lastUpdateTime = lastTimeRewardApplicable();
-        if (account != address(0)) {
-            rewards[account] = earned(account);
-            userRewardPerTokenPaid[account] = rewardPerTokenStored;
-        }
-        _;
     }
 
-    function stake(uint256 amount) external nonReentrant updateReward(msg.sender) {
+    function _settleStake(uint256 stakeId) internal {
+        _updateGlobalReward();
+        StakeInfo storage s = stakes[stakeId];
+        uint256 delta = rewardPerWeightedShareStored - s.rewardPerWeightedSharePaid;
+        s.accruedReward += (s.weighted * delta) / PRECISION;
+        s.rewardPerWeightedSharePaid = rewardPerWeightedShareStored;
+    }
+
+    // ---------- Mutating: staking ----------
+
+    function stake(uint8 tier, uint256 amount) external nonReentrant returns (uint256 stakeId) {
         require(amount > 0, "cannot stake 0");
-        _totalSupply += amount;
-        _balances[msg.sender] += amount;
-        lastStakeTime[msg.sender] = block.timestamp;
+        require(tier < NUM_TIERS, "invalid tier");
+        _updateGlobalReward();
+
+        uint256 weighted = (amount * tierMultiplierBps[tier]) / BPS_DENOMINATOR;
+        uint256 unlockTime = block.timestamp + tierDuration[tier];
+
+        stakeId = nextStakeId++;
+        stakes[stakeId] = StakeInfo({
+            owner: msg.sender,
+            tier: tier,
+            amount: amount,
+            weighted: weighted,
+            startTime: block.timestamp,
+            unlockTime: unlockTime,
+            rewardPerWeightedSharePaid: rewardPerWeightedShareStored,
+            accruedReward: 0,
+            closed: false
+        });
+        stakeIdsByUser[msg.sender].push(stakeId);
+
+        totalPrincipalStaked += amount;
+        totalWeightedSupply += weighted;
+
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-        emit Staked(msg.sender, amount);
+        emit Staked(msg.sender, stakeId, tier, amount, weighted, unlockTime);
     }
 
-    /// @dev The full `amount` leaves the staker's tracked balance either
-    ///      way - only the transfer to them is reduced when a penalty
-    ///      applies, with the difference kept in pendingPenalties instead
-    ///      of paid out.
-    function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
-        require(amount > 0, "cannot withdraw 0");
-        require(_balances[msg.sender] >= amount, "withdraw amount exceeds balance");
-        _totalSupply -= amount;
-        _balances[msg.sender] -= amount;
+    /// @dev Shared accounting for both withdraw() and exitStake(): settles
+    ///      the stake's reward, applies the early-withdrawal penalty and
+    ///      reward forfeiture if applicable, updates all balances, and
+    ///      pays the native-USDC reward (if any) to msg.sender. Does NOT
+    ///      move the SDOGE principal payout - callers handle that
+    ///      differently (split vs. single recipient).
+    function _processWithdraw(
+        uint256 stakeId,
+        uint256 amount
+    ) internal returns (uint256 payout, uint256 rewardPaid, bool early) {
+        StakeInfo storage s = stakes[stakeId];
+        require(s.owner == msg.sender, "not your stake");
+        require(!s.closed, "stake already closed");
+        require(amount > 0 && amount <= s.amount, "invalid amount");
 
-        uint256 payout = amount;
-        if (block.timestamp < lastStakeTime[msg.sender] + earlyWithdrawWindow) {
-            uint256 penalty = (amount * earlyWithdrawPenaltyBps) / 10000;
-            if (penalty > 0) {
-                payout -= penalty;
-                pendingPenalties += penalty;
-                emit EarlyWithdrawPenalty(msg.sender, penalty);
+        _settleStake(stakeId);
+
+        early = block.timestamp < s.unlockTime;
+        uint256 removedWeighted = (amount * tierMultiplierBps[s.tier]) / BPS_DENOMINATOR;
+
+        s.amount -= amount;
+        s.weighted -= removedWeighted;
+        totalPrincipalStaked -= amount;
+        totalWeightedSupply -= removedWeighted;
+
+        if (early) {
+            uint256 penalty = (amount * earlyWithdrawPenaltyBps) / BPS_DENOMINATOR;
+            payout = amount - penalty;
+            unallocatedTokens += penalty;
+            emit EarlyWithdrawPenalty(msg.sender, stakeId, penalty);
+
+            if (s.accruedReward > 0) {
+                unallocatedUsdc += s.accruedReward;
+                emit RewardForfeited(msg.sender, stakeId, s.accruedReward);
+                s.accruedReward = 0;
+            }
+        } else {
+            payout = amount;
+            rewardPaid = s.accruedReward;
+            s.accruedReward = 0;
+        }
+
+        if (s.amount == 0) {
+            s.closed = true;
+        }
+
+        if (rewardPaid > 0) {
+            emit RewardPaid(msg.sender, stakeId, rewardPaid);
+            (bool sent, ) = msg.sender.call{value: rewardPaid}("");
+            require(sent, "reward transfer failed");
+        }
+
+        emit Withdrawn(msg.sender, stakeId, amount, payout, early);
+    }
+
+    /// @notice Withdraw `amount` of principal from `stakeId`, paid out
+    ///         split across 1-4 recipient wallets (`recipients`/`splitAmounts`
+    ///         must be the same length and sum exactly to what's actually
+    ///         paid out after any penalty). Any accrued reward for this
+    ///         stake is settled here too: paid to msg.sender if the stake
+    ///         has matured, forfeited entirely if it hasn't (see the
+    ///         contract-level note on why that's deliberate). A partial
+    ///         withdrawal from a still-locked stake forfeits that stake's
+    ///         reward in full, not a pro-rated slice - touching a locked
+    ///         stake at all is what forfeits it, so partial withdrawals
+    ///         can't be used to dodge the deterrent. Requires knowing the
+    ///         exact post-penalty payout in advance to fill `splitAmounts` -
+    ///         use exitStake() instead for a single-wallet full exit that
+    ///         computes it for you.
+    function withdraw(
+        uint256 stakeId,
+        uint256 amount,
+        address[] calldata recipients,
+        uint256[] calldata splitAmounts
+    ) external nonReentrant returns (uint256 payout, uint256 rewardPaid) {
+        require(
+            recipients.length > 0 && recipients.length <= MAX_WITHDRAW_RECIPIENTS,
+            "1-4 recipients"
+        );
+        require(recipients.length == splitAmounts.length, "recipients/amounts length mismatch");
+
+        bool early;
+        (payout, rewardPaid, early) = _processWithdraw(stakeId, amount);
+
+        uint256 sum;
+        for (uint256 i = 0; i < splitAmounts.length; i++) {
+            sum += splitAmounts[i];
+        }
+        require(sum == payout, "split amounts must sum to payout");
+
+        for (uint256 i = 0; i < recipients.length; i++) {
+            require(recipients[i] != address(0), "recipient is zero address");
+            if (splitAmounts[i] > 0) {
+                stakingToken.safeTransfer(recipients[i], splitAmounts[i]);
             }
         }
-
-        stakingToken.safeTransfer(msg.sender, payout);
-        emit Withdrawn(msg.sender, amount);
     }
 
-    /// @dev Zeroes the reward before the external call (checks-effects-
-    ///      interactions) - nonReentrant is defense in depth on top of that,
-    ///      not the only thing preventing reentrancy here.
-    function getReward() public nonReentrant updateReward(msg.sender) {
-        uint256 reward = rewards[msg.sender];
-        if (reward == 0) return;
-        rewards[msg.sender] = 0;
-        emit RewardPaid(msg.sender, reward);
-        (bool sent, ) = msg.sender.call{value: reward}("");
-        require(sent, "reward transfer failed");
+    /// @notice Convenience full exit to a single wallet (msg.sender):
+    ///         withdraws all remaining principal from `stakeId` and settles
+    ///         its reward, without the caller needing to pre-compute the
+    ///         post-penalty payout the way withdraw() requires. Same
+    ///         early-withdrawal penalty and reward-forfeiture rules apply.
+    function exitStake(uint256 stakeId) external nonReentrant returns (uint256 payout, uint256 rewardPaid) {
+        uint256 amount = stakes[stakeId].amount;
+        bool early;
+        (payout, rewardPaid, early) = _processWithdraw(stakeId, amount);
+        if (payout > 0) {
+            stakingToken.safeTransfer(msg.sender, payout);
+        }
     }
 
-    function exit() external {
-        withdraw(_balances[msg.sender]);
-        getReward();
+    /// @notice Claim a matured stake's accrued reward without withdrawing
+    ///         principal - lets a staker keep compounding past maturity
+    ///         while still collecting periodically. Reverts if the stake
+    ///         is still locked: rewards on a locked stake stay "at risk"
+    ///         (forfeitable) until either maturity or a deliberate early
+    ///         exit, by design - see the contract-level note above.
+    function claimReward(uint256 stakeId) external nonReentrant returns (uint256 rewardPaid) {
+        StakeInfo storage s = stakes[stakeId];
+        require(s.owner == msg.sender, "not your stake");
+        require(!s.closed, "stake already closed");
+        require(block.timestamp >= s.unlockTime, "still locked - matures or a full early exit settles reward");
+
+        _settleStake(stakeId);
+        rewardPaid = s.accruedReward;
+        s.accruedReward = 0;
+
+        if (rewardPaid > 0) {
+            emit RewardPaid(msg.sender, stakeId, rewardPaid);
+            (bool sent, ) = msg.sender.call{value: rewardPaid}("");
+            require(sent, "reward transfer failed");
+        }
+    }
+
+    // ---------- Permissionless funding ----------
+
+    /// @notice Anyone can add native USDC to the reward pool. Held in
+    ///         unallocatedUsdc, not immediately active - the owner/notifier
+    ///         still has to call notifyRewardAmount() to spread it into the
+    ///         live rate, same as any other funding. Deliberately NOT
+    ///         wired directly into notifyRewardAmount()'s own access
+    ///         control: letting anyone reset the reward rate/period on
+    ///         demand would let a griefer manipulate payout timing for
+    ///         everyone by spamming tiny contributions.
+    function contributeUSDC() external payable {
+        require(msg.value > 0, "send some USDC");
+        unallocatedUsdc += msg.value;
+        emit UsdcContributed(msg.sender, msg.value);
+    }
+
+    /// @notice Anyone can donate $SDOGE directly into the reward pipeline -
+    ///         held in unallocatedTokens alongside forfeited penalties,
+    ///         swept out and converted to USDC the same way.
+    function contributeTokens(uint256 amount) external nonReentrant {
+        require(amount > 0, "cannot contribute 0");
+        unallocatedTokens += amount;
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        emit TokensContributed(msg.sender, amount);
     }
 
     // ---------- Admin: funding & config ----------
 
     /// @notice Grants (or revokes, with address(0)) permission to call
-    ///         notifyRewardAmount() without being the owner. Intended for a
-    ///         hot wallet an automated keeper holds - never grant this to
-    ///         anything that also needs the owner's other privileges.
+    ///         notifyRewardAmount() / sweepTokens() without being the
+    ///         owner. Intended for a hot wallet an automated keeper holds -
+    ///         never grant this to anything that also needs the owner's
+    ///         other privileges.
     function setNotifier(address _notifier) external onlyOwner {
         emit NotifierUpdated(notifier, _notifier);
         notifier = _notifier;
     }
 
-    /// @notice Fund the next rewardsDuration with msg.value of native USDC.
-    ///         If a period is still running, its unpaid remainder rolls
-    ///         into the new rate rather than being lost. Callable by the
-    ///         owner or the designated notifier (see setNotifier).
-    function notifyRewardAmount() external payable onlyOwnerOrNotifier updateReward(address(0)) {
+    /// @notice Fund the next rewardsDuration with msg.value of native USDC,
+    ///         automatically including any unallocatedUsdc (forfeited
+    ///         rewards + permissionless contributions) already sitting
+    ///         here. If a period is still running, its unpaid remainder
+    ///         rolls into the new rate rather than being lost.
+    function notifyRewardAmount() external payable onlyOwnerOrNotifier {
+        _updateGlobalReward();
+
+        uint256 totalNew = msg.value + unallocatedUsdc;
+        unallocatedUsdc = 0;
+
         if (block.timestamp >= periodFinish) {
-            rewardRate = msg.value / rewardsDuration;
+            rewardRate = totalNew / rewardsDuration;
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
-            rewardRate = (msg.value + leftover) / rewardsDuration;
+            rewardRate = (totalNew + leftover) / rewardsDuration;
         }
 
         // Never promise more per second than this contract actually holds
-        // (all currently-held native balance, since reward is the only use
-        // of native value here) - guards against a rate that can't be paid.
+        // for rewards (its native balance minus nothing, since reward is
+        // the only use of native value here) - guards against a rate that
+        // can't be paid.
         require(rewardRate > 0, "reward rate is 0 (amount too small for duration)");
         require(rewardRate * rewardsDuration <= address(this).balance, "reward too high for balance");
 
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp + rewardsDuration;
-        emit RewardAdded(msg.value, rewardRate, periodFinish);
+        emit RewardAdded(totalNew, rewardRate, periodFinish);
     }
 
     /// @notice Only changeable between reward periods, so it can't be used
@@ -233,38 +449,57 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         emit RewardsDurationUpdated(_rewardsDuration);
     }
 
+    /// @notice Tune the early-withdrawal penalty. Capped well below 100% so
+    ///         it can only ever be a deterrent, never a trap that confiscates
+    ///         a staker's entire principal.
+    function setEarlyWithdrawPenalty(uint256 _penaltyBps) external onlyOwner {
+        require(_penaltyBps <= MAX_EARLY_WITHDRAW_PENALTY_BPS, "penalty too high");
+        earlyWithdrawPenaltyBps = _penaltyBps;
+        emit EarlyWithdrawPenaltyBpsUpdated(_penaltyBps);
+    }
+
+    /// @notice Retune a tier's reward multiplier going forward. Never
+    ///         affects the `weighted` value already locked into an
+    ///         existing stake - only stakes created after this call use
+    ///         the new multiplier.
+    function setTierMultiplier(uint8 tier, uint256 multiplierBps) external onlyOwner {
+        require(tier < NUM_TIERS, "invalid tier");
+        require(multiplierBps > 0 && multiplierBps <= MAX_TIER_MULTIPLIER_BPS, "multiplier out of range");
+        tierMultiplierBps[tier] = multiplierBps;
+        emit TierMultiplierUpdated(tier, multiplierBps);
+    }
+
+    /// @notice Retune a tier's lock duration going forward. Never affects
+    ///         the unlockTime already stored on an existing stake.
+    function setTierDuration(uint8 tier, uint256 duration) external onlyOwner {
+        require(tier < NUM_TIERS, "invalid tier");
+        require(duration > 0, "duration must be > 0");
+        tierDuration[tier] = duration;
+        emit TierDurationUpdated(tier, duration);
+    }
+
+    /// @notice Moves accumulated unallocatedTokens (forfeited early-exit
+    ///         penalties plus permissionless donations) to `to` for
+    ///         conversion into stakers' USDC rewards - e.g. swapped for
+    ///         USDC and passed to notifyRewardAmount(). Bounded by
+    ///         unallocatedTokens, so it can never reach into stakers'
+    ///         principal (totalPrincipalStaked is never touched here).
+    function sweepTokens(address to) external onlyOwnerOrNotifier {
+        require(to != address(0), "cannot sweep to zero address");
+        uint256 amount = unallocatedTokens;
+        require(amount > 0, "nothing to sweep");
+        unallocatedTokens = 0;
+        stakingToken.safeTransfer(to, amount);
+        emit TokensSwept(to, amount);
+    }
+
     /// @notice Rescue unrelated tokens accidentally sent here. Can never
-    ///         touch the staking token itself - that's stakers' principal,
-    ///         not the owner's to move.
+    ///         touch the staking token itself - that's stakers' principal
+    ///         (or already-accounted-for unallocatedTokens), not the
+    ///         owner's to move via this path.
     function recoverERC20(address tokenAddress, uint256 amount) external onlyOwner {
         require(tokenAddress != address(stakingToken), "cannot withdraw the staking token");
         IERC20(tokenAddress).safeTransfer(owner(), amount);
         emit ERC20Recovered(tokenAddress, amount);
-    }
-
-    /// @notice Tune the early-withdrawal penalty. Capped well below 100% so
-    ///         it can only ever be a deterrent, never a trap that confiscates
-    ///         a staker's principal.
-    function setEarlyWithdrawSettings(uint256 _penaltyBps, uint256 _window) external onlyOwner {
-        require(_penaltyBps <= MAX_EARLY_WITHDRAW_PENALTY_BPS, "penalty too high");
-        earlyWithdrawPenaltyBps = _penaltyBps;
-        earlyWithdrawWindow = _window;
-        emit EarlyWithdrawSettingsUpdated(_penaltyBps, _window);
-    }
-
-    /// @notice Moves accumulated early-withdrawal penalties (in the staking
-    ///         token) to `to` for conversion into stakers' USDC rewards -
-    ///         e.g. swapped for USDC and passed to notifyRewardAmount(),
-    ///         the same way tax revenue already is. Bounded by
-    ///         pendingPenalties, so it can never reach into stakers'
-    ///         principal. Owner-or-notifier: routine and repeatable, same
-    ///         as notifyRewardAmount() itself.
-    function sweepPenalties(address to) external onlyOwnerOrNotifier {
-        require(to != address(0), "cannot sweep to zero address");
-        uint256 amount = pendingPenalties;
-        require(amount > 0, "no penalties to sweep");
-        pendingPenalties = 0;
-        stakingToken.safeTransfer(to, amount);
-        emit PenaltiesSwept(to, amount);
     }
 }
