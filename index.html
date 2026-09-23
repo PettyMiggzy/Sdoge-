@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>$SDOGE — The Stable Doge | Real Yield Meme Token on Arc</title>
+<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USYC treasury. Same good boy, more stability. Fixed supply, 1% tax, buyback & burn, redeemable NAV." />
+
+<link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav class="navbar" id="navbar">
+  <div class="container navbar__inner">
+    <a href="#top" class="brand">
+      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
+      <span class="brand__name">$SDOGE</span>
+    </a>
+
+    <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+
+    <div class="navbar__links" id="navLinks">
+      <a href="#about">About</a>
+      <a href="#tokenomics">Tokenomics</a>
+      <a href="#treasury">Treasury</a>
+      <a href="#how-to-buy">How to Buy</a>
+      <a href="#faq">FAQ</a>
+      <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<header class="hero" id="top">
+  <div class="hero__bg" style="background-image:url('assets/img/hero-banner.jpg')"></div>
+  <div class="hero__overlay"></div>
+
+  <div class="container hero__inner">
+    <div class="pill">
+      <span class="pill__dot"></span> Live on Arc &middot; Launching via Argus
+    </div>
+    <h1 class="hero__title">
+      Same Good Boy.<br/><span class="text-gradient">More Stability.</span>
+    </h1>
+    <p class="hero__subtitle">
+      $SDOGE is the first Doge with a real treasury. A meme on the outside,
+      a USYC-backed reserve on the inside — every trade feeds a treasury
+      that can never be minted away.
+    </p>
+
+    <div class="hero__cta">
+      <a href="#buy" class="btn btn--primary">Buy on Argus</a>
+      <a href="#chart" class="btn btn--ghost">View Chart</a>
+      <a href="#treasury" class="btn btn--ghost">See the Treasury</a>
+    </div>
+
+    <div class="hero__stats">
+      <div class="stat">
+        <span class="stat__value">1,000,000,000</span>
+        <span class="stat__label">Fixed Supply</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value">1%</span>
+        <span class="stat__label">Buy/Sell Tax</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value">USYC</span>
+        <span class="stat__label">Treasury Reserve Asset</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value">Arc</span>
+        <span class="stat__label">Native Chain (USDC gas)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker">
+    <div class="ticker__track">
+      <span>SAME GOOD BOY, MORE STABILITY</span>
+      <span>&bull;</span>
+      <span>1 $SDOGE VIBES ONLY</span>
+      <span>&bull;</span>
+      <span>REAL TREASURY, REAL DOGE</span>
+      <span>&bull;</span>
+      <span>GOOD BOY ALWAYS STAYS</span>
+      <span>&bull;</span>
+      <span>SAME GOOD BOY, MORE STABILITY</span>
+      <span>&bull;</span>
+      <span>1 $SDOGE VIBES ONLY</span>
+      <span>&bull;</span>
+      <span>REAL TREASURY, REAL DOGE</span>
+      <span>&bull;</span>
+      <span>GOOD BOY ALWAYS STAYS</span>
+      <span>&bull;</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== ABOUT ===== -->
+  <section class="section" id="about">
+    <div class="container">
+      <p class="eyebrow">Why $SDOGE</p>
+      <h2 class="section__title">Meme energy. Treasury discipline.</h2>
+      <p class="section__lead">
+        Every other dog coin is a popularity contest. $SDOGE is a popularity
+        contest with a balance sheet — a fixed-supply meme token where every
+        single trade quietly funds a real, on-chain reserve.
+      </p>
+
+      <div class="grid grid--3">
+        <div class="card">
+          <div class="card__icon">🏦</div>
+          <h3>Real Yield Treasury</h3>
+          <p>A share of every trade routes to a Treasury contract holding
+          USYC — Circle's tokenized short-term Treasury fund, native to Arc.
+          The reserve accrues yield continuously and compounds back into
+          itself.</p>
+        </div>
+        <div class="card">
+          <div class="card__icon">🔥</div>
+          <h3>Buyback &amp; Burn</h3>
+          <p>The rest of every trade buys $SDOGE back from the open market
+          and burns it — tightening supply with every swap, forever.</p>
+        </div>
+        <div class="card">
+          <div class="card__icon">🐕</div>
+          <h3>Redeemable, Not Just Hopeful</h3>
+          <p>Holders will be able to burn $SDOGE through the Treasury
+          contract to claim their proportional share of reserves —
+          a floor that's backed by an asset, not just a chart.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TOKENOMICS ===== -->
+  <section class="section section--alt" id="tokenomics">
+    <div class="container">
+      <p class="eyebrow">Tokenomics</p>
+      <h2 class="section__title">Simple by design. Boring on purpose.</h2>
+      <p class="section__lead">
+        No hidden wallets, no team allocation games, no future minting.
+        One tax, split two ways, forever.
+      </p>
+
+      <div class="tax-split">
+        <div class="tax-split__ring" style="--p1: 60; --p2: 40;">
+          <div class="tax-split__center">
+            <span class="tax-split__number">1%</span>
+            <span class="tax-split__caption">total tax</span>
+          </div>
+        </div>
+        <div class="tax-split__legend">
+          <div class="legend-item">
+            <span class="legend-dot legend-dot--treasury"></span>
+            <div>
+              <strong>0.6% → Treasury</strong>
+              <p>Swapped and deposited into the USYC reserve. Compounds automatically — no claiming, no dividends, just NAV that's designed to climb.</p>
+            </div>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot legend-dot--burn"></span>
+            <div>
+              <strong>0.4% → Buyback &amp; Burn</strong>
+              <p>Used to buy $SDOGE on the open market and send it to a dead address. Circulating supply only ever goes down.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specs">
+        <div class="specs__row">
+          <span>Total Supply</span>
+          <span>1,000,000,000 $SDOGE (fixed, non-mintable)</span>
+        </div>
+        <div class="specs__row">
+          <span>Buy / Sell Tax</span>
+          <span>1% (0.6% Treasury / 0.4% Buyback &amp; Burn)</span>
+        </div>
+        <div class="specs__row">
+          <span>Chain</span>
+          <span>Arc — Circle's USDC-native L1 (Chain ID 5042)</span>
+        </div>
+        <div class="specs__row">
+          <span>Launch Venue</span>
+          <span>Argus.world bonding curve → Uniswap v4 on Arc</span>
+        </div>
+        <div class="specs__row">
+          <span>Treasury Reserve Asset</span>
+          <span>USYC (Circle tokenized short-term Treasury fund)</span>
+        </div>
+        <div class="specs__row">
+          <span>Team Allocation</span>
+          <span>0% — fair launch via bonding curve</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TREASURY / NAV ===== -->
+  <section class="section" id="treasury">
+    <div class="container">
+      <p class="eyebrow">Treasury &amp; NAV</p>
+      <h2 class="section__title">The floor is an asset, not a hope.</h2>
+      <p class="section__lead">
+        Instead of paying out "yield" like a security dividend, the Treasury
+        auto-compounds USYC income back into reserves — raising the
+        redeemable value behind every token over time. Holders can always
+        burn $SDOGE for a proportional slice of the Treasury.
+      </p>
+
+      <div class="dashboard">
+        <div class="dashboard__header">
+          <span class="badge badge--pending">Live at launch — preview layout</span>
+        </div>
+        <div class="dashboard__grid">
+          <div class="dashboard__card">
+            <span class="dashboard__label">Treasury Reserve (USYC)</span>
+            <span class="dashboard__value">—</span>
+            <span class="dashboard__hint">Populated on-chain at launch</span>
+          </div>
+          <div class="dashboard__card">
+            <span class="dashboard__label">NAV per $SDOGE</span>
+            <span class="dashboard__value">—</span>
+            <span class="dashboard__hint">Treasury value ÷ circulating supply</span>
+          </div>
+          <div class="dashboard__card">
+            <span class="dashboard__label">Total Burned</span>
+            <span class="dashboard__value">—</span>
+            <span class="dashboard__hint">Cumulative buyback &amp; burn</span>
+          </div>
+          <div class="dashboard__card">
+            <span class="dashboard__label">Circulating Supply</span>
+            <span class="dashboard__value">—</span>
+            <span class="dashboard__hint">1,000,000,000 at genesis</span>
+          </div>
+        </div>
+        <button class="btn btn--primary btn--wide" id="redeemBtn" disabled>
+          Connect Wallet to Redeem (available post-launch)
+        </button>
+      </div>
+
+      <p class="fine-print">
+        Design goal, not a promise: the mechanism is built so the Treasury
+        floor trends up as USYC accrues, but reserve value can still move
+        with market conditions and smart-contract risk. Nothing here is
+        financial advice or a guaranteed return — see the disclaimer below.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== HOW TO BUY ===== -->
+  <section class="section section--alt" id="how-to-buy">
+    <div class="container">
+      <p class="eyebrow">How to Buy</p>
+      <h2 class="section__title">Four steps. No excuses.</h2>
+
+      <div class="steps">
+        <div class="step">
+          <span class="step__number">1</span>
+          <h3>Get a wallet</h3>
+          <p>Install a wallet that supports Arc, and fund it with USDC — the gas token on Arc.</p>
+        </div>
+        <div class="step">
+          <span class="step__number">2</span>
+          <h3>Bridge to Arc</h3>
+          <p>Bridge or on-ramp your USDC to the Arc network.</p>
+        </div>
+        <div class="step">
+          <span class="step__number">3</span>
+          <h3>Head to Argus</h3>
+          <p>Connect your wallet on Argus.world and find the official $SDOGE pool.</p>
+        </div>
+        <div class="step">
+          <span class="step__number">4</span>
+          <h3>Swap &amp; hold</h3>
+          <p>Swap USDC for $SDOGE. Every trade feeds the Treasury and the burn. Good boy.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        Always verify the official contract address and Argus link before
+        trading — never trust a link from a DM, comment, or search ad.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CHART / BUY ===== -->
+  <section class="section" id="chart">
+    <div class="container">
+      <p class="eyebrow">Chart &amp; Contract</p>
+      <h2 class="section__title">Trade $SDOGE</h2>
+
+      <div class="chart-panel">
+        <div class="chart-panel__placeholder" id="buy">
+          <p>📈 Live chart embeds here once $SDOGE is trading on Argus / Uniswap v4.</p>
+        </div>
+
+        <div class="contract-box">
+          <span class="contract-box__label">Contract Address</span>
+          <div class="contract-box__row">
+            <code id="contractAddress">TBA — published at launch</code>
+            <button class="btn btn--ghost btn--small" id="copyBtn">Copy</button>
+          </div>
+          <p class="contract-box__hint">This page will be updated with the real, verified contract address the moment $SDOGE goes live. Anything posted elsewhere before that is not us.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FAQ ===== -->
+  <section class="section section--alt" id="faq">
+    <div class="container">
+      <p class="eyebrow">FAQ</p>
+      <h2 class="section__title">Questions, answered plainly</h2>
+
+      <div class="accordion">
+        <div class="accordion__item">
+          <button class="accordion__trigger">What is $SDOGE, really? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>A fixed-supply meme token on Arc with a built-in Treasury.
+            A portion of every trade is deposited into USYC reserves and
+            another portion buys back and burns supply. It's a meme coin
+            with a mechanism, not a promise of profit.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__trigger">Is this an investment / security? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>$SDOGE is a meme token, not a registered security, an
+            investment product, or a savings account, and nothing on this
+            site is financial advice. There is no promise, guarantee, or
+            expectation of profit, dividend, or fixed return communicated
+            here. Treasury mechanics affect the token's design, not any
+            individual's guaranteed outcome. Do your own research and
+            consult a professional before buying.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__trigger">What is USYC? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>USYC is a tokenized fund from Circle that represents shares
+            in short-term U.S. Treasury holdings, issued natively on Arc.
+            The $SDOGE Treasury is designed to hold USYC as its reserve
+            asset.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__trigger">Can the floor really "never go to zero"? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>It's our tagline, not a legal guarantee. The mechanism is
+            designed so the Treasury backing trends upward over time, but
+            markets, liquidity, and smart-contract risk are real. Never
+            put in more than you can afford to lose.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__trigger">Where do I buy? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>Via the official pool on Argus.world once live, using USDC
+            on Arc. See "How to Buy" above.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
+      <span class="brand__name">$SDOGE</span>
+      <p>The Stable Doge. Same good boy, more stability.</p>
+    </div>
+
+    <div class="footer__links">
+      <div>
+        <h4>Explore</h4>
+        <a href="#about">About</a>
+        <a href="#tokenomics">Tokenomics</a>
+        <a href="#treasury">Treasury</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div>
+        <h4>Community</h4>
+        <a href="#">X / Twitter (coming soon)</a>
+        <a href="#">Telegram (coming soon)</a>
+        <a href="#">Argus.world</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <p class="disclaimer">
+      <strong>Risk disclaimer:</strong> $SDOGE is an experimental meme
+      token on the Arc network. It is not a security, not an investment
+      product, and not backed, endorsed, or issued by Circle or any
+      issuer of USDC/USYC. Cryptocurrency involves substantial risk,
+      including total loss of funds. Smart contracts may contain bugs;
+      treasury value can fluctuate with market and protocol conditions.
+      Nothing on this site is financial, legal, or tax advice. Always
+      verify contract addresses and links from official sources only, and
+      do your own research before buying.
+    </p>
+    <p class="copyright">© <span id="year"></span> $SDOGE. Good boy always stays.</p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>
