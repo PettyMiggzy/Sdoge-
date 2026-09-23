@@ -16,6 +16,15 @@
 //
 // Optional env vars:
 //   ARC_RPC_URL           - default https://rpc.mainnet.arc.io
+//   ARC_RPC_WSS_URL       - free backup RPC, tried if ARC_RPC_URL fails.
+//                           Default wss://rpc.blockdaemon.mainnet.arc.io/websocket
+//                           (a different provider than the default, so a
+//                           rate limit on one doesn't take out both).
+//   ARC_RPC_FALLBACK_URL  - last-resort paid RPC (e.g. an Alchemy URL with
+//                           its API key baked in), only used if both of the
+//                           above fail. Keep this in GitHub Secrets, never
+//                           in config.json — unlike the others, it's a
+//                           credential.
 //   TOKEN_DECIMALS        - default 18
 //   UNIVERSAL_ROUTER_ADDRESS - Arc's Uniswap v4 UniversalRouter. Never a real
 //                           buyer, so it's auto-excluded alongside whatever's
@@ -81,7 +90,57 @@ function fromTopicAddress(topic) {
   return '0x' + topic.slice(-40);
 }
 
+// One-shot WebSocket JSON-RPC call: open, send, wait for the matching
+// reply, close. Simpler and more robust than keeping a socket open across
+// calls, and call volume here (a handful per run) makes the reconnect
+// overhead irrelevant.
+function rpcOverWebSocket(url, method, params, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ws = new WebSocket(url);
+
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {
+        // already closing/closed — fine
+      }
+      fn(arg);
+    };
+
+    const timer = setTimeout(
+      () => finish(reject, new Error(`WS RPC timed out after ${timeoutMs}ms for ${method}`)),
+      timeoutMs
+    );
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }));
+    });
+    ws.addEventListener('message', (event) => {
+      try {
+        const body = JSON.parse(event.data.toString());
+        if (body.error) finish(reject, new Error(`WS RPC error for ${method}: ${JSON.stringify(body.error)}`));
+        else finish(resolve, body.result);
+      } catch (err) {
+        finish(reject, new Error(`WS RPC bad response for ${method}: ${err.message}`));
+      }
+    });
+    ws.addEventListener('error', () => {
+      finish(reject, new Error(`WS RPC connection error for ${method}`));
+    });
+  });
+}
+
+// Never interpolate `url` into a thrown message here — ARC_RPC_FALLBACK_URL
+// can carry a paid provider's API key, and this error can end up in
+// GitHub Actions logs, which are public on this repo.
 async function rpc(url, method, params) {
+  if (url.startsWith('ws://') || url.startsWith('wss://')) {
+    return rpcOverWebSocket(url, method, params);
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -91,6 +150,21 @@ async function rpc(url, method, params) {
   const body = await res.json();
   if (body.error) throw new Error(`RPC error for ${method}: ${JSON.stringify(body.error)}`);
   return body.result;
+}
+
+// Tries each configured endpoint in order (primary -> free backup -> paid
+// fallback), moving on if one throws (network error, 429, timeout, etc).
+async function rpcWithFallback(endpoints, method, params) {
+  let lastErr;
+  for (const { label, url } of endpoints) {
+    try {
+      return await rpc(url, method, params);
+    } catch (err) {
+      lastErr = err;
+      console.error(`RPC (${label}) failed for ${method}: ${err.message} — trying next endpoint`);
+    }
+  }
+  throw lastErr;
 }
 
 async function loadState() {
@@ -196,20 +270,20 @@ async function postToTelegram(token, chatId, { text, buttons }) {
 // a buy is just the native value of the transaction that triggered it —
 // no separate USDC contract or price feed needed. Cached per run since a
 // tx can contain more than one qualifying transfer.
-async function getTxValueUsd(rpcUrl, txHash, cache) {
+async function getTxValueUsd(endpoints, txHash, cache) {
   if (cache.has(txHash)) return cache.get(txHash);
-  const tx = await rpc(rpcUrl, 'eth_getTransactionByHash', [txHash]);
+  const tx = await rpcWithFallback(endpoints, 'eth_getTransactionByHash', [txHash]);
   const usd = tx?.value ? Number(BigInt(tx.value)) / 1e18 : 0;
   cache.set(txHash, usd);
   return usd;
 }
 
-async function getLogsChunked(rpcUrl, fromBlock, toBlock, address, topics) {
+async function getLogsChunked(endpoints, fromBlock, toBlock, address, topics) {
   const logs = [];
   let start = fromBlock;
   while (start <= toBlock) {
     const end = start + MAX_BLOCK_RANGE < toBlock ? start + MAX_BLOCK_RANGE : toBlock;
-    const chunk = await rpc(rpcUrl, 'eth_getLogs', [
+    const chunk = await rpcWithFallback(endpoints, 'eth_getLogs', [
       {
         address,
         fromBlock: '0x' + start.toString(16),
@@ -241,7 +315,11 @@ async function main() {
     return;
   }
 
-  const rpcUrl = need('ARC_RPC_URL') ?? 'https://rpc.mainnet.arc.io';
+  const endpoints = [
+    { label: 'primary', url: need('ARC_RPC_URL') ?? 'https://rpc.mainnet.arc.io' },
+    { label: 'free-wss', url: need('ARC_RPC_WSS_URL') ?? 'wss://rpc.blockdaemon.mainnet.arc.io/websocket' },
+    need('ARC_RPC_FALLBACK_URL') && { label: 'paid-fallback', url: need('ARC_RPC_FALLBACK_URL') },
+  ].filter(Boolean);
   const decimals = BigInt(need('TOKEN_DECIMALS') ?? '18');
   const divisor = 10n ** decimals;
   const minBuyTokens = Number(need('MIN_BUY_TOKENS') ?? '0');
@@ -255,7 +333,7 @@ async function main() {
   );
 
   const state = await loadState();
-  const currentBlock = BigInt(await rpc(rpcUrl, 'eth_blockNumber', []));
+  const currentBlock = BigInt(await rpcWithFallback(endpoints, 'eth_blockNumber', []));
 
   if (state.lastBlock === null) {
     const startBlock = need('START_BLOCK');
@@ -271,7 +349,7 @@ async function main() {
     return;
   }
 
-  const logs = await getLogsChunked(rpcUrl, lastBlock + 1n, currentBlock, tokenAddress, [
+  const logs = await getLogsChunked(endpoints, lastBlock + 1n, currentBlock, tokenAddress, [
     TRANSFER_TOPIC,
     toTopicAddress(poolAddress),
   ]);
@@ -288,7 +366,7 @@ async function main() {
     const tokens = Number(rawValue) / Number(divisor);
     if (tokens < minBuyTokens) continue;
 
-    const usdSpent = await getTxValueUsd(rpcUrl, log.transactionHash, txValueCache);
+    const usdSpent = await getTxValueUsd(endpoints, log.transactionHash, txValueCache);
     if (usdSpent < minBuyUsd) {
       console.log(`Skipped ${formatAmount(tokens)} SDOGE buy (${formatUsd(usdSpent)}, below $${minBuyUsd} minimum).`);
       continue;

@@ -87,6 +87,37 @@ so it doesn't flood the channel with old history). Trigger it immediately
 via **Actions → SDOGE Buy Bot → Run workflow** instead of waiting up to
 5 minutes.
 
+## RPC reliability (surviving rate limits)
+
+Real incident: Arc's public RPC (`rpc.mainnet.arc.io`, the default) returned
+a `429` mid-run, which briefly took the whole bot down and let a batch of
+real buys go unannounced. Two fixes:
+
+1. **Every chain read now tries up to three endpoints in order** before
+   giving up: `ARC_RPC_URL` (default `https://rpc.mainnet.arc.io`) → a free
+   backup on a *different* provider, `ARC_RPC_WSS_URL` (default
+   `wss://rpc.blockdaemon.mainnet.arc.io/websocket`, no API key needed) →
+   `ARC_RPC_FALLBACK_URL`, a paid RPC (e.g. Alchemy) if you set one. The
+   free tiers are tried first specifically so a paid provider's usage/cost
+   is only ever touched when both free options are actually down.
+2. The polling loop no longer lets one bad iteration kill the whole
+   ~4-minute window (see the workflow's `|| true`-style handling) — it just
+   retries 25s later like it was always supposed to.
+
+`ARC_RPC_FALLBACK_URL` is optional but, unlike everything else in this
+list, **it's a credential** (a paid provider's URL has your API key baked
+into it) — it must go in as a GitHub **secret**, never in `config.json`:
+**https://github.com/PettyMiggzy/Sdoge-/settings/secrets/actions/new**
+— name `ARC_RPC_FALLBACK_URL`, paste the full URL (key included), save.
+The code never logs the URL itself (only a label like `primary`/`free-wss`/
+`paid-fallback`), and GitHub also auto-redacts secret values from Actions
+logs as a second layer.
+
+Since a failed run never advances `bot/state.json`, none of this loses
+history — the next run that actually succeeds sweeps every block back to
+the last good checkpoint in one pass and announces everything it missed,
+exactly as if nothing had gone wrong (just later than it should have).
+
 ## The buy-alert video
 
 If `bot/assets/buy-alert.mp4` exists, every alert is posted as a video

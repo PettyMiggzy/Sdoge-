@@ -26,6 +26,8 @@ jobs:
         working-directory: bot
         env:
           ARC_RPC_URL: ${{ vars.ARC_RPC_URL }}
+          ARC_RPC_WSS_URL: ${{ vars.ARC_RPC_WSS_URL }}
+          ARC_RPC_FALLBACK_URL: ${{ secrets.ARC_RPC_FALLBACK_URL }}
           SDOGE_TOKEN_ADDRESS: ${{ vars.SDOGE_TOKEN_ADDRESS }}
           POOL_ADDRESS: ${{ vars.POOL_ADDRESS }}
           UNIVERSAL_ROUTER_ADDRESS: ${{ vars.UNIVERSAL_ROUTER_ADDRESS }}
