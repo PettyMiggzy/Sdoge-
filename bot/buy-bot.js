@@ -8,13 +8,18 @@
 //
 // Required env vars (see bot/README.md for how to obtain each one):
 //   SDOGE_TOKEN_ADDRESS   - the $SDOGE ERC-20 contract on Arc
-//   POOL_ADDRESS          - the SDOGE/USDC pool address tokens are bought FROM
+//   POOL_ADDRESS          - the Uniswap v4 PoolManager tokens are bought FROM
+//                           (a singleton shared by every pool on Arc, not a
+//                           dedicated SDOGE contract)
 //   TELEGRAM_BOT_TOKEN    - from @BotFather
 //   TELEGRAM_CHAT_ID      - the channel/group to post into
 //
 // Optional env vars:
 //   ARC_RPC_URL           - default https://rpc.mainnet.arc.io
 //   TOKEN_DECIMALS        - default 18
+//   UNIVERSAL_ROUTER_ADDRESS - Arc's Uniswap v4 UniversalRouter. Never a real
+//                           buyer, so it's auto-excluded alongside whatever's
+//                           in EXCLUDE_TO_ADDRESSES.
 //   EXCLUDE_TO_ADDRESSES  - comma-separated addresses to ignore (e.g. the
 //                           protocol's own buyback+burn wallet, so its
 //                           withdrawals from the pool aren't announced as
@@ -25,9 +30,14 @@
 //   DRY_RUN               - "true" to log the message instead of sending it
 //   START_BLOCK           - block to start watching from on first run
 //                           (defaults to "now", i.e. no history backfill)
+//
+// bot/assets/buy-alert.mp4, if present, is attached as a video to every
+// posted alert (caption = the usual alert text). Falls back to a plain text
+// message when the file isn't there.
 
 const STATE_PATH = new URL('./state.json', import.meta.url);
 const CONFIG_PATH = new URL('./config.json', import.meta.url);
+const VIDEO_PATH = new URL('./assets/buy-alert.mp4', import.meta.url);
 const TRANSFER_TOPIC =
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const MAX_BLOCK_RANGE = 2000n;
@@ -44,6 +54,16 @@ try {
   fileConfig = JSON.parse(await fs.readFile(CONFIG_PATH, 'utf8'));
 } catch {
   fileConfig = {};
+}
+
+// Loaded once at startup so every alert this run can attach it without
+// re-reading the file. Missing asset just means alerts fall back to text.
+let buyAlertVideo = null;
+try {
+  const fs = await import('node:fs/promises');
+  buyAlertVideo = await fs.readFile(VIDEO_PATH);
+} catch {
+  buyAlertVideo = null;
 }
 
 function need(name) {
@@ -107,11 +127,11 @@ function formatUsd(n) {
 
 function buildMessage({ tokens, usdSpent, buyer, txHash }) {
   const text = [
-    `${tierEmoji(tokens)}`,
-    `*New $SDOGE Buy!*`,
-    `${formatUsd(usdSpent)} spent`,
-    `${formatAmount(tokens)} $SDOGE`,
-    `Buyer: \`${buyer.slice(0, 6)}...${buyer.slice(-4)}\``,
+    `🚀 *NEW $SDOGE BUY!* ${tierEmoji(tokens)}`,
+    ``,
+    `💵 *Spent:* ${formatUsd(usdSpent)}`,
+    `🐕 *Got:* ${formatAmount(tokens)} $SDOGE`,
+    `👤 *Buyer:* \`${buyer.slice(0, 6)}...${buyer.slice(-4)}\``,
   ].join('\n');
 
   // Real inline buttons instead of bare markdown links — links sitting
@@ -127,10 +147,35 @@ function buildMessage({ tokens, usdSpent, buyer, txHash }) {
 }
 
 async function postToTelegram(token, chatId, { text, buttons }) {
+  const replyMarkup = buttons?.length ? { inline_keyboard: buttons } : undefined;
+
   if (need('DRY_RUN') === 'true') {
-    console.log('[dry-run] would post to Telegram:\n' + text + '\nbuttons: ' + JSON.stringify(buttons));
+    console.log(
+      `[dry-run] would post to Telegram${buyAlertVideo ? ' (with video)' : ''}:\n` +
+        text +
+        '\nbuttons: ' +
+        JSON.stringify(buttons)
+    );
     return;
   }
+
+  if (buyAlertVideo) {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('caption', text);
+    form.append('parse_mode', 'Markdown');
+    if (replyMarkup) form.append('reply_markup', JSON.stringify(replyMarkup));
+    form.append('video', new Blob([buyAlertVideo], { type: 'video/mp4' }), 'buy-alert.mp4');
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendVideo`, {
+      method: 'POST',
+      body: form,
+    });
+    const body = await res.json();
+    if (!body.ok) throw new Error(`Telegram error (sendVideo): ${JSON.stringify(body)}`);
+    return;
+  }
+
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -139,11 +184,11 @@ async function postToTelegram(token, chatId, { text, buttons }) {
       text,
       parse_mode: 'Markdown',
       disable_web_page_preview: true,
-      reply_markup: buttons?.length ? { inline_keyboard: buttons } : undefined,
+      reply_markup: replyMarkup,
     }),
   });
   const body = await res.json();
-  if (!body.ok) throw new Error(`Telegram error: ${JSON.stringify(body)}`);
+  if (!body.ok) throw new Error(`Telegram error (sendMessage): ${JSON.stringify(body)}`);
 }
 
 // Arc's native currency IS USDC (confirmed: a real buy tx's `value` field
@@ -204,6 +249,7 @@ async function main() {
   const exclude = new Set(
     (need('EXCLUDE_TO_ADDRESSES') ?? '')
       .split(',')
+      .concat(need('UNIVERSAL_ROUTER_ADDRESS') ?? '')
       .map((a) => a.trim().toLowerCase())
       .filter(Boolean)
   );

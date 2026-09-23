@@ -10,9 +10,10 @@ spins up a fresh runner that:
 
 1. Reads `bot/state.json` for the last block it checked.
 2. Asks Arc's RPC for any `Transfer` events that moved $SDOGE **out of the
-   pool address** since then — that's the on-chain signature of a buy.
-3. Posts one Telegram message per transfer (skipping any in
-   `EXCLUDE_TO_ADDRESSES`, see below).
+   PoolManager address** since then — that's the on-chain signature of a buy.
+3. Posts one Telegram message (with the buy-alert video attached, see below)
+   per transfer — skipping any recipient in `EXCLUDE_TO_ADDRESSES` or
+   `UNIVERSAL_ROUTER_ADDRESS` (see below).
 4. Commits the new "last block checked" back to `bot/state.json` so the next
    run picks up where this one left off.
 
@@ -40,13 +41,23 @@ manage things that way.
 `bot/config.json` is already filled in post-launch:
 
 - `SDOGE_TOKEN_ADDRESS`: `0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405`
-- `POOL_ADDRESS`: `0x8366a39cc670b4001a1121b8f6a443a643e40951` — derived by
-  scanning on-chain Transfer events from the deployment block forward (no
-  block explorer indexed the token yet): nearly the full 1B supply moved
-  here in the deployment tx, and it's since sent tokens out to 19 different
-  buyer addresses across 68 transfers — the standard signature of a pool.
-  Also holds a multi-million native-USDC balance, consistent with an
-  active SDOGE/USDC pool.
+- `POOL_ADDRESS`: `0x8366a39cc670b4001a1121b8f6a443a643e40951` — originally
+  found by scanning on-chain Transfer events from the deployment block
+  forward (no block explorer indexed the token yet): nearly the full 1B
+  supply moved here in the deployment tx, and it's since sent tokens out to
+  19 different buyer addresses across 68 transfers — the standard signature
+  of a pool. It's since been confirmed as Arc's Uniswap v4 **PoolManager** —
+  a single singleton contract shared by *every* pool on the chain (v4
+  doesn't deploy a separate contract per pool the way v2/v3 do), which is
+  also why it holds a multi-million native-USDC balance covering all of
+  Arc's pools, not just SDOGE's. Doesn't change how the bot uses it: every
+  pool's tokens still move through this one address, so watching Transfers
+  out of it for the SDOGE contract specifically still isolates SDOGE buys.
+- `UNIVERSAL_ROUTER_ADDRESS`: `0x8702463e73f74d0b6765aBceb314Ef07aCb92650` —
+  Arc's Uniswap v4 UniversalRouter, the contract swaps normally get routed
+  through. Automatically folded into the exclude list at runtime (on top of
+  whatever's in `EXCLUDE_TO_ADDRESSES`) so it's never misreported as a
+  "buyer" if it ever shows up as an intermediate recipient.
 - `EXCLUDE_TO_ADDRESSES`: `0xb021be536808f551b31789422fd28a6c9c6e97da` —
   this address received the initial mint and got tokens back from the pool
   3 times after that, which reads as the deployer/bonding-curve contract
@@ -76,13 +87,22 @@ so it doesn't flood the channel with old history). Trigger it immediately
 via **Actions → SDOGE Buy Bot → Run workflow** instead of waiting up to
 5 minutes.
 
+## The buy-alert video
+
+If `bot/assets/buy-alert.mp4` exists, every alert is posted as a video
+(Telegram `sendVideo`, multipart upload) with the usual message as the
+caption and the same Tx/Buy/Chart buttons attached below it. If the file is
+ever missing, alerts silently fall back to the old plain-text `sendMessage`
+— nothing breaks either way, and the fallback needs no configuration.
+
 ## Testing before launch
 
 Set the Actions variable `DRY_RUN` to `true` (add it as an env var in the
 workflow, or export it locally) to log the message instead of sending it —
-useful for checking formatting without spamming the real channel. You can
-also run it locally against any already-live token/pool on Arc to confirm
-the RPC and decoding logic work end-to-end before your own pool exists:
+useful for checking formatting without spamming the real channel; the log
+line also notes whether a video would've been attached. You can also run it
+locally against any already-live token/pool on Arc to confirm the RPC and
+decoding logic work end-to-end before your own pool exists:
 
 ```bash
 cd bot
