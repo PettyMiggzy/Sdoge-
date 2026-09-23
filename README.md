@@ -17,7 +17,10 @@ python3 -m http.server 8811
 - `index.html` — single-page site (hero, highlights, about, community, tokenomics/treasury/contract, roadmap, how-to-buy, FAQ)
 - `assets/css/style.css` — all styling
 - `assets/js/main.js` — nav toggle, FAQ accordion, copy-address button
-- `assets/img/` — logo, hero/community artwork, social share image
+- `assets/img/` — logo, hero/community/CTA artwork, social share image
+  (`moon-buggy.jpg` and `signpost-pool.jpg` were AI-generated via the Venice
+  API using the existing art as a style reference, to match the character
+  design consistently; everything else was supplied directly)
 
 ## Still placeholder — fill in before launch
 
