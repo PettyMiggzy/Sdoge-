@@ -320,6 +320,75 @@ describe("SDOGEStaking", function () {
     });
   });
 
+  describe("80% early-unlock threshold", function () {
+    it("charges no penalty and forfeits nothing once 80% of the lock has elapsed, before full maturity", async function () {
+      const { owner, alice, sdoge, staking } = await deployFixture();
+      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100"); // 30 days -> 80% = 24 days
+      await fund(staking, owner, "7");
+      await time.increase(24 * DAY + 1); // past 80%, still short of the full 30
+
+      const before = await sdoge.balanceOf(alice.address);
+      const amount = ethers.parseEther("100");
+      const { rewardPaid } = await staking
+        .connect(alice)
+        .withdraw.staticCall(stakeId, amount, [alice.address], [amount]);
+      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount]);
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + amount); // full principal, no penalty
+      expect(await staking.unallocatedTokens()).to.equal(0);
+      expect(rewardPaid).to.be.gt(0); // reward paid, not forfeited
+    });
+
+    it("still applies the penalty just before the 80% mark", async function () {
+      const { alice, sdoge, staking } = await deployFixture();
+      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100"); // 80% = 24 days
+      await time.increase(23 * DAY);
+
+      const before = await sdoge.balanceOf(alice.address);
+      const amount = ethers.parseEther("100");
+      const payout = ethers.parseEther("85");
+      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [payout]);
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + payout); // penalty still applied
+      expect(await staking.unallocatedTokens()).to.equal(ethers.parseEther("15"));
+    });
+
+    it("lets claimReward() collect once 80% has elapsed, even though full maturity hasn't", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      await fund(staking, owner, "7");
+      await time.increase(24 * DAY + 1);
+
+      await expect(staking.connect(alice).claimReward(stakeId)).to.not.be.reverted;
+    });
+
+    it("effectiveUnlockTime() reports 80% of the way from startTime to unlockTime", async function () {
+      const { alice, staking } = await deployFixture();
+      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      const s = await staking.stakes(stakeId);
+
+      const expected = s.startTime + ((s.unlockTime - s.startTime) * 8000n) / 10000n;
+      expect(await staking.effectiveUnlockTime(stakeId)).to.equal(expected);
+    });
+
+    it("only the owner can tune the threshold, bounded to (0%, 100%]", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await expect(staking.connect(alice).setEarlyUnlockThreshold(9000)).to.be.revertedWithCustomError(
+        staking,
+        "OwnableUnauthorizedAccount"
+      );
+      await expect(staking.connect(owner).setEarlyUnlockThreshold(0)).to.be.revertedWith(
+        "threshold out of range"
+      );
+      await expect(staking.connect(owner).setEarlyUnlockThreshold(10001)).to.be.revertedWith(
+        "threshold out of range"
+      );
+
+      await staking.connect(owner).setEarlyUnlockThreshold(9000);
+      expect(await staking.earlyUnlockThresholdBps()).to.equal(9000);
+    });
+  });
+
   describe("reward accrual with tier multipliers", function () {
     it("pays a higher tier proportionally more per token for equal principal and time", async function () {
       const { owner, alice, bob, staking } = await deployFixture();

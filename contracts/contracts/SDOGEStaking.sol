@@ -77,6 +77,14 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
 
     uint256 public earlyWithdrawPenaltyBps = 1500; // 15%, applies to principal only
 
+    /// @notice Reaching this fraction of a stake's committed lock counts as
+    ///         fully unlocked - no principal penalty, no reward forfeiture -
+    ///         even though block.timestamp hasn't reached unlockTime yet.
+    ///         Default 80%: a 30-day stake is penalty-free after 24 days.
+    ///         Rewards the commitment itself without demanding the staker
+    ///         sit out the last, least-informative slice of it.
+    uint256 public earlyUnlockThresholdBps = 8000; // 80%
+
     // ---------- Per-stake accounting ----------
 
     struct StakeInfo {
@@ -141,6 +149,7 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
     event RewardAdded(uint256 amount, uint256 newRewardRate, uint256 periodFinish);
     event RewardsDurationUpdated(uint256 newDuration);
     event EarlyWithdrawPenaltyBpsUpdated(uint256 penaltyBps);
+    event EarlyUnlockThresholdUpdated(uint256 thresholdBps);
     event TierMultiplierUpdated(uint8 indexed tier, uint256 multiplierBps);
     event TierDurationUpdated(uint8 indexed tier, uint256 duration);
     event NotifierUpdated(address indexed previousNotifier, address indexed newNotifier);
@@ -236,6 +245,15 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         emit Staked(msg.sender, stakeId, tier, amount, weighted, unlockTime);
     }
 
+    /// @notice The timestamp at which `stakeId` counts as unlocked for
+    ///         penalty purposes - earlyUnlockThresholdBps of the way
+    ///         through its committed lock, not the full 100%.
+    function effectiveUnlockTime(uint256 stakeId) public view returns (uint256) {
+        StakeInfo storage s = stakes[stakeId];
+        uint256 lockLength = s.unlockTime - s.startTime;
+        return s.startTime + (lockLength * earlyUnlockThresholdBps) / BPS_DENOMINATOR;
+    }
+
     /// @dev Shared accounting for both withdraw() and exitStake(): settles
     ///      the stake's reward, applies the early-withdrawal penalty and
     ///      reward forfeiture if applicable, updates all balances, and
@@ -253,7 +271,7 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
 
         _settleStake(stakeId);
 
-        early = block.timestamp < s.unlockTime;
+        early = block.timestamp < effectiveUnlockTime(stakeId);
         uint256 removedWeighted = (amount * tierMultiplierBps[s.tier]) / BPS_DENOMINATOR;
 
         s.amount -= amount;
@@ -358,7 +376,10 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         StakeInfo storage s = stakes[stakeId];
         require(s.owner == msg.sender, "not your stake");
         require(!s.closed, "stake already closed");
-        require(block.timestamp >= s.unlockTime, "still locked - matures or a full early exit settles reward");
+        require(
+            block.timestamp >= effectiveUnlockTime(stakeId),
+            "still locked - matures or a full early exit settles reward"
+        );
 
         _settleStake(stakeId);
         rewardPaid = s.accruedReward;
@@ -456,6 +477,16 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         require(_penaltyBps <= MAX_EARLY_WITHDRAW_PENALTY_BPS, "penalty too high");
         earlyWithdrawPenaltyBps = _penaltyBps;
         emit EarlyWithdrawPenaltyBpsUpdated(_penaltyBps);
+    }
+
+    /// @notice Tune how far into a stake's lock it counts as fully
+    ///         unlocked. Bounded to (0%, 100%]: 0 would let a stake start
+    ///         "matured," and anything above 100% is meaningless since
+    ///         nothing outlasts the lock itself.
+    function setEarlyUnlockThreshold(uint256 _thresholdBps) external onlyOwner {
+        require(_thresholdBps > 0 && _thresholdBps <= BPS_DENOMINATOR, "threshold out of range");
+        earlyUnlockThresholdBps = _thresholdBps;
+        emit EarlyUnlockThresholdUpdated(_thresholdBps);
     }
 
     /// @notice Retune a tier's reward multiplier going forward. Never

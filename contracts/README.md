@@ -37,15 +37,26 @@ once:
 This was specified exactly this way, not derived by us - worth flagging
 plainly rather than softening quietly: combining full reward forfeiture
 with a principal penalty is harsher than most staking contracts do either
-individually. Someone who locks 365 days, waits 300, then needs liquidity
-loses close to a year of accrued rewards *and* 15% of principal in one
-move. That's a deliberate deterrent for a reason (it's what makes the
-whole reward pool self-funded, with no tax revenue or Treasury money
-involved) but it is also the single most likely source of "I got rugged"
-complaints if it isn't communicated very clearly on the site before
-launch. Both knobs (`earlyWithdrawPenaltyBps` via `setEarlyWithdrawPenalty`,
-and the tier durations themselves) are tunable later if real usage says
-this is too harsh - nothing here locks the number in permanently.
+individually. That's a deliberate deterrent for a reason (it's what makes
+the whole reward pool self-funded, with no tax revenue or Treasury money
+involved), softened by the 80% threshold below rather than removed. Both
+knobs (`earlyWithdrawPenaltyBps` via `setEarlyWithdrawPenalty`, and the
+tier durations themselves) stay tunable later if real usage says this is
+still too harsh - nothing here locks the numbers in permanently.
+
+### The 80% early-unlock threshold
+
+Reaching `earlyUnlockThresholdBps` (default 80%) of a stake's committed
+lock counts as fully unlocked - no principal penalty, no reward
+forfeiture - even though the "advertised" lock length hasn't technically
+finished. A 30-day stake is penalty-free after 24 days, not 30. This
+rewards the commitment itself rather than demanding a staker sit out the
+last, least-informative slice of a long lock to avoid losing months of
+accrued reward over a few final days. `effectiveUnlockTime(stakeId)` is
+the exact timestamp this resolves to for a given stake; `withdraw()`,
+`exitStake()`, and `claimReward()` all check against it instead of the
+stake's full `unlockTime`. Owner-tunable via `setEarlyUnlockThreshold`,
+bounded to (0%, 100%].
 
 Forfeited principal and forfeited reward both stay in the contract
 (`unallocatedTokens` and `unallocatedUsdc` respectively) to fund
@@ -201,7 +212,9 @@ penalty/duration setting.
 
 ```bash
 npm install
-npx hardhat test        # 37 tests: tiers, penalty + forfeiture, multi-wallet withdrawal, exitStake, contributions, admin, notifier, reentrancy
+npx hardhat test        # 63 tests total: 42 staking (tiers, penalty + forfeiture, the 80% threshold,
+                         # multi-wallet withdrawal, exitStake, contributions, admin, notifier, reentrancy)
+                         # + 21 collectibles (design creation, minting, supply caps, admin, ERC-1155 behavior)
 npx hardhat compile
 ```
 
