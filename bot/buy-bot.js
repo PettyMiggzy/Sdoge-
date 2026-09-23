@@ -101,23 +101,28 @@ function tierEmoji(tokens) {
 }
 
 function buildMessage({ tokens, buyer, txHash }) {
-  const lines = [
+  const text = [
     `${tierEmoji(tokens)}`,
     `*New $SDOGE Buy!*`,
     `${formatAmount(tokens)} $SDOGE`,
     `Buyer: \`${buyer.slice(0, 6)}...${buyer.slice(-4)}\``,
-    `[Tx](https://explorer.arc.io/tx/${txHash})`,
-  ];
+  ].join('\n');
+
+  // Real inline buttons instead of bare markdown links — links sitting
+  // alone on their own line render as plain, undecorated text in Telegram
+  // and look broken rather than clickable.
+  const row = [{ text: '🔍 Tx', url: `https://explorer.arc.io/tx/${txHash}` }];
   const buyUrl = need('BUY_URL');
   const chartUrl = need('CHART_URL');
-  if (buyUrl) lines.push(`[Buy](${buyUrl})`);
-  if (chartUrl) lines.push(`[Chart](${chartUrl})`);
-  return lines.join('\n');
+  if (buyUrl) row.push({ text: '🛒 Buy', url: buyUrl });
+  if (chartUrl) row.push({ text: '📊 Chart', url: chartUrl });
+
+  return { text, buttons: [row] };
 }
 
-async function postToTelegram(token, chatId, text) {
+async function postToTelegram(token, chatId, { text, buttons }) {
   if (need('DRY_RUN') === 'true') {
-    console.log('[dry-run] would post to Telegram:\n' + text);
+    console.log('[dry-run] would post to Telegram:\n' + text + '\nbuttons: ' + JSON.stringify(buttons));
     return;
   }
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -128,6 +133,7 @@ async function postToTelegram(token, chatId, text) {
       text,
       parse_mode: 'Markdown',
       disable_web_page_preview: true,
+      reply_markup: buttons?.length ? { inline_keyboard: buttons } : undefined,
     }),
   });
   const body = await res.json();
