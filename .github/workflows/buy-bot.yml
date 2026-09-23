@@ -62,9 +62,22 @@ jobs:
           done
 
       - name: Persist state if it changed
+        # A push here can lose the race against any other commit landing on
+        # this branch mid-run (a dev push, or an overlapping run) — seen for
+        # real: run #17 posted its alert fine but its `git push` got a plain
+        # "fetch first" rejection. Retry with rebase instead of failing the
+        # whole job over a state-file conflict that a re-fetch trivially
+        # resolves.
         run: |
           git config user.name "sdoge-buy-bot"
           git config user.email "actions@users.noreply.github.com"
           git add bot/state.json
-          git diff --cached --quiet || git commit -m "chore: update buy-bot state [skip ci]"
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update buy-bot state [skip ci]"
+          for i in 1 2 3 4 5; do
+            git push && exit 0
+            echo "Push rejected (likely a concurrent commit to this branch) — rebasing and retrying ($i/5)..."
+            git pull --rebase origin "$GITHUB_REF_NAME" || { echo "::error::Rebase failed - a real conflict on bot/state.json"; exit 1; }
+          done
+          echo "::error::Could not push buy-bot state after 5 attempts"
+          exit 1
