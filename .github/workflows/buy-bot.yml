@@ -1,0 +1,49 @@
+name: SDOGE Buy Bot
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: sdoge-buy-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run buy bot
+        working-directory: bot
+        env:
+          ARC_RPC_URL: ${{ vars.ARC_RPC_URL }}
+          SDOGE_TOKEN_ADDRESS: ${{ vars.SDOGE_TOKEN_ADDRESS }}
+          POOL_ADDRESS: ${{ vars.POOL_ADDRESS }}
+          TOKEN_DECIMALS: ${{ vars.TOKEN_DECIMALS }}
+          MIN_BUY_TOKENS: ${{ vars.MIN_BUY_TOKENS }}
+          EXCLUDE_TO_ADDRESSES: ${{ vars.EXCLUDE_TO_ADDRESSES }}
+          BUY_URL: ${{ vars.BUY_URL }}
+          CHART_URL: ${{ vars.CHART_URL }}
+          BUY_TIER_1: ${{ vars.BUY_TIER_1 }}
+          BUY_TIER_2: ${{ vars.BUY_TIER_2 }}
+          BUY_TIER_3: ${{ vars.BUY_TIER_3 }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node buy-bot.js
+
+      - name: Persist state if it changed
+        run: |
+          git config user.name "sdoge-buy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add bot/state.json
+          git diff --cached --quiet || git commit -m "chore: update buy-bot state [skip ci]"
+          git push

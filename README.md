@@ -26,6 +26,9 @@ python3 -m http.server 8811
   using the existing art as a style reference, to match the character
   design consistently; `logo.jpg` and `social-share.jpg` were supplied
   directly. No stock emoji are used anywhere on the page.
+- `bot/` + `.github/workflows/buy-bot.yml` — Telegram buy-alert bot, runs on
+  a GitHub Actions cron (no server needed). See `bot/README.md` for setup —
+  it isn't live yet since there's no deployed pool to watch.
 
 ## Still placeholder — fill in before launch
 
