@@ -83,13 +83,23 @@ manage things that way.
   through. Automatically folded into the exclude list at runtime (on top of
   whatever's in `EXCLUDE_TO_ADDRESSES`) so it's never misreported as a
   "buyer" if it ever shows up as an intermediate recipient.
-- `EXCLUDE_TO_ADDRESSES`: `0xb021be536808f551b31789422fd28a6c9c6e97da` —
-  this address received the initial mint and got tokens back from the pool
+- `EXCLUDE_TO_ADDRESSES`: `0xb021be536808f551b31789422fd28a6c9c6e97da,0xddab9022421c30391e9ec5ae6d0887c8adb88980`
+  — the first received the initial mint and got tokens back from the pool
   3 times after that, which reads as the deployer/bonding-curve contract
-  doing protocol-level operations rather than a user buying. Excluded so
-  it doesn't get announced as a buy. **Worth double-checking this is right**
-  — if it turns out to be a real user or something else entirely, just
-  remove it from the list.
+  doing protocol-level operations rather than a user buying. **Worth
+  double-checking this is right** — if it turns out to be a real user or
+  something else entirely, just remove it from the list.
+
+  The second is a real bug fix, found live: every buy actually produces
+  **two** Transfer events out of the pool in the same transaction — the
+  1% buy tax to this address, and the remaining 99% to the actual buyer.
+  Confirmed by the ratio: across dozens of real buys, this address's
+  share was consistently ~1.00% of the pair's total, to 4+ significant
+  figures. Without excluding it, each buy was being announced *twice* —
+  once correctly, and once for the tax split, with a wildly wrong price/
+  market cap (the full tx's USD value divided by only that ~1% of the
+  tokens produces a price ~100x too high). Excluding it fixes both: no
+  more double-announcing, and no more nonsense market caps.
 - `TELEGRAM_CHAT_ID`: `-1004414453950` — the "Stable Doge" group. Not
   sensitive on its own (it's just an ID for a chat people can already join),
   so it's fine here rather than in GitHub's secrets UI.
