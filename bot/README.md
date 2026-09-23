@@ -50,32 +50,27 @@ manage things that way.
   it doesn't get announced as a buy. **Worth double-checking this is right**
   — if it turns out to be a real user or something else entirely, just
   remove it from the list.
+- `TELEGRAM_CHAT_ID`: `-1004414453950` — the "Stable Doge" group. Not
+  sensitive on its own (it's just an ID for a chat people can already join),
+  so it's fine here rather than in GitHub's secrets UI.
 
-**Still genuinely needed, and the only thing that requires the GitHub web
-UI** — because these are actual secrets that must never be committed to a
-public repo:
+**One thing left, and it has to go through the GitHub web UI** — a bot
+token is a real secret and must never be committed to a public repo, so
+this is the one piece that can't just live in `config.json`:
 
-1. **A Telegram bot.** In Telegram, message **@BotFather** → `/newbot` →
-   follow the prompts → it gives you a token like `123456:ABC-DEF...`.
-2. **The chat to post into.** Add the new bot to your Telegram
-   group/channel as an admin (needs permission to post messages). Then get
-   the chat ID: the simplest way is to add
-   [@userinfobot](https://t.me/userinfobot) or
-   [@RawDataBot](https://t.me/RawDataBot) to the same chat momentarily and
-   read the `chat.id` it reports (channels/groups have a negative ID like
-   `-1001234567890`), then remove it again.
+`TELEGRAM_BOT_TOKEN` — already created (`@Stabledogebbot`, confirmed live
+via `getMe`, confirmed it's an admin in the "Stable Doge" group via
+`getChatMember`) — just needs to go in as a **secret**, not committed
+anywhere. Add it at:
+**https://github.com/PettyMiggzy/Sdoge-/settings/secrets/actions/new**
+— name `TELEGRAM_BOT_TOKEN`, paste the token value, save.
 
-Add both in the repo's **Settings → Secrets and variables → Actions**:
-- `TELEGRAM_BOT_TOKEN` as a **secret**
-- `TELEGRAM_CHAT_ID` as a **variable** (not sensitive, but no reason to
-  commit it either — just paste it there once you have it)
-
-That's it — those two are the only remaining gap. The moment both are set,
-the very next scheduled run goes live (it does **not** backfill the 68
-buys that already happened — first activation starts fresh from the
-current block so it doesn't flood the channel with old history). Trigger
-it immediately via **Actions → SDOGE Buy Bot → Run workflow** instead of
-waiting up to 5 minutes.
+That's the only remaining gap. The moment it's set, the very next
+scheduled run goes live (it does **not** backfill the 68+ buys that
+already happened — first activation starts fresh from the current block
+so it doesn't flood the channel with old history). Trigger it immediately
+via **Actions → SDOGE Buy Bot → Run workflow** instead of waiting up to
+5 minutes.
 
 ## Testing before launch
 
