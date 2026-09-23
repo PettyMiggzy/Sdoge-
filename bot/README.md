@@ -13,7 +13,8 @@ spins up a fresh runner that:
    PoolManager address** since then — that's the on-chain signature of a buy.
 3. Posts one Telegram message (with the buy-alert video attached, see below)
    per transfer — skipping any recipient in `EXCLUDE_TO_ADDRESSES` or
-   `UNIVERSAL_ROUTER_ADDRESS` (see below).
+   `UNIVERSAL_ROUTER_ADDRESS` (see below), paced ~1.2s apart with
+   automatic retry on Telegram's own rate limit (see below).
 4. Commits the new "last block checked" back to `bot/state.json` so the next
    run picks up where this one left off.
 
@@ -37,6 +38,16 @@ the separate holder-initiated burn-to-redeem feature can shrink supply
 over time, so a hardcoded number would slowly drift wrong). The tier
 indicator (repeated 🐕, scaled by `BUY_TIER_1/2/3`) replaced an earlier
 run of green circles that didn't read as on-brand.
+
+**Real incident, now fixed:** sweeping a large backlog (237 transfers,
+52 of them real qualifying buys) fired alerts at Telegram back-to-back
+with no pacing. Telegram's per-chat flood limit kicked in partway
+through and rejected 26 of them — and since `bot/state.json`'s cursor
+advances after the batch regardless of individual post failures, those
+26 real buys would have been gone for good. Every post is now paced
+~1.2s apart, and if Telegram still returns a 429, the response's own
+`retry_after` tells us exactly how long to wait before retrying (up to
+5 attempts) instead of just giving up on that alert.
 
 Each alert also names the pool (`POOL_LABEL`, default `Uniswap v4 (Argus)`
 — just descriptive text, not looked up per-buy) and, if `TELEGRAM_URL`/

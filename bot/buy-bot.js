@@ -287,7 +287,7 @@ async function postToTelegram(token, chatId, { text, buttons }) {
       body: form,
     });
     const body = await res.json();
-    if (!body.ok) throw new Error(`Telegram error (sendVideo): ${JSON.stringify(body)}`);
+    if (!body.ok) throw telegramError('sendVideo', body);
     return;
   }
 
@@ -303,7 +303,45 @@ async function postToTelegram(token, chatId, { text, buttons }) {
     }),
   });
   const body = await res.json();
-  if (!body.ok) throw new Error(`Telegram error (sendMessage): ${JSON.stringify(body)}`);
+  if (!body.ok) throw telegramError('sendMessage', body);
+}
+
+function telegramError(method, body) {
+  const err = new Error(`Telegram error (${method}): ${JSON.stringify(body)}`);
+  if (body?.parameters?.retry_after) err.retryAfterMs = (body.parameters.retry_after + 1) * 1000;
+  return err;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// A batch of alerts (e.g. sweeping up buys missed during an outage) fired
+// at Telegram back-to-back WILL hit its per-chat flood limit — confirmed
+// live: posting ~20 videos in ~25s got several alerts permanently dropped
+// (state.json advances regardless of individual post failures) before
+// Telegram's 429 started including a `retry_after`. Pace every post a
+// little, and if one still gets rate-limited, wait exactly as long as
+// Telegram says to and retry rather than losing that buy's alert.
+const POST_PACING_MS = 1200;
+
+async function postToTelegramPaced(token, chatId, message, maxRetries = 5) {
+  if (need('DRY_RUN') === 'true') return postToTelegram(token, chatId, message);
+  await sleep(POST_PACING_MS);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await postToTelegram(token, chatId, message);
+    } catch (err) {
+      if (err.retryAfterMs && attempt < maxRetries) {
+        console.log(
+          `Telegram rate limit hit, waiting ${Math.round(err.retryAfterMs / 1000)}s (attempt ${attempt + 1}/${maxRetries})...`
+        );
+        await sleep(err.retryAfterMs);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 // Arc's native currency IS USDC (confirmed: a real buy tx's `value` field
@@ -437,7 +475,7 @@ async function main() {
 
     const message = buildMessage({ tokens, usdSpent, buyer: to, txHash: log.transactionHash, totalSupply });
     try {
-      await postToTelegram(botToken, chatId, message);
+      await postToTelegramPaced(botToken, chatId, message);
       console.log(`Posted buy alert: ${formatAmount(tokens)} SDOGE (${formatUsd(usdSpent)}) to ${to}`);
     } catch (err) {
       console.error('Failed to post to Telegram:', err.message);
