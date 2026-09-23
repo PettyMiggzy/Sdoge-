@@ -44,10 +44,18 @@ jobs:
         # every 25s, then exits with enough buffer before the next tick to
         # avoid overlap. state.json only needs to hit disk each iteration —
         # it's committed to git once, after the loop, by the next step.
+        #
+        # `|| true` on the node call matters: this step runs under `bash -e`,
+        # so a single transient failure (e.g. a 429 from Arc's public RPC)
+        # would otherwise abort the *entire* step immediately, wasting every
+        # remaining retry in this 4m10s window instead of just skipping to
+        # the next one 25s later. state.json is only ever saved after a
+        # fully successful pass, so a skipped iteration can't lose or
+        # double-count a block range — the next iteration just re-checks it.
         run: |
           end=$((SECONDS + 250))
           while [ $SECONDS -lt $end ]; do
-            node buy-bot.js
+            node buy-bot.js || echo "::warning::buy-bot.js exited non-zero this iteration (likely a transient RPC error) — retrying in 25s"
             sleep 25
           done
 
