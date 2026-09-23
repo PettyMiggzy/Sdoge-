@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Run buy bot
+      - name: Run buy bot (polling loop)
         working-directory: bot
         env:
           ARC_RPC_URL: ${{ vars.ARC_RPC_URL }}
@@ -38,7 +38,17 @@ jobs:
           BUY_TIER_3: ${{ vars.BUY_TIER_3 }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: node buy-bot.js
+        # GitHub Actions cron can't fire more often than every 5 minutes, so
+        # each 5-minute tick instead loops internally for ~4m10s, re-checking
+        # every 25s, then exits with enough buffer before the next tick to
+        # avoid overlap. state.json only needs to hit disk each iteration —
+        # it's committed to git once, after the loop, by the next step.
+        run: |
+          end=$((SECONDS + 250))
+          while [ $SECONDS -lt $end ]; do
+            node buy-bot.js
+            sleep 25
+          done
 
       - name: Persist state if it changed
         run: |
