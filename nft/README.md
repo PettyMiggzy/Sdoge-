@@ -2,7 +2,7 @@
 
 A small roster of named/themed Doge characters, each with its own limited
 mintable supply, minted with native USDC. Contract and metadata are built;
-the collection isn't deployed or fully art-complete yet (6 of an intended
+the collection isn't deployed or fully art-complete yet (7 of an intended
 10 designs have finished art).
 
 ## Contract: `contracts/contracts/SDOGECollectibles.sol`
@@ -48,13 +48,13 @@ npx hardhat run scripts/deploy-collectibles.js --network arc
 ```
 
 Then, once deployed, the owner calls `createDesign()` once per finished
-design (see `nft/metadata/` below for the 6 defined so far) - nothing is
+design (see `nft/metadata/` below for the 7 defined so far) - nothing is
 mintable until that's done.
 
 ## Reference art and metadata
 
-`nft/reference/` holds the 6 finished character pieces (tracked in git,
-unlike `nft/assets/` below); `nft/metadata/{1-6}.json` are their ERC-1155
+`nft/reference/` holds the 7 finished character pieces (tracked in git,
+unlike `nft/assets/` below); `nft/metadata/{1-7}.json` are their ERC-1155
 metadata files (standard `name`/`description`/`image`/`attributes`
 shape), matching the design-ID order they're expected to be created in:
 
@@ -66,10 +66,16 @@ shape), matching the design-ID order they're expected to be created in:
 | 4 | `rich-doge.jpg` | Husky | Gold chain, grillz | Orange | Yes |
 | 5 | `hoodie-doge.jpg` | Shiba | Blue hoodie | Grey | Yes |
 | 6 | `cap-doge.jpg` | Shiba | None (plain) | Blue | Yes |
+| 7 | `blazed-doge.jpg` | Shiba | None (plain) | Orange | Yes |
+
+`blazed-doge` reuses `cap-doge`'s cap/outfit/character but adds bloodshot
+eyes and a dazed open mouth - the classic "stoned" meme expression - as
+its distinguishing trait, tracked as its own `Expression` attribute rather
+than folded into `Outfit`.
 
 The `image` field in each metadata file is a placeholder
 (`ipfs://REPLACE_ME/...`) - these haven't been pinned to permanent
-storage yet. Do that (nft.storage, Pinata, or similar) and update all 6
+storage yet. Do that (nft.storage, Pinata, or similar) and update all 7
 files before deploying for real; a metadata `image` pointing at nothing
 is a broken collection the moment someone opens it in a wallet.
 
@@ -78,15 +84,19 @@ husky, an orange/tan shiba); `cap-doge` is noticeably plainer than the
 rest, which could hint at a rarity structure (plain = common, full
 costume = rare) - not confirmed, just noted as a real possibility.
 
-## The remaining 4 designs - no image generation available here
+## The remaining designs - no image generation available here
+
+7 of 10 are done, so only 3 more are needed to hit that number - the 4
+prompts below are kept as options rather than trimmed to exactly 3, in
+case one doesn't turn out well or an 11th piece is fine.
 
 This environment's image tools are editing-only (crop, color, expand,
 vectorize) - there is no working text-to-image generation available (the
 one tool that could plausibly do it explicitly states generative content
-creation isn't currently enabled here). The 4 remaining designs need to be
-generated elsewhere, using whatever tool produced the original 6.
+creation isn't currently enabled here). The remaining designs need to be
+generated elsewhere, using whatever tool produced the existing 7.
 
-**Style guide**, reverse-engineered from the 6 existing pieces, for
+**Style guide**, reverse-engineered from the existing pieces, for
 consistency: flat cel-shaded/vector cartoon illustration, thick black
 outlines, head-and-shoulders bust portrait, chibi-proportioned doge face
 with a smug/confident half-smile (often one raised eyebrow) and pink
@@ -95,8 +105,8 @@ scene detail), a Circle USDC "($)" logo worked into the outfit as a
 patch/badge/print. Alternate between the orange/tan shiba base and the
 grey/silver husky base.
 
-Four prompts to reach 10, picked to be distinct from the existing 6 and
-from each other (no overlap with SWAT/space/streetwear/plain):
+Four candidate prompts, picked to be distinct from the existing 7 and
+from each other (no overlap with SWAT/space/streetwear/plain/blazed):
 
 1. **Samurai Doge** - "A [shiba/husky] dog character wearing traditional
    samurai armor with a katana sheathed at its side, a Circle USDC ($)
@@ -122,10 +132,10 @@ from each other (no overlap with SWAT/space/streetwear/plain):
    black outlines, smug half-smile with one raised eyebrow, pink blush
    cheeks, head-and-shoulders bust portrait, chibi proportions."
 
-Whichever generator made the first 6 will match this style far more
+Whichever generator made the existing 7 will match this style far more
 reliably than a fresh model would - use that one if at all possible.
-Drop the 4 results into `nft/reference/` and say so; I'll write their
-`metadata/7-10.json` files and they're ready for `createDesign()`.
+Drop the results into `nft/reference/` and say so; I'll write their
+`metadata/8+.json` files and they're ready for `createDesign()`.
 
 ## How it'd connect to staking
 

@@ -1,0 +1,13 @@
+{
+  "name": "Blazed Doge",
+  "description": "Feeling stable, looking blazed. Part of the Stable Doge collection.",
+  "image": "ipfs://REPLACE_ME/blazed-doge.jpg",
+  "attributes": [
+    { "trait_type": "Character", "value": "Shiba" },
+    { "trait_type": "Background", "value": "Orange" },
+    { "trait_type": "Outfit", "value": "None (Plain)" },
+    { "trait_type": "Headwear", "value": "Blue Cap" },
+    { "trait_type": "Expression", "value": "Bloodshot Eyes" },
+    { "trait_type": "USDC Branding", "value": "Yes" }
+  ]
+}
