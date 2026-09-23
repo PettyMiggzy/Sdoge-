@@ -1,0 +1,12 @@
+{
+  "name": "Space Doge",
+  "description": "To the moon, literally. Part of the Stable Doge collection.",
+  "image": "ipfs://REPLACE_ME/astronaut-doge.jpg",
+  "attributes": [
+    { "trait_type": "Character", "value": "Shiba" },
+    { "trait_type": "Background", "value": "Blue" },
+    { "trait_type": "Outfit", "value": "Space Suit" },
+    { "trait_type": "Headwear", "value": "Astronaut Helmet" },
+    { "trait_type": "USDC Branding", "value": "Yes" }
+  ]
+}

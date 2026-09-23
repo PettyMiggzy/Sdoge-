@@ -1,0 +1,12 @@
+{
+  "name": "Hoodie Doge",
+  "description": "Same good boy, more stability. Part of the Stable Doge collection.",
+  "image": "ipfs://REPLACE_ME/hoodie-doge.jpg",
+  "attributes": [
+    { "trait_type": "Character", "value": "Shiba" },
+    { "trait_type": "Background", "value": "Grey" },
+    { "trait_type": "Outfit", "value": "Blue Hoodie" },
+    { "trait_type": "Headwear", "value": "Blue Cap" },
+    { "trait_type": "USDC Branding", "value": "Yes" }
+  ]
+}

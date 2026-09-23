@@ -1,0 +1,12 @@
+{
+  "name": "Bucket Hat Doge",
+  "description": "Vibes only. Part of the Stable Doge collection.",
+  "image": "ipfs://REPLACE_ME/bucket-hat-doge.jpg",
+  "attributes": [
+    { "trait_type": "Character", "value": "Shiba" },
+    { "trait_type": "Background", "value": "Purple" },
+    { "trait_type": "Outfit", "value": "Hoodie & Fanny Pack" },
+    { "trait_type": "Headwear", "value": "Bucket Hat" },
+    { "trait_type": "USDC Branding", "value": "Yes" }
+  ]
+}

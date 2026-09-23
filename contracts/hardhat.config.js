@@ -6,6 +6,12 @@ module.exports = {
     version: "0.8.24",
     settings: {
       optimizer: { enabled: true, runs: 200 },
+      // Arc's baseline is the Osaka hardfork (newer than Cancun) - Arc's own
+      // docs say pinning to "paris" was an early workaround that's no longer
+      // necessary. Cancun is required regardless: OpenZeppelin 5.x's
+      // ERC1155 pulls in Arrays.sol, which uses the MCOPY opcode
+      // (introduced in Cancun) - this wouldn't even compile at "paris".
+      evmVersion: "cancun",
     },
   },
   networks: {
