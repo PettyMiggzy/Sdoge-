@@ -36,6 +36,8 @@
 //   MIN_BUY_TOKENS        - minimum SDOGE amount to bother alerting on
 //   MIN_BUY_USD           - minimum USD spent to bother alerting on (default 1)
 //   BUY_URL, CHART_URL    - links appended to each alert
+//   TELEGRAM_URL, X_URL   - social links, shown as a second button row
+//   POOL_LABEL            - default "Uniswap v4 (Argus)"
 //   DRY_RUN               - "true" to log the message instead of sending it
 //   START_BLOCK           - block to start watching from on first run
 //                           (defaults to "now", i.e. no history backfill)
@@ -237,17 +239,26 @@ function buildMessage({ tokens, usdSpent, buyer, txHash, totalSupply }) {
     lines.push(`📈 *Price:* ${formatPrice(pricePerToken)}/SDOGE`);
     lines.push(`🏦 *Market Cap:* ${formatCompactUsd(pricePerToken * totalSupply)}`);
   }
+  lines.push(`🦄 *Pool:* ${need('POOL_LABEL') ?? 'Uniswap v4 (Argus)'}`);
 
   // Real inline buttons instead of bare markdown links — links sitting
   // alone on their own line render as plain, undecorated text in Telegram
   // and look broken rather than clickable.
-  const row = [{ text: '🔍 Tx', url: `https://explorer.arc.io/tx/${txHash}` }];
+  const actionRow = [{ text: '🔍 Tx', url: `https://explorer.arc.io/tx/${txHash}` }];
   const buyUrl = need('BUY_URL');
   const chartUrl = need('CHART_URL');
-  if (buyUrl) row.push({ text: '🛒 Buy', url: buyUrl });
-  if (chartUrl) row.push({ text: '📊 Chart', url: chartUrl });
+  if (buyUrl) actionRow.push({ text: '🛒 Buy', url: buyUrl });
+  if (chartUrl) actionRow.push({ text: '📊 Chart', url: chartUrl });
 
-  return { text: lines.join('\n'), buttons: [row] };
+  const buttons = [actionRow];
+  const socialRow = [];
+  const telegramUrl = need('TELEGRAM_URL');
+  const xUrl = need('X_URL');
+  if (telegramUrl) socialRow.push({ text: '💬 Telegram', url: telegramUrl });
+  if (xUrl) socialRow.push({ text: '🐦 X', url: xUrl });
+  if (socialRow.length) buttons.push(socialRow);
+
+  return { text: lines.join('\n'), buttons };
 }
 
 async function postToTelegram(token, chatId, { text, buttons }) {

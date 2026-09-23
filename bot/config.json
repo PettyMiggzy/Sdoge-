@@ -5,5 +5,7 @@
   "EXCLUDE_TO_ADDRESSES": "0xb021be536808f551b31789422fd28a6c9c6e97da",
   "TELEGRAM_CHAT_ID": "-1004414453950",
   "BUY_URL": "https://argus.world",
-  "CHART_URL": ""
+  "CHART_URL": "",
+  "TELEGRAM_URL": "https://t.me/stabledoge1",
+  "X_URL": "https://x.com/stabledoge1"
 }

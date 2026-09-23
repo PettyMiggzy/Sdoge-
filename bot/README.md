@@ -38,6 +38,11 @@ over time, so a hardcoded number would slowly drift wrong). The tier
 indicator (repeated 🐕, scaled by `BUY_TIER_1/2/3`) replaced an earlier
 run of green circles that didn't read as on-brand.
 
+Each alert also names the pool (`POOL_LABEL`, default `Uniswap v4 (Argus)`
+— just descriptive text, not looked up per-buy) and, if `TELEGRAM_URL`/
+`X_URL` are set, adds a second button row linking out to those alongside
+the existing Tx/Buy/Chart row.
+
 ## Configuring it
 
 Non-secret config (token/pool addresses, exclude list, links) lives in
@@ -77,6 +82,8 @@ manage things that way.
 - `TELEGRAM_CHAT_ID`: `-1004414453950` — the "Stable Doge" group. Not
   sensitive on its own (it's just an ID for a chat people can already join),
   so it's fine here rather than in GitHub's secrets UI.
+- `TELEGRAM_URL` / `X_URL`: `https://t.me/stabledoge1` / `https://x.com/stabledoge1`
+  — the community links, shown as a second row of buttons on every alert.
 
 **One thing left, and it has to go through the GitHub web UI** — a bot
 token is a real secret and must never be committed to a public repo, so
