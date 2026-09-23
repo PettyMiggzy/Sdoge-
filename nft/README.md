@@ -29,7 +29,7 @@ mechanism already built.
 
 ## Reference art
 
-`nft/reference/` holds 5 example character pieces (tracked in git, unlike
+`nft/reference/` holds 6 example character pieces (tracked in git, unlike
 `nft/assets/` below - these are deliberate, curated art, not disposable
 bulk output):
 
@@ -40,19 +40,30 @@ bulk output):
   fanny pack
 - `rich-doge.jpg` - grey/silver doge, gold chain, grillz, USDC medallion
 - `hoodie-doge.jpg` - orange/tan doge, blue hoodie and cap, USDC branding
+- `cap-doge.jpg` - orange/tan doge, head/shoulders only, just a USDC cap -
+  no full outfit, plainer than the other 5
 
-Two distinct base characters appear across these (a grey/silver husky-style
-doge and an orange/tan shiba-style doge), each restyled per piece rather
-than one base with swappable trait layers - suggests this collection is
-shaping up as a roster of named/themed Doge characters (SWAT Doge, Space
-Doge, etc.) rather than a generative trait-combination collection. Worth
-confirming before deciding on a mint mechanism, since the two approaches
-need very different tooling (a fixed small set of hand-finished pieces vs.
-a generator combining trait layers into many unique combinations).
+Two distinct base characters appear across the full-outfit pieces (a
+grey/silver husky-style doge and an orange/tan shiba-style doge), each
+restyled per piece rather than one base with swappable trait layers -
+suggests this collection is shaping up as a roster of named/themed Doge
+characters (SWAT Doge, Space Doge, etc.) rather than a generative
+trait-combination collection. `cap-doge.jpg` being noticeably simpler than
+the rest could instead hint at a rarity structure (plain cap = common,
+full costume = rare) - not confirmed, just worth noting as a real
+possibility raised by what's been sent so far. Worth confirming before
+deciding on a mint mechanism, since a fixed roster, a rarity-tiered
+generative set, and a plain trait-combination generator all need very
+different tooling.
 
-USDC branding appears in 4 of the 5 pieces - fits the project's whole
+USDC branding appears in every piece so far - fits the project's whole
 premise ($SDOGE paired with/backed by USDC) and gives the collection a
 consistent visual identity tying back to the main token.
+
+A second batch sent after the first repeated 4 of the 5 original pieces
+byte-for-byte identical (confirmed via checksum) and swapped SWAT Doge out
+for `cap-doge.jpg` - noted here in case that swap was deliberate (e.g.
+deciding against SWAT Doge) rather than incidental.
 
 ## Bulk-generated assets
 
