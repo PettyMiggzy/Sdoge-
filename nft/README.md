@@ -2,7 +2,7 @@
 
 A small roster of named/themed Doge characters, each with its own limited
 mintable supply, minted with native USDC. Contract and metadata are built;
-the collection isn't deployed or fully art-complete yet (7 of an intended
+the collection isn't deployed or fully art-complete yet (8 of an intended
 10 designs have finished art).
 
 ## Contract: `contracts/contracts/SDOGECollectibles.sol`
@@ -48,13 +48,13 @@ npx hardhat run scripts/deploy-collectibles.js --network arc
 ```
 
 Then, once deployed, the owner calls `createDesign()` once per finished
-design (see `nft/metadata/` below for the 7 defined so far) - nothing is
+design (see `nft/metadata/` below for the 8 defined so far) - nothing is
 mintable until that's done.
 
 ## Reference art and metadata
 
-`nft/reference/` holds the 7 finished character pieces (tracked in git,
-unlike `nft/assets/` below); `nft/metadata/{1-7}.json` are their ERC-1155
+`nft/reference/` holds the 8 finished character pieces (tracked in git,
+unlike `nft/assets/` below); `nft/metadata/{1-8}.json` are their ERC-1155
 metadata files (standard `name`/`description`/`image`/`attributes`
 shape), matching the design-ID order they're expected to be created in:
 
@@ -67,15 +67,19 @@ shape), matching the design-ID order they're expected to be created in:
 | 5 | `hoodie-doge.jpg` | Shiba | Blue hoodie | Grey | Yes |
 | 6 | `cap-doge.jpg` | Shiba | None (plain) | Blue | Yes |
 | 7 | `blazed-doge.jpg` | Shiba | None (plain) | Orange | Yes |
+| 8 | `degen-doge.jpg` | Shiba | Gold chain (DEGEN + USDC pendants) | Orange | Yes |
 
 `blazed-doge` reuses `cap-doge`'s cap/outfit/character but adds bloodshot
 eyes and a dazed open mouth - the classic "stoned" meme expression - as
 its distinguishing trait, tracked as its own `Expression` attribute rather
-than folded into `Outfit`.
+than folded into `Outfit`. `degen-doge` is the shiba counterpart to
+`rich-doge`'s husky (same gold-chain-and-grillz idea), distinguished by a
+cigar, black sunglasses instead of pink, and an added "DEGEN" pendant
+alongside the USDC one.
 
 The `image` field in each metadata file is a placeholder
 (`ipfs://REPLACE_ME/...`) - these haven't been pinned to permanent
-storage yet. Do that (nft.storage, Pinata, or similar) and update all 7
+storage yet. Do that (nft.storage, Pinata, or similar) and update all 8
 files before deploying for real; a metadata `image` pointing at nothing
 is a broken collection the moment someone opens it in a wallet.
 
@@ -86,15 +90,15 @@ costume = rare) - not confirmed, just noted as a real possibility.
 
 ## The remaining designs - no image generation available here
 
-7 of 10 are done, so only 3 more are needed to hit that number - the 4
-prompts below are kept as options rather than trimmed to exactly 3, in
-case one doesn't turn out well or an 11th piece is fine.
+8 of 10 are done, so only 2 more are needed to hit that number - the 4
+prompts below are kept as options rather than trimmed to exactly 2, in
+case one or two don't turn out well, or a bigger-than-10 set is fine.
 
 This environment's image tools are editing-only (crop, color, expand,
 vectorize) - there is no working text-to-image generation available (the
 one tool that could plausibly do it explicitly states generative content
 creation isn't currently enabled here). The remaining designs need to be
-generated elsewhere, using whatever tool produced the existing 7.
+generated elsewhere, using whatever tool produced the existing 8.
 
 **Style guide**, reverse-engineered from the existing pieces, for
 consistency: flat cel-shaded/vector cartoon illustration, thick black
@@ -105,8 +109,8 @@ scene detail), a Circle USDC "($)" logo worked into the outfit as a
 patch/badge/print. Alternate between the orange/tan shiba base and the
 grey/silver husky base.
 
-Four candidate prompts, picked to be distinct from the existing 7 and
-from each other (no overlap with SWAT/space/streetwear/plain/blazed):
+Four candidate prompts, picked to be distinct from the existing 8 and
+from each other (no overlap with SWAT/space/streetwear/plain/blazed/degen):
 
 1. **Samurai Doge** - "A [shiba/husky] dog character wearing traditional
    samurai armor with a katana sheathed at its side, a Circle USDC ($)
@@ -132,7 +136,7 @@ from each other (no overlap with SWAT/space/streetwear/plain/blazed):
    black outlines, smug half-smile with one raised eyebrow, pink blush
    cheeks, head-and-shoulders bust portrait, chibi proportions."
 
-Whichever generator made the existing 7 will match this style far more
+Whichever generator made the existing 8 will match this style far more
 reliably than a fresh model would - use that one if at all possible.
 Drop the results into `nft/reference/` and say so; I'll write their
 `metadata/8+.json` files and they're ready for `createDesign()`.
