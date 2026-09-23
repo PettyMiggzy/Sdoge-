@@ -1,7 +1,10 @@
 # $SDOGE — The Stable Doge
 
-Marketing site for $SDOGE, a fixed-supply meme token on Arc with a USYC-backed
+Marketing site for $SDOGE, a fixed-supply meme token on Arc with a USDC-backed
 treasury (60% of the 1% trade tax → Treasury reserve, 40% → buyback & burn).
+No yield strategy right now — the Treasury just holds plain USDC. A
+yield-bearing upgrade (e.g. Circle's USYC) is framed as a possible future
+roadmap item, not a current feature.
 
 ## Run locally
 
@@ -40,7 +43,9 @@ python3 -m http.server 8811
 
 ## Note on copy
 
-Tokenomics language intentionally describes the Treasury as auto-compounding
-NAV rather than "yield distribution," and avoids guaranteed-return claims
-("can't go to zero" is flagged as a tagline, not a promise, in the FAQ) —
-get this reviewed by a securities lawyer before real funds are solicited.
+Tokenomics language is deliberately plain: a USDC reserve that grows from
+trade tax and shrinking supply, no yield claims, no "NAV" or investment-fund
+language, and no guaranteed-return claims ("can't go to zero" is flagged as
+a tagline, not a promise, in the FAQ). Still worth a securities-lawyer
+read before real funds are solicited, but this framing is meaningfully
+simpler than a yield-bearing-treasury story would be.

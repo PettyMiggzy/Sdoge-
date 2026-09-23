@@ -4,18 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>$SDOGE — The Stable Doge | Stable. Simple. On Arc.</title>
-<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USYC treasury. Stable, simple, on Arc — fixed supply, 1% tax, buyback & burn, redeemable NAV." />
+<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USDC treasury. Stable, simple, on Arc — fixed supply, 1% tax, buyback & burn, redeemable reserve." />
 
 <!-- Social share preview. og:image must be an absolute URL for Telegram/Twitter/Discord
      crawlers to fetch it — replace with the real production URL before launch,
      e.g. https://yourdomain.com/assets/img/social-share.jpg -->
 <meta property="og:type" content="website" />
 <meta property="og:title" content="$SDOGE — The Stable Doge" />
-<meta property="og:description" content="Stable. Simple. On Arc. A meme token backed by a real USYC treasury." />
+<meta property="og:description" content="Stable. Simple. On Arc. A meme token backed by a real USDC treasury." />
 <meta property="og:image" content="assets/img/social-share.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="$SDOGE — The Stable Doge" />
-<meta name="twitter:description" content="Stable. Simple. On Arc. A meme token backed by a real USYC treasury." />
+<meta name="twitter:description" content="Stable. Simple. On Arc. A meme token backed by a real USDC treasury." />
 <meta name="twitter:image" content="assets/img/social-share.jpg" />
 
 <link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
@@ -72,7 +72,7 @@
 
     <p class="hero__subtitle">
       $SDOGE is the first Doge with a real treasury. A meme on the outside,
-      a USYC-backed reserve on the inside — every trade feeds a treasury
+      a USDC-backed reserve on the inside — every trade feeds a treasury
       that can never be minted away.
     </p>
 
@@ -120,7 +120,7 @@
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
           </div>
           <h3>Stable Value</h3>
-          <p>Built for stability. Backed by a real USYC treasury, not just a chart.</p>
+          <p>Built for stability. Backed by a real USDC treasury, not just a chart.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card__icon">
@@ -161,11 +161,11 @@
       <div class="grid grid--3">
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-treasury.jpg" alt="" /></div>
-          <h3>Real Yield Treasury</h3>
-          <p>A share of every trade routes to a Treasury contract holding
-          USYC — Circle's tokenized short-term Treasury fund, native to Arc.
-          The reserve accrues yield continuously and compounds back into
-          itself.</p>
+          <h3>Real USDC Treasury</h3>
+          <p>A share of every trade routes straight into a Treasury contract
+          holding plain USDC, native to Arc. No yield strategy, no lending,
+          no risk-taking — just a stable reserve that grows with every
+          trade.</p>
         </div>
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-burn.jpg" alt="" /></div>
@@ -210,7 +210,7 @@
       <p class="section__lead">
         No hidden wallets, no team allocation games, no future minting.
         One tax, split two ways, forever — and instead of a fake peg, a
-        Treasury NAV that's designed to climb.
+        USDC Treasury reserve that grows with every trade.
       </p>
 
       <div class="tri-panel">
@@ -241,12 +241,12 @@
           <h3 class="tri-card__title">Treasury</h3>
           <div class="tri-card__stat">
             <span class="tri-card__value">—</span>
-            <span class="tri-card__change">NAV live at launch</span>
+            <span class="tri-card__change">Reserve live at launch</span>
           </div>
           <div class="sparkline-placeholder">Chart populates once the Treasury is funded on-chain</div>
           <div class="tri-card__badge">
             <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-            Reserve Asset: USYC on Arc
+            Reserve Asset: USDC on Arc
           </div>
         </div>
 
@@ -270,7 +270,8 @@
 
       <p class="fine-print">
         Design goal, not a promise: the mechanism is built so the Treasury
-        floor trends up as USYC accrues, but reserve value can still move
+        floor trends up as trade tax accumulates and supply burns — there is
+        no yield strategy behind it right now. Reserve value can still move
         with market conditions and smart-contract risk. Nothing here is
         financial advice, a price peg, or a guaranteed return — see the
         disclaimer below.
@@ -293,7 +294,7 @@
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 2</span>
           <h3>Treasury Online</h3>
-          <p>Treasury contract deployed, USYC reserve funded from trading tax, NAV tracking goes live on this site.</p>
+          <p>Treasury contract deployed, USDC reserve funded from trading tax, reserve tracking goes live on this site.</p>
         </div>
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 3</span>
@@ -303,7 +304,7 @@
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 4</span>
           <h3>Beyond</h3>
-          <p>Wider listings, deeper liquidity, continued buyback &amp; burn. Good boy keeps growing.</p>
+          <p>Wider listings, deeper liquidity, continued buyback &amp; burn — and exploring a yield-bearing upgrade for the Treasury (like USYC) once the fundamentals are proven out. Good boy keeps growing.</p>
         </div>
       </div>
     </div>
@@ -363,7 +364,7 @@
           <button class="accordion__trigger">What is $SDOGE, really? <span>+</span></button>
           <div class="accordion__panel">
             <p>A fixed-supply meme token on Arc with a built-in Treasury.
-            A portion of every trade is deposited into USYC reserves and
+            A portion of every trade is deposited into USDC reserves and
             another portion buys back and burns supply. It's a meme coin
             with a mechanism, not a promise of profit.</p>
           </div>
@@ -381,12 +382,13 @@
           </div>
         </div>
         <div class="accordion__item">
-          <button class="accordion__trigger">What is USYC? <span>+</span></button>
+          <button class="accordion__trigger">Does the Treasury earn yield? <span>+</span></button>
           <div class="accordion__panel">
-            <p>USYC is a tokenized fund from Circle that represents shares
-            in short-term U.S. Treasury holdings, issued natively on Arc.
-            The $SDOGE Treasury is designed to hold USYC as its reserve
-            asset.</p>
+            <p>Not right now. The Treasury holds plain USDC — no lending, no
+            yield strategy, no risk-taking. A yield-bearing upgrade to the
+            reserve (potentially using something like Circle's USYC) is a
+            possible future roadmap item, not a current feature. See the
+            Roadmap section above.</p>
           </div>
         </div>
         <div class="accordion__item">
@@ -470,7 +472,7 @@
       <strong>Risk disclaimer:</strong> $SDOGE is an experimental meme
       token on the Arc network. It is not a security, not an investment
       product, not a stablecoin, and not backed, endorsed, or issued by
-      Circle or any issuer of USDC/USYC. Cryptocurrency involves
+      Circle or any issuer of USDC. Cryptocurrency involves
       substantial risk, including total loss of funds. Smart contracts
       may contain bugs; treasury value and token price can both
       fluctuate. Nothing on this site is financial, legal, or tax advice.
