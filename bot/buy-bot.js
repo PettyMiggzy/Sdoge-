@@ -189,24 +189,54 @@ function tierEmoji(tokens) {
   const t1 = Number(process.env.BUY_TIER_1 ?? 100000);
   const t2 = Number(process.env.BUY_TIER_2 ?? 1000000);
   const t3 = Number(process.env.BUY_TIER_3 ?? 5000000);
-  if (tokens >= t3) return '🟢🟢🟢🟢🟢'.repeat(3);
-  if (tokens >= t2) return '🟢🟢🟢🟢🟢';
-  if (tokens >= t1) return '🟢🟢🟢';
-  return '🟢';
+  if (tokens >= t3) return '🐕'.repeat(15);
+  if (tokens >= t2) return '🐕'.repeat(5);
+  if (tokens >= t1) return '🐕'.repeat(3);
+  return '🐕';
 }
 
 function formatUsd(n) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 });
 }
 
-function buildMessage({ tokens, usdSpent, buyer, txHash }) {
-  const text = [
+// Sub-cent token prices are the norm here, and toPrecision() would fall
+// back to exponential notation ("4.2e-8") once the exponent passes -6 —
+// unreadable in a chat alert. Pick enough fixed decimals instead to keep
+// ~3 significant figures, however small the price gets.
+function formatPrice(n) {
+  if (!isFinite(n) || n <= 0) return 'n/a';
+  if (n >= 1) return '$' + n.toFixed(2);
+  const decimals = Math.min(12, Math.max(2, 2 - Math.floor(Math.log10(n))));
+  return '$' + n.toFixed(decimals);
+}
+
+function formatCompactUsd(n) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function buildMessage({ tokens, usdSpent, buyer, txHash, totalSupply }) {
+  const lines = [
     `🚀 *NEW $SDOGE BUY!* ${tierEmoji(tokens)}`,
     ``,
     `💵 *Spent:* ${formatUsd(usdSpent)}`,
     `🐕 *Got:* ${formatAmount(tokens)} $SDOGE`,
     `👤 *Buyer:* \`${buyer.slice(0, 6)}...${buyer.slice(-4)}\``,
-  ].join('\n');
+  ];
+
+  // totalSupply is only fetched (and only ever null) when there's at least
+  // one buy to announce, so a missed/failed lookup just quietly drops these
+  // two lines instead of breaking the whole alert.
+  if (totalSupply) {
+    const pricePerToken = usdSpent / tokens;
+    lines.push(`📈 *Price:* ${formatPrice(pricePerToken)}/SDOGE`);
+    lines.push(`🏦 *Market Cap:* ${formatCompactUsd(pricePerToken * totalSupply)}`);
+  }
 
   // Real inline buttons instead of bare markdown links — links sitting
   // alone on their own line render as plain, undecorated text in Telegram
@@ -217,7 +247,7 @@ function buildMessage({ tokens, usdSpent, buyer, txHash }) {
   if (buyUrl) row.push({ text: '🛒 Buy', url: buyUrl });
   if (chartUrl) row.push({ text: '📊 Chart', url: chartUrl });
 
-  return { text, buttons: [row] };
+  return { text: lines.join('\n'), buttons: [row] };
 }
 
 async function postToTelegram(token, chatId, { text, buttons }) {
@@ -276,6 +306,18 @@ async function getTxValueUsd(endpoints, txHash, cache) {
   const usd = tx?.value ? Number(BigInt(tx.value)) / 1e18 : 0;
   cache.set(txHash, usd);
   return usd;
+}
+
+// Total supply isn't hardcoded even though it's fixed today, because the
+// separate holder-initiated burn-to-redeem feature can actually shrink it
+// over time — reading it on-chain each run keeps market cap accurate
+// without needing to track redemptions here too.
+async function getTotalSupply(endpoints, tokenAddress, divisor) {
+  const raw = await rpcWithFallback(endpoints, 'eth_call', [
+    { to: tokenAddress, data: '0x18160ddd' }, // totalSupply()
+    'latest',
+  ]);
+  return Number(BigInt(raw)) / Number(divisor);
 }
 
 async function getLogsChunked(endpoints, fromBlock, toBlock, address, topics) {
@@ -357,6 +399,16 @@ async function main() {
   console.log(`Checked blocks ${lastBlock + 1n}-${currentBlock}, found ${logs.length} transfer(s) out of the pool.`);
 
   const txValueCache = new Map();
+  // Only fetched when there's actually something to announce, since it's
+  // the same value for every buy in this run.
+  let totalSupply = null;
+  if (logs.length > 0) {
+    try {
+      totalSupply = await getTotalSupply(endpoints, tokenAddress, divisor);
+    } catch (err) {
+      console.error('Could not fetch total supply, alerts will skip price/market cap:', err.message);
+    }
+  }
 
   for (const log of logs) {
     const to = fromTopicAddress(log.topics[2]);
@@ -372,7 +424,7 @@ async function main() {
       continue;
     }
 
-    const message = buildMessage({ tokens, usdSpent, buyer: to, txHash: log.transactionHash });
+    const message = buildMessage({ tokens, usdSpent, buyer: to, txHash: log.transactionHash, totalSupply });
     try {
       await postToTelegram(botToken, chatId, message);
       console.log(`Posted buy alert: ${formatAmount(tokens)} SDOGE (${formatUsd(usdSpent)}) to ${to}`);

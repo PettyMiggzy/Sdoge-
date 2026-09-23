@@ -29,6 +29,15 @@ contract or price feed is needed. `MIN_BUY_USD` (default `1`) skips
 alerting on anything below that — dust buys under $1 get logged as
 skipped rather than posted.
 
+Each alert also shows price and market cap, derived from that same buy
+rather than a separate price feed: price = USD spent ÷ tokens received,
+market cap = that price × total supply (read fresh via `totalSupply()`
+on-chain each time there's a buy to announce, rather than hardcoded —
+the separate holder-initiated burn-to-redeem feature can shrink supply
+over time, so a hardcoded number would slowly drift wrong). The tier
+indicator (repeated 🐕, scaled by `BUY_TIER_1/2/3`) replaced an earlier
+run of green circles that didn't read as on-brand.
+
 ## Configuring it
 
 Non-secret config (token/pool addresses, exclude list, links) lives in
