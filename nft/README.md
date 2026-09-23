@@ -27,8 +27,35 @@ mechanism already built.
 - Mint mechanism (fixed price? bonding curve? which chain/marketplace on
   Arc, if any exists yet?) not researched.
 
-## Assets
+## Reference art
 
-Generated art/metadata will go under `nft/assets/` once this starts -
-that path is already `.gitignore`d so a full collection's worth of images
-doesn't bloat the repo.
+`nft/reference/` holds 5 example character pieces (tracked in git, unlike
+`nft/assets/` below - these are deliberate, curated art, not disposable
+bulk output):
+
+- `swat-doge.jpg` - grey/silver doge, SWAT helmet and vest
+- `astronaut-doge.jpg` - orange/tan doge, space suit, USDC-branded patches
+  (matches the earlier "Space Doge" mention)
+- `bucket-hat-doge.jpg` - orange/tan doge, USDC-branded bucket hat and
+  fanny pack
+- `rich-doge.jpg` - grey/silver doge, gold chain, grillz, USDC medallion
+- `hoodie-doge.jpg` - orange/tan doge, blue hoodie and cap, USDC branding
+
+Two distinct base characters appear across these (a grey/silver husky-style
+doge and an orange/tan shiba-style doge), each restyled per piece rather
+than one base with swappable trait layers - suggests this collection is
+shaping up as a roster of named/themed Doge characters (SWAT Doge, Space
+Doge, etc.) rather than a generative trait-combination collection. Worth
+confirming before deciding on a mint mechanism, since the two approaches
+need very different tooling (a fixed small set of hand-finished pieces vs.
+a generator combining trait layers into many unique combinations).
+
+USDC branding appears in 4 of the 5 pieces - fits the project's whole
+premise ($SDOGE paired with/backed by USDC) and gives the collection a
+consistent visual identity tying back to the main token.
+
+## Bulk-generated assets
+
+If this becomes a generative collection later, that output goes under
+`nft/assets/` - already `.gitignore`d so a full collection's worth of
+images doesn't bloat the repo. Not used yet.
