@@ -7,8 +7,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title SDOGEStaking
-/// @notice Stake $SDOGE, earn a share of yield the treasury earns elsewhere
-///         (e.g. depositing the buy-tax's USDC into Aave/Morpho on Arc).
+/// @notice Stake $SDOGE, earn a direct share of the 1% trade tax (paid out
+///         as native USDC) - not yield the treasury earns elsewhere. The
+///         same tax that funds the Treasury and Buyback also funds this.
 ///
 /// Arc's native currency IS USDC (like ETH on mainnet) - NOT an ERC-20 - so
 /// rewards are handled as native value (payable / call{value:}), while the
@@ -17,9 +18,12 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 /// rewardPerToken accumulator so reward math is O(1) regardless of staker
 /// count), adapted for a native-currency reward instead of an ERC-20 one.
 ///
-/// This contract never sources yield itself - it only distributes whatever
-/// native USDC the owner sends via notifyRewardAmount(). Funding it (e.g.
-/// from Aave/Morpho interest) is a separate, off-chain-triggered step.
+/// This contract never sources revenue itself - it only distributes
+/// whatever native USDC is sent via notifyRewardAmount(). That's called
+/// either by the owner directly, or by a separate `notifier` address the
+/// owner designates - deliberately split so the owner key can stay a cold
+/// multisig while `notifier` is a hot key an automated keeper holds (see
+/// treasury/fund-staking.js), scoped to just this one action.
 contract SDOGEStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -37,12 +41,22 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
 
+    /// @notice Address allowed to call notifyRewardAmount() in addition to
+    ///         the owner. address(0) (the default) means only the owner can.
+    address public notifier;
+
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 amount);
     event RewardAdded(uint256 amount, uint256 newRewardRate, uint256 periodFinish);
     event RewardsDurationUpdated(uint256 newDuration);
     event ERC20Recovered(address indexed token, uint256 amount);
+    event NotifierUpdated(address indexed previousNotifier, address indexed newNotifier);
+
+    modifier onlyOwnerOrNotifier() {
+        require(msg.sender == owner() || msg.sender == notifier, "not owner or notifier");
+        _;
+    }
 
     constructor(address _stakingToken, address _owner) Ownable(_owner) {
         require(_stakingToken != address(0), "staking token is zero address");
@@ -128,10 +142,20 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
 
     // ---------- Admin: funding & config ----------
 
+    /// @notice Grants (or revokes, with address(0)) permission to call
+    ///         notifyRewardAmount() without being the owner. Intended for a
+    ///         hot wallet an automated keeper holds - never grant this to
+    ///         anything that also needs the owner's other privileges.
+    function setNotifier(address _notifier) external onlyOwner {
+        emit NotifierUpdated(notifier, _notifier);
+        notifier = _notifier;
+    }
+
     /// @notice Fund the next rewardsDuration with msg.value of native USDC.
     ///         If a period is still running, its unpaid remainder rolls
-    ///         into the new rate rather than being lost.
-    function notifyRewardAmount() external payable onlyOwner updateReward(address(0)) {
+    ///         into the new rate rather than being lost. Callable by the
+    ///         owner or the designated notifier (see setNotifier).
+    function notifyRewardAmount() external payable onlyOwnerOrNotifier updateReward(address(0)) {
         if (block.timestamp >= periodFinish) {
             rewardRate = msg.value / rewardsDuration;
         } else {

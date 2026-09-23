@@ -1,0 +1,14 @@
+{
+  "name": "sdoge-treasury-keeper",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node fund-staking.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  }
+}

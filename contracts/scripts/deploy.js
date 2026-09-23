@@ -18,9 +18,33 @@ async function main() {
   console.log("SDOGEStaking deployed to:", await staking.getAddress());
   console.log("  stakingToken:", SDOGE_TOKEN_ADDRESS);
   console.log("  owner:", ownerAddress);
+
+  // Optional convenience: wire up the automated keeper's hot key in the same
+  // deploy run. Safe to skip - notifier defaults to disabled (address(0))
+  // and can be set later as a separate owner transaction.
+  const notifierAddress = process.env.STAKING_NOTIFIER_ADDRESS;
+  if (notifierAddress) {
+    const [deployer] = await ethers.getSigners();
+    if (deployer.address.toLowerCase() !== ownerAddress.toLowerCase()) {
+      console.log(
+        "\nSTAKING_NOTIFIER_ADDRESS was set, but the deployer isn't the owner - skipping setNotifier(). " +
+          "The owner (Treasury/multisig) must call it separately: " +
+          `staking.setNotifier("${notifierAddress}")`
+      );
+    } else {
+      await (await staking.setNotifier(notifierAddress)).wait();
+      console.log("  notifier:", notifierAddress, "(treasury/fund-staking.js's hot wallet)");
+    }
+  } else {
+    console.log(
+      "\nSTAKING_NOTIFIER_ADDRESS not set - notifier left disabled. The owner must call " +
+        "setNotifier(taxWalletAddress) before treasury/fund-staking.js can fund rewards."
+    );
+  }
+
   console.log(
     "\nNothing is funded yet - stakers can deposit SDOGE immediately, but rewards are 0 until " +
-      "the owner calls notifyRewardAmount() with native USDC value. See contracts/README.md."
+      "notifyRewardAmount() is called with native USDC value. See contracts/README.md."
   );
 }
 

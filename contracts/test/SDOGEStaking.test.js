@@ -151,11 +151,37 @@ describe("SDOGEStaking", function () {
   });
 
   describe("admin controls", function () {
-    it("only the owner can fund rewards", async function () {
+    it("only the owner or notifier can fund rewards", async function () {
       const { alice, staking } = await deployFixture();
       await expect(
         staking.connect(alice).notifyRewardAmount({ value: ethers.parseEther("1") })
-      ).to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("not owner or notifier");
+    });
+
+    it("only the owner can set the notifier", async function () {
+      const { alice, staking } = await deployFixture();
+      await expect(staking.connect(alice).setNotifier(alice.address)).to.be.revertedWithCustomError(
+        staking,
+        "OwnableUnauthorizedAccount"
+      );
+    });
+
+    it("lets a designated notifier fund rewards without being owner", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await staking.connect(owner).setNotifier(alice.address);
+
+      await expect(staking.connect(alice).notifyRewardAmount({ value: ethers.parseEther("7") })).to.not.be.reverted;
+      expect(await staking.rewardRate()).to.equal(ethers.parseEther("7") / BigInt(7 * DAY));
+    });
+
+    it("revokes notifier access by setting it back to address(0)", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await staking.connect(owner).setNotifier(alice.address);
+      await staking.connect(owner).setNotifier(ethers.ZeroAddress);
+
+      await expect(
+        staking.connect(alice).notifyRewardAmount({ value: ethers.parseEther("1") })
+      ).to.be.revertedWith("not owner or notifier");
     });
 
     it("rejects a reward funding too small to produce a nonzero rate", async function () {
