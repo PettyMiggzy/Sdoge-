@@ -19,10 +19,14 @@ spins up a fresh runner that:
 This detects buys via plain ERC-20 `Transfer` events rather than decoding
 Uniswap v4's pool-specific `Swap` event, because that requires knowing the
 exact `PoolKey` (fee tier, tick spacing, hooks address) which doesn't exist
-until the pool is actually deployed. It's simpler and DEX-version-agnostic,
-at the cost of not showing a USD value per buy (only the SDOGE amount) —
-that could be added later once the real pool + a USDC-on-Arc quote path is
-known.
+until the pool is actually deployed. It's simpler and DEX-version-agnostic.
+
+USD value per buy comes from the triggering transaction's native `value`
+field — Arc's native currency *is* USDC, confirmed empirically (a real
+buy's tx.value of 25 matched a real ~$25 purchase), so no separate USDC
+contract or price feed is needed. `MIN_BUY_USD` (default `1`) skips
+alerting on anything below that — dust buys under $1 get logged as
+skipped rather than posted.
 
 ## Configuring it
 
@@ -91,10 +95,13 @@ node buy-bot.js
 
 - **Free, on a public repo.** GitHub Actions cron is unlimited/free for
   public repositories; this repo is public.
-- **5-minute cadence**, not real-time. That's GitHub Actions' minimum cron
-  interval. For tighter latency, this same script could run on Vercel Cron
-  instead, but Vercel's free Hobby tier only allows once-a-day cron — you'd
-  need a paid Pro plan for per-minute frequency.
+- **~25-second effective cadence**, not the raw 5-minute cron interval.
+  GitHub Actions can't schedule cron more often than every 5 minutes, so
+  each tick instead loops internally (re-checking every ~25s for ~4m10s)
+  before exiting with a buffer ahead of the next tick. Vercel Pro
+  (~$20/mo) would give true per-minute cron instead of this workaround,
+  but this gets most of the benefit for free — Vercel's free Hobby tier
+  only allows once-a-day cron, which would be worse, not better.
 - **Auto-disable after 60 days of repo inactivity.** GitHub disables
   scheduled workflows if the default branch gets no pushes for 60 days
   (you'll get a warning email first). Not a practical concern while this

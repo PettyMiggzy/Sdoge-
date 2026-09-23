@@ -20,6 +20,7 @@
 //                           withdrawals from the pool aren't announced as
 //                           user buys)
 //   MIN_BUY_TOKENS        - minimum SDOGE amount to bother alerting on
+//   MIN_BUY_USD           - minimum USD spent to bother alerting on (default 1)
 //   BUY_URL, CHART_URL    - links appended to each alert
 //   DRY_RUN               - "true" to log the message instead of sending it
 //   START_BLOCK           - block to start watching from on first run
@@ -100,10 +101,15 @@ function tierEmoji(tokens) {
   return '🟢';
 }
 
-function buildMessage({ tokens, buyer, txHash }) {
+function formatUsd(n) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 });
+}
+
+function buildMessage({ tokens, usdSpent, buyer, txHash }) {
   const text = [
     `${tierEmoji(tokens)}`,
     `*New $SDOGE Buy!*`,
+    `${formatUsd(usdSpent)} spent`,
     `${formatAmount(tokens)} $SDOGE`,
     `Buyer: \`${buyer.slice(0, 6)}...${buyer.slice(-4)}\``,
   ].join('\n');
@@ -138,6 +144,19 @@ async function postToTelegram(token, chatId, { text, buttons }) {
   });
   const body = await res.json();
   if (!body.ok) throw new Error(`Telegram error: ${JSON.stringify(body)}`);
+}
+
+// Arc's native currency IS USDC (confirmed: a real buy tx's `value` field
+// of 25 lined up exactly with a ~$25 purchase), so the USD amount spent on
+// a buy is just the native value of the transaction that triggered it —
+// no separate USDC contract or price feed needed. Cached per run since a
+// tx can contain more than one qualifying transfer.
+async function getTxValueUsd(rpcUrl, txHash, cache) {
+  if (cache.has(txHash)) return cache.get(txHash);
+  const tx = await rpc(rpcUrl, 'eth_getTransactionByHash', [txHash]);
+  const usd = tx?.value ? Number(BigInt(tx.value)) / 1e18 : 0;
+  cache.set(txHash, usd);
+  return usd;
 }
 
 async function getLogsChunked(rpcUrl, fromBlock, toBlock, address, topics) {
@@ -181,6 +200,7 @@ async function main() {
   const decimals = BigInt(need('TOKEN_DECIMALS') ?? '18');
   const divisor = 10n ** decimals;
   const minBuyTokens = Number(need('MIN_BUY_TOKENS') ?? '0');
+  const minBuyUsd = Number(need('MIN_BUY_USD') ?? '1');
   const exclude = new Set(
     (need('EXCLUDE_TO_ADDRESSES') ?? '')
       .split(',')
@@ -212,6 +232,8 @@ async function main() {
 
   console.log(`Checked blocks ${lastBlock + 1n}-${currentBlock}, found ${logs.length} transfer(s) out of the pool.`);
 
+  const txValueCache = new Map();
+
   for (const log of logs) {
     const to = fromTopicAddress(log.topics[2]);
     if (exclude.has(to.toLowerCase())) continue;
@@ -220,10 +242,16 @@ async function main() {
     const tokens = Number(rawValue) / Number(divisor);
     if (tokens < minBuyTokens) continue;
 
-    const message = buildMessage({ tokens, buyer: to, txHash: log.transactionHash });
+    const usdSpent = await getTxValueUsd(rpcUrl, log.transactionHash, txValueCache);
+    if (usdSpent < minBuyUsd) {
+      console.log(`Skipped ${formatAmount(tokens)} SDOGE buy (${formatUsd(usdSpent)}, below $${minBuyUsd} minimum).`);
+      continue;
+    }
+
+    const message = buildMessage({ tokens, usdSpent, buyer: to, txHash: log.transactionHash });
     try {
       await postToTelegram(botToken, chatId, message);
-      console.log(`Posted buy alert: ${formatAmount(tokens)} SDOGE to ${to}`);
+      console.log(`Posted buy alert: ${formatAmount(tokens)} SDOGE (${formatUsd(usdSpent)}) to ${to}`);
     } catch (err) {
       console.error('Failed to post to Telegram:', err.message);
     }
