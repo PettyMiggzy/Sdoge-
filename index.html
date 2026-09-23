@@ -158,34 +158,21 @@
         single trade quietly funds a real, on-chain reserve.
       </p>
 
-      <div class="grid grid--4">
+      <div class="grid grid--3">
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-treasury.jpg" alt="" /></div>
           <h3>Real USDC Treasury</h3>
-          <p>Half of every trade's tax routes straight into a Treasury
-          contract holding plain USDC, native to Arc. No yield strategy, no
-          lending, no risk-taking — just a stable reserve that grows with
-          every trade.</p>
+          <p>A share of every trade routes straight into a Treasury contract
+          holding plain USDC, native to Arc. No yield strategy, no lending,
+          no risk-taking — just a stable reserve that grows with every
+          trade.</p>
         </div>
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-burn.jpg" alt="" /></div>
           <h3>Buyback</h3>
-          <p>Another share of every trade buys $SDOGE back from the open
-          market and adds it to the Treasury — reinforcing the reserve with
-          every single swap, forever.</p>
-        </div>
-        <div class="card">
-          <div class="card__icon card__icon--svg" aria-hidden="true">
-            <svg viewBox="0 0 48 48" width="32" height="32" fill="none">
-              <circle cx="24" cy="24" r="20" stroke="var(--gold)" stroke-width="2.5"/>
-              <path d="M24 13v11l7 7" stroke="var(--gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <h3>Stake &amp; Earn</h3>
-          <p>Holders will be able to stake $SDOGE and earn USDC — funded by
-          the remaining share of the trade tax, paid out continuously, no
-          lock-up. Not Treasury yield, just a direct cut of the same tax
-          that funds Treasury and Buyback.</p>
+          <p>The rest of every trade buys $SDOGE back from the open market
+          and adds it to the Treasury — reinforcing the reserve with every
+          single swap, forever.</p>
         </div>
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-redeem.jpg" alt="" /></div>
@@ -223,7 +210,7 @@
       <h2 class="section__title">Simple by design. Boring on purpose.</h2>
       <p class="section__lead">
         No hidden wallets, no team allocation games, no future minting.
-        One tax, split three ways, forever — and instead of a fake peg, a
+        One tax, split two ways, forever — and instead of a fake peg, a
         USDC Treasury reserve that grows with every trade.
       </p>
 
@@ -231,7 +218,7 @@
         <div class="tri-card">
           <h3 class="tri-card__title">Tokenomics</h3>
           <div class="tax-split">
-            <div class="tax-split__ring" style="--p1: 50; --p2: 80;">
+            <div class="tax-split__ring" style="--p1: 60; --p2: 40;">
               <div class="tax-split__center">
                 <span class="tax-split__number">1%</span>
                 <span class="tax-split__caption">total tax</span>
@@ -240,15 +227,11 @@
             <div class="tax-split__legend">
               <div class="legend-item">
                 <span class="legend-dot legend-dot--treasury"></span>
-                <span>Treasury <strong>50%</strong></span>
+                <span>Treasury <strong>60%</strong></span>
               </div>
               <div class="legend-item">
                 <span class="legend-dot legend-dot--burn"></span>
-                <span>Buyback <strong>30%</strong></span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot legend-dot--staking"></span>
-                <span>Staking <strong>20%</strong></span>
+                <span>Buyback <strong>40%</strong></span>
               </div>
             </div>
           </div>
@@ -313,7 +296,7 @@
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 2</span>
           <h3>Treasury Online</h3>
-          <p>Treasury and staking contracts deployed, USDC reserve funded from trading tax, staking rewards go live, reserve tracking goes live on this site.</p>
+          <p>Treasury contract deployed, USDC reserve funded from trading tax, reserve tracking goes live on this site.</p>
         </div>
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 3</span>
@@ -354,7 +337,7 @@
         <div class="step">
           <span class="step__number">4</span>
           <h3>Swap &amp; hold</h3>
-          <p>Swap USDC for $SDOGE. Every trade splits three ways — Treasury, buyback, and staking rewards — automatically. Good boy.</p>
+          <p>Swap USDC for $SDOGE. Every trade feeds the Treasury — direct deposit or buyback, it all ends up in the reserve. Good boy.</p>
         </div>
       </div>
 
@@ -383,10 +366,9 @@
           <button class="accordion__trigger">What is $SDOGE, really? <span>+</span></button>
           <div class="accordion__panel">
             <p>A fixed-supply meme token on Arc with a built-in Treasury.
-            A portion of every trade is deposited into USDC reserves,
+            A portion of every trade is deposited into USDC reserves and
             another portion buys $SDOGE back from the market and adds it to
-            the same Treasury, and the remaining portion funds staking
-            rewards for holders. It's a meme coin with a mechanism, not a
+            the same Treasury. It's a meme coin with a mechanism, not a
             promise of profit.</p>
           </div>
         </div>
@@ -405,14 +387,11 @@
         <div class="accordion__item">
           <button class="accordion__trigger">Does the Treasury earn yield? <span>+</span></button>
           <div class="accordion__panel">
-            <p>No. The Treasury itself still holds plain USDC — no lending, no
-            yield strategy, no protocol risk on the reserve. Staking rewards
-            (see above) aren't yield on the Treasury either — they're a
-            direct 20% slice of the trade tax, same as Buyback is 30% and
-            Treasury is 50%. Nothing about the reserve's own risk profile
-            changes. A separate yield-bearing upgrade to the reserve itself
-            (potentially using something like Circle's USYC) is still a
-            possible future roadmap item, not a current feature.</p>
+            <p>Not right now. The Treasury holds plain USDC — no lending, no
+            yield strategy, no risk-taking. A yield-bearing upgrade to the
+            reserve (potentially using something like Circle's USYC) is a
+            possible future roadmap item, not a current feature. See the
+            Roadmap section above.</p>
           </div>
         </div>
         <div class="accordion__item">
