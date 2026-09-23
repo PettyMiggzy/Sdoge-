@@ -9,3 +9,6 @@ typechain-types/
 
 # Generated NFT art/metadata (nft/) - not committed, collection not started yet
 nft/assets/
+
+# Real secrets for running bot/ yourself (pm2) - see bot/.env.example
+.env

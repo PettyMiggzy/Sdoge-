@@ -1,8 +1,13 @@
 name: SDOGE Buy Bot
 
+# Manual/emergency fallback only. The bot's primary home is now a
+# long-lived pm2 process on its own server (see bot/README.md) - a
+# process that never exits doesn't have the gaps this schedule trigger
+# had (confirmed against real run history: only 2 of 18 runs were ever
+# genuine `schedule` events; GH Actions' cron was leaving up to ~an hour
+# of dead air between runs). No `schedule:` trigger here anymore, on
+# purpose - running both at once would double-post every buy.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -41,6 +46,10 @@ jobs:
           BUY_TIER_3: ${{ vars.BUY_TIER_3 }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # buy-bot.js's default mode is now an infinite loop (built for
+          # pm2) - this step's own while-loop below still expects the old
+          # one-pass-then-exit behavior, so ask for that explicitly.
+          RUN_ONCE: "true"
         # GitHub Actions cron can't fire more often than every 5 minutes, so
         # each 5-minute tick instead loops internally for ~4m10s, re-checking
         # every 25s, then exits with enough buffer before the next tick to

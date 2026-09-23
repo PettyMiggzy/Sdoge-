@@ -2,9 +2,23 @@
 // $SDOGE buy-alert bot.
 //
 // Polls Arc for Transfer events that move SDOGE out of the liquidity pool
-// (= someone bought) and posts an alert to Telegram. Designed to run on a
-// schedule (GitHub Actions cron) rather than as a long-lived process, so
-// all state lives in state.json and is committed back between runs.
+// (= someone bought) and posts an alert to Telegram.
+//
+// Default mode: a persistent daemon (loop forever, sleep POLL_INTERVAL_MS
+// between passes) - meant to run 24/7 under pm2 on your own server. This
+// is the primary way to run it: GitHub Actions' own `schedule` cron turned
+// out to be unreliable in practice (confirmed against real run history -
+// only 2 of 18 runs were ever genuine `schedule` events, the rest were
+// manual workflow_dispatch, leaving gaps up to ~an hour with the bot not
+// running at all - during which real buys just sat unannounced until the
+// next run happened to fire). A process that never exits doesn't have
+// that gap.
+//
+// Set RUN_ONCE=true for the old one-shot-then-exit behavior (a single
+// pass, no loop) - that's what .github/workflows/buy-bot.yml's manual
+// workflow_dispatch fallback uses, and what state.json's git-commit step
+// there assumes (a long-lived pm2 process on your own server has no
+// reason to commit its state to git - it just keeps it on local disk).
 //
 // Required env vars (see bot/README.md for how to obtain each one):
 //   SDOGE_TOKEN_ADDRESS   - the $SDOGE ERC-20 contract on Arc
@@ -388,7 +402,7 @@ async function getLogsChunked(endpoints, fromBlock, toBlock, address, topics) {
   return logs;
 }
 
-async function main() {
+async function runOnce() {
   const tokenAddress = need('SDOGE_TOKEN_ADDRESS');
   const poolAddress = need('POOL_ADDRESS');
   const botToken = need('TELEGRAM_BOT_TOKEN');
@@ -486,7 +500,30 @@ async function main() {
   await saveState(state);
 }
 
+async function main() {
+  if (need('RUN_ONCE') === 'true') {
+    await runOnce();
+    return;
+  }
+
+  const pollIntervalMs = Number(need('POLL_INTERVAL_MS') ?? '25000');
+  console.log(`Starting persistent poll loop, checking every ${pollIntervalMs}ms. (pm2 stop / Ctrl+C to exit.)`);
+  for (;;) {
+    try {
+      await runOnce();
+    } catch (err) {
+      // A bad pass (RPC down, etc.) shouldn't take the whole daemon down -
+      // rpcWithFallback already retries across endpoints, so getting here
+      // means all of them failed. Log and try again next interval rather
+      // than letting pm2 restart the process (which would just repeat the
+      // same failure with extra startup overhead).
+      console.error('Buy bot pass failed (will retry next interval):', err);
+    }
+    await sleep(pollIntervalMs);
+  }
+}
+
 main().catch((err) => {
-  console.error('Buy bot run failed:', err);
+  console.error('Buy bot fatal error:', err);
   process.exit(1);
 });

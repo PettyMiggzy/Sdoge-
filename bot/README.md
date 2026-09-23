@@ -1,12 +1,15 @@
 # $SDOGE Buy Bot
 
-Posts a Telegram alert every time someone buys $SDOGE. Runs as a GitHub
-Actions cron job every 5 minutes — no server required.
+Posts a Telegram alert every time someone buys $SDOGE. Runs 24/7 as a
+long-lived process (pm2, on your own server) - see "Running it 24/7"
+below. A GitHub Actions workflow also exists as a manual/emergency
+fallback, but it is **not** the primary way this runs anymore (see why
+in "Why not just GitHub Actions cron").
 
 ## How it works
 
-There's no long-lived process. Every 5 minutes, `.github/workflows/buy-bot.yml`
-spins up a fresh runner that:
+By default (no `RUN_ONCE` env var set), `buy-bot.js` loops forever,
+sleeping `POLL_INTERVAL_MS` (default 25s) between passes. Each pass:
 
 1. Reads `bot/state.json` for the last block it checked.
 2. Asks Arc's RPC for any `Transfer` events that moved $SDOGE **out of the
@@ -15,8 +18,46 @@ spins up a fresh runner that:
    per transfer — skipping any recipient in `EXCLUDE_TO_ADDRESSES` or
    `UNIVERSAL_ROUTER_ADDRESS` (see below), paced ~1.2s apart with
    automatic retry on Telegram's own rate limit (see below).
-4. Commits the new "last block checked" back to `bot/state.json` so the next
-   run picks up where this one left off.
+4. Saves the new "last block checked" to `bot/state.json` so the next
+   pass picks up where this one left off.
+
+## Running it 24/7 on your own server (pm2)
+
+```bash
+cd bot
+npm install -g pm2       # if you don't already have it
+cp .env.example .env && $EDITOR .env   # fill in TELEGRAM_BOT_TOKEN at least
+pm2 start ecosystem.config.js
+pm2 save && pm2 startup  # keep it running across a server reboot
+```
+
+Useful commands: `pm2 logs sdoge-buy-bot`, `pm2 restart sdoge-buy-bot`,
+`pm2 stop sdoge-buy-bot`. Everything non-secret still comes from the
+committed `bot/config.json`, same as before - `.env` only needs to carry
+`TELEGRAM_BOT_TOKEN` (and `ARC_RPC_FALLBACK_URL`, if you're using one).
+
+`ecosystem.config.cjs` passes Node `--env-file=.env` so it reads that file
+natively (Node 20.6+, no `dotenv` dependency needed) and sets
+`autorestart: true` so pm2 brings the process back if it ever crashes.
+
+### Why not just GitHub Actions cron
+
+That's how this ran initially, and it mostly worked, but it isn't
+reliable enough to be the only thing announcing real buys: checked
+against this repo's actual run history, only **2 of 18** runs were ever
+a genuine `schedule` event — every other run happened because someone
+manually triggered it (e.g. while developing). Real gaps of 30-60+
+minutes opened up between runs with the bot not running *at all* during
+them — any buy in that window just sat unannounced until the next run
+happened to fire, which reads exactly like "missing" buys even though
+the block-cursor design means nothing is ever permanently lost, just
+delayed. A process that never exits doesn't have that gap.
+
+`.github/workflows/buy-bot.yml` is kept as a manual (`workflow_dispatch`
+only, no `schedule:` trigger) fallback — e.g. to sweep up alerts by hand
+if your pm2 process is down for some reason. **Never run both at the same
+time against the same Telegram chat** — they'd each independently detect
+and announce the same buys, double-posting everything.
 
 This detects buys via plain ERC-20 `Transfer` events rather than decoding
 Uniswap v4's pool-specific `Swap` event, because that requires knowing the
@@ -106,23 +147,18 @@ manage things that way.
 - `TELEGRAM_URL` / `X_URL`: `https://t.me/stabledoge1` / `https://x.com/stabledoge1`
   — the community links, shown as a second row of buttons on every alert.
 
-**One thing left, and it has to go through the GitHub web UI** — a bot
-token is a real secret and must never be committed to a public repo, so
-this is the one piece that can't just live in `config.json`:
+**`TELEGRAM_BOT_TOKEN`** is the one piece that can't live in `config.json`
+— a bot token is a real secret. Already created (`@Stabledogebbot`,
+confirmed live via `getMe`, confirmed it's an admin in the "Stable Doge"
+group via `getChatMember`) and **already live and posting real alerts**
+to the group. Where it needs to go depends on how you're running the bot:
 
-`TELEGRAM_BOT_TOKEN` — already created (`@Stabledogebbot`, confirmed live
-via `getMe`, confirmed it's an admin in the "Stable Doge" group via
-`getChatMember`) — just needs to go in as a **secret**, not committed
-anywhere. Add it at:
-**https://github.com/PettyMiggzy/Sdoge-/settings/secrets/actions/new**
-— name `TELEGRAM_BOT_TOKEN`, paste the token value, save.
-
-That's the only remaining gap. The moment it's set, the very next
-scheduled run goes live (it does **not** backfill the 68+ buys that
-already happened — first activation starts fresh from the current block
-so it doesn't flood the channel with old history). Trigger it immediately
-via **Actions → SDOGE Buy Bot → Run workflow** instead of waiting up to
-5 minutes.
+- **pm2 (primary)**: paste it into `bot/.env` (see "Running it 24/7"
+  above) — that's the only config that path reads from a non-committed
+  source.
+- **GitHub Actions (manual fallback)**: already set as a repo secret at
+  **https://github.com/PettyMiggzy/Sdoge-/settings/secrets/actions** —
+  nothing to do here unless it needs rotating.
 
 ## RPC reliability (surviving rate limits)
 
@@ -143,7 +179,9 @@ real buys go unannounced. Two fixes:
 
 `ARC_RPC_FALLBACK_URL` is optional but, unlike everything else in this
 list, **it's a credential** (a paid provider's URL has your API key baked
-into it) — it must go in as a GitHub **secret**, never in `config.json`:
+into it) — never put it in `config.json`. For pm2, put it in `bot/.env`
+alongside `TELEGRAM_BOT_TOKEN`. For the GitHub Actions fallback, it goes
+in as a repo secret:
 **https://github.com/PettyMiggzy/Sdoge-/settings/secrets/actions/new**
 — name `ARC_RPC_FALLBACK_URL`, paste the full URL (key included), save.
 The code never logs the URL itself (only a label like `primary`/`free-wss`/
@@ -175,26 +213,25 @@ decoding logic work end-to-end before your own pool exists:
 ```bash
 cd bot
 SDOGE_TOKEN_ADDRESS=0x... POOL_ADDRESS=0x... \
-TELEGRAM_BOT_TOKEN=x TELEGRAM_CHAT_ID=x DRY_RUN=true \
+TELEGRAM_BOT_TOKEN=x TELEGRAM_CHAT_ID=x DRY_RUN=true RUN_ONCE=true \
 node buy-bot.js
 ```
 
+(`RUN_ONCE=true` there so it checks once and exits instead of looping —
+drop it to test the actual persistent-loop behavior.)
+
 ## Operational notes
 
-- **Free, on a public repo.** GitHub Actions cron is unlimited/free for
-  public repositories; this repo is public.
-- **~25-second effective cadence**, not the raw 5-minute cron interval.
-  GitHub Actions can't schedule cron more often than every 5 minutes, so
-  each tick instead loops internally (re-checking every ~25s for ~4m10s)
-  before exiting with a buffer ahead of the next tick. Vercel Pro
-  (~$20/mo) would give true per-minute cron instead of this workaround,
-  but this gets most of the benefit for free — Vercel's free Hobby tier
-  only allows once-a-day cron, which would be worse, not better.
-- **Auto-disable after 60 days of repo inactivity.** GitHub disables
-  scheduled workflows if the default branch gets no pushes for 60 days
-  (you'll get a warning email first). Not a practical concern while this
-  repo is under active development; worth remembering if things go quiet
-  post-launch.
-- State is committed as a real git commit on every run that finds new
-  activity. That's intentional and normal for this pattern, not a sign of
-  something wrong.
+- **~25-second effective cadence** by default (`POLL_INTERVAL_MS`) for
+  the pm2 daemon — tight enough that alerts feel close to real-time
+  without hammering Arc's public RPC.
+- **`bot/state.json` is plain local disk state** for the pm2 path — no
+  git commit involved, since the process is long-lived and never loses
+  its filesystem between passes the way a GitHub Actions runner does.
+  The `workflow_dispatch`-only fallback workflow still commits it to git
+  after each manual run, same as before, since that path *is* a fresh
+  ephemeral runner every time.
+- If you ever go back to running this on GitHub Actions as the primary
+  path instead of pm2: cron can't fire more often than every 5 minutes
+  there, and (see "Why not just GitHub Actions cron" above) even that
+  wasn't firing reliably in practice.
