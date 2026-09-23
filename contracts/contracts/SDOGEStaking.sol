@@ -22,8 +22,18 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 /// whatever native USDC is sent via notifyRewardAmount(). That's called
 /// either by the owner directly, or by a separate `notifier` address the
 /// owner designates - deliberately split so the owner key can stay a cold
-/// multisig while `notifier` is a hot key an automated keeper holds (see
-/// treasury/fund-staking.js), scoped to just this one action.
+/// multisig while `notifier` is a hot key an automated keeper holds,
+/// scoped to just this one action.
+///
+/// One source of that USDC is fully self-funded and needs no treasury
+/// money or outside yield at all: an early-withdrawal penalty. Withdraw
+/// within `earlyWithdrawWindow` of your last stake and `earlyWithdrawPenaltyBps`
+/// of what you're withdrawing stays behind in the staking token instead of
+/// going to you, tracked separately in `pendingPenalties`. Sweeping that out
+/// (via `sweepPenalties`) and converting it to USDC for notifyRewardAmount()
+/// is the same "accumulate, then feed the reward stream" shape already used
+/// for tax revenue - impatient stakers fund patient ones, at zero cost to
+/// the project.
 contract SDOGEStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -45,6 +55,26 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
     ///         the owner. address(0) (the default) means only the owner can.
     address public notifier;
 
+    /// @notice Penalty on withdrawals made within earlyWithdrawWindow of the
+    ///         staker's last stake() call, in basis points of the amount
+    ///         withdrawn. Capped at 30% (see setEarlyWithdrawSettings) so
+    ///         even a compromised owner can't turn this punitive.
+    uint256 public earlyWithdrawPenaltyBps = 1500; // 15%
+    uint256 public earlyWithdrawWindow = 7 days;
+    uint256 public constant MAX_EARLY_WITHDRAW_PENALTY_BPS = 3000;
+
+    /// @dev Resets on every stake() - a top-up restarts the window for the
+    ///      staker's whole balance rather than tracking per-deposit lots.
+    ///      Simpler and cheaper; documented here because it's a real
+    ///      behavioral tradeoff, not hidden as an oversight.
+    mapping(address => uint256) public lastStakeTime;
+
+    /// @notice Forfeited early-withdrawal penalties, held in the staking
+    ///         token, not yet swept out. Always <= this contract's
+    ///         stakingToken balance minus _totalSupply - i.e. it can never
+    ///         be stakers' principal, only what's already been forfeited.
+    uint256 public pendingPenalties;
+
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 amount);
@@ -52,6 +82,9 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
     event RewardsDurationUpdated(uint256 newDuration);
     event ERC20Recovered(address indexed token, uint256 amount);
     event NotifierUpdated(address indexed previousNotifier, address indexed newNotifier);
+    event EarlyWithdrawPenalty(address indexed user, uint256 penaltyAmount);
+    event EarlyWithdrawSettingsUpdated(uint256 penaltyBps, uint256 window);
+    event PenaltiesSwept(address indexed to, uint256 amount);
 
     modifier onlyOwnerOrNotifier() {
         require(msg.sender == owner() || msg.sender == notifier, "not owner or notifier");
@@ -110,16 +143,32 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         require(amount > 0, "cannot stake 0");
         _totalSupply += amount;
         _balances[msg.sender] += amount;
+        lastStakeTime[msg.sender] = block.timestamp;
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
     }
 
+    /// @dev The full `amount` leaves the staker's tracked balance either
+    ///      way - only the transfer to them is reduced when a penalty
+    ///      applies, with the difference kept in pendingPenalties instead
+    ///      of paid out.
     function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
         require(amount > 0, "cannot withdraw 0");
         require(_balances[msg.sender] >= amount, "withdraw amount exceeds balance");
         _totalSupply -= amount;
         _balances[msg.sender] -= amount;
-        stakingToken.safeTransfer(msg.sender, amount);
+
+        uint256 payout = amount;
+        if (block.timestamp < lastStakeTime[msg.sender] + earlyWithdrawWindow) {
+            uint256 penalty = (amount * earlyWithdrawPenaltyBps) / 10000;
+            if (penalty > 0) {
+                payout -= penalty;
+                pendingPenalties += penalty;
+                emit EarlyWithdrawPenalty(msg.sender, penalty);
+            }
+        }
+
+        stakingToken.safeTransfer(msg.sender, payout);
         emit Withdrawn(msg.sender, amount);
     }
 
@@ -191,5 +240,31 @@ contract SDOGEStaking is Ownable, ReentrancyGuard {
         require(tokenAddress != address(stakingToken), "cannot withdraw the staking token");
         IERC20(tokenAddress).safeTransfer(owner(), amount);
         emit ERC20Recovered(tokenAddress, amount);
+    }
+
+    /// @notice Tune the early-withdrawal penalty. Capped well below 100% so
+    ///         it can only ever be a deterrent, never a trap that confiscates
+    ///         a staker's principal.
+    function setEarlyWithdrawSettings(uint256 _penaltyBps, uint256 _window) external onlyOwner {
+        require(_penaltyBps <= MAX_EARLY_WITHDRAW_PENALTY_BPS, "penalty too high");
+        earlyWithdrawPenaltyBps = _penaltyBps;
+        earlyWithdrawWindow = _window;
+        emit EarlyWithdrawSettingsUpdated(_penaltyBps, _window);
+    }
+
+    /// @notice Moves accumulated early-withdrawal penalties (in the staking
+    ///         token) to `to` for conversion into stakers' USDC rewards -
+    ///         e.g. swapped for USDC and passed to notifyRewardAmount(),
+    ///         the same way tax revenue already is. Bounded by
+    ///         pendingPenalties, so it can never reach into stakers'
+    ///         principal. Owner-or-notifier: routine and repeatable, same
+    ///         as notifyRewardAmount() itself.
+    function sweepPenalties(address to) external onlyOwnerOrNotifier {
+        require(to != address(0), "cannot sweep to zero address");
+        uint256 amount = pendingPenalties;
+        require(amount > 0, "no penalties to sweep");
+        pendingPenalties = 0;
+        stakingToken.safeTransfer(to, amount);
+        emit PenaltiesSwept(to, amount);
     }
 }

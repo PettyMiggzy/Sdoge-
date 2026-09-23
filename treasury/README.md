@@ -1,5 +1,16 @@
 # $SDOGE Staking Keeper
 
+**Status: not the current plan, kept as reference infrastructure.**
+Staking's primary funding source is now the contract's own early-withdrawal
+penalty (self-funded by stakers, zero tax/Treasury involvement) — see
+`../contracts/README.md`. The tax-revenue split this script implements
+(Treasury 50% / Buyback 30% / Staking 20%) was built, then set aside before
+shipping, because it still spends the project's own tax revenue rather than
+funding rewards for free. This script and workflow are left in place,
+inert, in case the tax-revenue path is revisited later — they don't run
+against anything live and don't need to be deleted to build the penalty
+path.
+
 Watches the tax wallet, skims Staking's 20% cut off any newly-arrived tax
 revenue, and sends it to the deployed `SDOGEStaking` contract. Runs as a
 GitHub Actions cron job, same pattern as `bot/`.

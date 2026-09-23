@@ -47,6 +47,7 @@ describe("SDOGEStaking", function () {
     it("withdraws principal back and updates balances", async function () {
       const { alice, sdoge, staking } = await deployFixture();
       await staking.connect(alice).stake(ethers.parseEther("100"));
+      await time.increase(7 * DAY + 1); // clear of the early-withdrawal window - see that describe block
       const before = await sdoge.balanceOf(alice.address);
 
       await staking.connect(alice).withdraw(ethers.parseEther("40"));
@@ -62,6 +63,163 @@ describe("SDOGEStaking", function () {
       await expect(staking.connect(alice).withdraw(ethers.parseEther("101"))).to.be.revertedWith(
         "withdraw amount exceeds balance"
       );
+    });
+  });
+
+  describe("early withdrawal penalty", function () {
+    it("applies the default 15% penalty when withdrawing within the window", async function () {
+      const { alice, sdoge, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      const before = await sdoge.balanceOf(alice.address);
+
+      await expect(staking.connect(alice).withdraw(ethers.parseEther("100")))
+        .to.emit(staking, "EarlyWithdrawPenalty")
+        .withArgs(alice.address, ethers.parseEther("15"));
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("85"));
+      expect(await staking.pendingPenalties()).to.equal(ethers.parseEther("15"));
+    });
+
+    it("charges no penalty once earlyWithdrawWindow has passed", async function () {
+      const { alice, sdoge, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await time.increase(7 * DAY + 1);
+      const before = await sdoge.balanceOf(alice.address);
+
+      await staking.connect(alice).withdraw(ethers.parseEther("100"));
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("100"));
+      expect(await staking.pendingPenalties()).to.equal(0);
+    });
+
+    it("resets the window on every additional stake", async function () {
+      const { alice, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await time.increase(7 * DAY + 1); // clear of the window
+      await staking.connect(alice).stake(ethers.parseEther("1")); // top-up resets the clock
+
+      await expect(staking.connect(alice).withdraw(ethers.parseEther("101"))).to.emit(
+        staking,
+        "EarlyWithdrawPenalty"
+      );
+    });
+
+    it("accumulates penalties from multiple stakers", async function () {
+      const { alice, bob, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(bob).stake(ethers.parseEther("200"));
+
+      await staking.connect(alice).withdraw(ethers.parseEther("100")); // 15 penalty
+      await staking.connect(bob).withdraw(ethers.parseEther("200")); // 30 penalty
+
+      expect(await staking.pendingPenalties()).to.equal(ethers.parseEther("45"));
+    });
+
+    it("exit() applies the penalty too, since it calls withdraw() internally", async function () {
+      const { alice, sdoge, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      const before = await sdoge.balanceOf(alice.address);
+
+      await staking.connect(alice).exit();
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("85"));
+    });
+
+    it("never lets a penalty touch other stakers' principal - full accounting invariant", async function () {
+      const { alice, bob, sdoge, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(bob).stake(ethers.parseEther("200"));
+      await staking.connect(alice).withdraw(ethers.parseEther("100")); // early - 15 penalty
+
+      const contractBalance = await sdoge.balanceOf(await staking.getAddress());
+      const totalSupply = await staking.totalSupply();
+      const pending = await staking.pendingPenalties();
+      expect(contractBalance).to.equal(totalSupply + pending);
+
+      // Bob's full 200 must still be withdrawable in full once he's clear of his own window.
+      await time.increase(7 * DAY + 1);
+      const bobBefore = await sdoge.balanceOf(bob.address);
+      await staking.connect(bob).withdraw(ethers.parseEther("200"));
+      expect(await sdoge.balanceOf(bob.address)).to.equal(bobBefore + ethers.parseEther("200"));
+    });
+  });
+
+  describe("sweeping penalties", function () {
+    it("lets owner or notifier sweep accumulated penalties out", async function () {
+      const { owner, alice, sdoge, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(alice).withdraw(ethers.parseEther("100")); // 15 penalty accrues
+
+      const treasury = ethers.Wallet.createRandom().address;
+      await expect(staking.connect(owner).sweepPenalties(treasury))
+        .to.emit(staking, "PenaltiesSwept")
+        .withArgs(treasury, ethers.parseEther("15"));
+
+      expect(await sdoge.balanceOf(treasury)).to.equal(ethers.parseEther("15"));
+      expect(await staking.pendingPenalties()).to.equal(0);
+    });
+
+    it("lets a designated notifier sweep penalties without being owner", async function () {
+      const { owner, alice, bob, staking } = await deployFixture();
+      await staking.connect(owner).setNotifier(bob.address);
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(alice).withdraw(ethers.parseEther("100"));
+
+      await expect(staking.connect(bob).sweepPenalties(bob.address)).to.not.be.reverted;
+    });
+
+    it("rejects sweeping from a random address", async function () {
+      const { alice, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(alice).withdraw(ethers.parseEther("100"));
+
+      await expect(staking.connect(alice).sweepPenalties(alice.address)).to.be.revertedWith(
+        "not owner or notifier"
+      );
+    });
+
+    it("rejects sweeping to the zero address", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      await staking.connect(alice).withdraw(ethers.parseEther("100"));
+
+      await expect(staking.connect(owner).sweepPenalties(ethers.ZeroAddress)).to.be.revertedWith(
+        "cannot sweep to zero address"
+      );
+    });
+
+    it("rejects sweeping when there's nothing to sweep", async function () {
+      const { owner, staking } = await deployFixture();
+      await expect(staking.connect(owner).sweepPenalties(owner.address)).to.be.revertedWith(
+        "no penalties to sweep"
+      );
+    });
+  });
+
+  describe("early withdrawal settings", function () {
+    it("only the owner can change penalty settings", async function () {
+      const { alice, staking } = await deployFixture();
+      await expect(
+        staking.connect(alice).setEarlyWithdrawSettings(1000, DAY)
+      ).to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
+    });
+
+    it("rejects a penalty above the 30% cap", async function () {
+      const { owner, staking } = await deployFixture();
+      await expect(staking.connect(owner).setEarlyWithdrawSettings(3001, DAY)).to.be.revertedWith(
+        "penalty too high"
+      );
+    });
+
+    it("applies updated settings to subsequent withdrawals", async function () {
+      const { owner, alice, sdoge, staking } = await deployFixture();
+      await staking.connect(owner).setEarlyWithdrawSettings(500, DAY); // 5%, 1-day window
+      await staking.connect(alice).stake(ethers.parseEther("100"));
+      const before = await sdoge.balanceOf(alice.address);
+
+      await staking.connect(alice).withdraw(ethers.parseEther("100"));
+
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("95"));
     });
   });
 
