@@ -24,52 +24,58 @@ at the cost of not showing a USD value per buy (only the SDOGE amount) —
 that could be added later once the real pool + a USDC-on-Arc quote path is
 known.
 
-## Before it can go live
+## Configuring it
 
-The bot already runs on every cron tick — right now it just logs "not
-configured yet" and exits, because none of the following exist yet:
+Non-secret config (token/pool addresses, exclude list, links) lives in
+committed `bot/config.json` — these values are already public on-chain and
+on the site, so there's no reason to make you click through the GitHub UI
+for them. An environment variable of the same name always overrides the
+config file, so `vars`/`secrets` in the workflow still work if you'd rather
+manage things that way.
+
+`bot/config.json` is already filled in post-launch:
+
+- `SDOGE_TOKEN_ADDRESS`: `0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405`
+- `POOL_ADDRESS`: `0x8366a39cc670b4001a1121b8f6a443a643e40951` — derived by
+  scanning on-chain Transfer events from the deployment block forward (no
+  block explorer indexed the token yet): nearly the full 1B supply moved
+  here in the deployment tx, and it's since sent tokens out to 19 different
+  buyer addresses across 68 transfers — the standard signature of a pool.
+  Also holds a multi-million native-USDC balance, consistent with an
+  active SDOGE/USDC pool.
+- `EXCLUDE_TO_ADDRESSES`: `0xb021be536808f551b31789422fd28a6c9c6e97da` —
+  this address received the initial mint and got tokens back from the pool
+  3 times after that, which reads as the deployer/bonding-curve contract
+  doing protocol-level operations rather than a user buying. Excluded so
+  it doesn't get announced as a buy. **Worth double-checking this is right**
+  — if it turns out to be a real user or something else entirely, just
+  remove it from the list.
+
+**Still genuinely needed, and the only thing that requires the GitHub web
+UI** — because these are actual secrets that must never be committed to a
+public repo:
 
 1. **A Telegram bot.** In Telegram, message **@BotFather** → `/newbot` →
    follow the prompts → it gives you a token like `123456:ABC-DEF...`.
-2. **A chat to post into.** Add the new bot to your Telegram
+2. **The chat to post into.** Add the new bot to your Telegram
    group/channel as an admin (needs permission to post messages). Then get
    the chat ID: the simplest way is to add
    [@userinfobot](https://t.me/userinfobot) or
    [@RawDataBot](https://t.me/RawDataBot) to the same chat momentarily and
    read the `chat.id` it reports (channels/groups have a negative ID like
    `-1001234567890`), then remove it again.
-3. **The deployed $SDOGE token address and pool address.** Not available
-   until launch — the site itself still shows the contract as "TBA."
 
-## Configuring it
+Add both in the repo's **Settings → Secrets and variables → Actions**:
+- `TELEGRAM_BOT_TOKEN` as a **secret**
+- `TELEGRAM_CHAT_ID` as a **variable** (not sensitive, but no reason to
+  commit it either — just paste it there once you have it)
 
-In the repo's **Settings → Secrets and variables → Actions**:
-
-**Secrets** (encrypted, never shown again):
-- `TELEGRAM_BOT_TOKEN` — from step 1 above.
-
-**Variables** (plain config, fine to be visible to anyone with repo access):
-- `SDOGE_TOKEN_ADDRESS` — the $SDOGE ERC-20 contract on Arc
-- `POOL_ADDRESS` — the SDOGE/USDC pool address
-- `TELEGRAM_CHAT_ID` — from step 2 above
-- `ARC_RPC_URL` — optional, defaults to `https://rpc.mainnet.arc.io`
-- `TOKEN_DECIMALS` — optional, defaults to `18`
-- `MIN_BUY_TOKENS` — optional, skip alerts below this size
-- `EXCLUDE_TO_ADDRESSES` — optional, comma-separated. **Set this to the
-  Treasury/buyback-and-burn contract's address once known** — that contract
-  also withdraws SDOGE from the pool when it executes a buyback, and without
-  this exclusion the bot would misreport the protocol's own buyback as a
-  user buy.
-- `BUY_URL`, `CHART_URL` — optional links appended to each alert
-- `BUY_TIER_1/2/3` — optional token-amount thresholds for the 🟢 emoji
-  scaling (defaults: 100k / 1M / 5M)
-
-Once `SDOGE_TOKEN_ADDRESS`, `POOL_ADDRESS`, `TELEGRAM_CHAT_ID`, and
-`TELEGRAM_BOT_TOKEN` are all set, the very next scheduled run will start
-watching from the current block (it does **not** backfill history — the
-first run just sets a baseline so launch-day doesn't get flooded with old
-transfers). Trigger it immediately via **Actions → SDOGE Buy Bot → Run
-workflow** instead of waiting up to 5 minutes.
+That's it — those two are the only remaining gap. The moment both are set,
+the very next scheduled run goes live (it does **not** backfill the 68
+buys that already happened — first activation starts fresh from the
+current block so it doesn't flood the channel with old history). Trigger
+it immediately via **Actions → SDOGE Buy Bot → Run workflow** instead of
+waiting up to 5 minutes.
 
 ## Testing before launch
 

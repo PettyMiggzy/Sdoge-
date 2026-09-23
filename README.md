@@ -1,10 +1,12 @@
 # $SDOGE — The Stable Doge
 
 Marketing site for $SDOGE, a fixed-supply meme token on Arc with a USDC-backed
-treasury (60% of the 1% trade tax → Treasury reserve, 40% → buyback & burn).
-No yield strategy right now — the Treasury just holds plain USDC. A
-yield-bearing upgrade (e.g. Circle's USYC) is framed as a possible future
-roadmap item, not a current feature.
+treasury (60% of the 1% trade tax → Treasury reserve, 40% → buyback into the
+same Treasury). No yield strategy right now — the Treasury just holds plain
+USDC. A yield-bearing upgrade (e.g. Circle's USYC) is framed as a possible
+future roadmap item, not a current feature.
+
+**Launched.** Contract: `0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405` (Arc).
 
 ## Run locally
 
@@ -27,13 +29,12 @@ python3 -m http.server 8811
   design consistently; `logo.jpg` and `social-share.jpg` were supplied
   directly. No stock emoji are used anywhere on the page.
 - `bot/` + `.github/workflows/buy-bot.yml` — Telegram buy-alert bot, runs on
-  a GitHub Actions cron (no server needed). See `bot/README.md` for setup —
-  it isn't live yet since there's no deployed pool to watch.
+  a GitHub Actions cron (no server needed). Token/pool addresses are
+  configured; only the Telegram bot token + chat ID are still needed to go
+  live. See `bot/README.md`.
 
-## Still placeholder — fill in before launch
+## Still placeholder
 
-- **Contract address** (`#contractAddress` in `index.html`) — currently "TBA",
-  wired to refuse copying until replaced with the real deployed address.
 - **Social links** (footer + community section) — Discord points at `#`;
   X (`x.com/stabledoge1`) and Telegram (`t.me/stabledoge1`) are live.
 - **Chart embed** (`#chart`, inside How to Buy) — placeholder panel; drop in

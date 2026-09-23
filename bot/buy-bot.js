@@ -26,13 +26,30 @@
 //                           (defaults to "now", i.e. no history backfill)
 
 const STATE_PATH = new URL('./state.json', import.meta.url);
+const CONFIG_PATH = new URL('./config.json', import.meta.url);
 const TRANSFER_TOPIC =
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const MAX_BLOCK_RANGE = 2000n;
 
+// Non-secret settings (token/pool addresses, exclude list, links) live in
+// committed bot/config.json rather than requiring GitHub Actions secrets/
+// variables for values that are already public on-chain and on the site.
+// Only TELEGRAM_BOT_TOKEN (and, if you'd rather, TELEGRAM_CHAT_ID) needs an
+// actual GitHub secret. An env var of the same name always overrides the
+// config file, so this stays compatible with the vars/secrets approach too.
+let fileConfig = {};
+try {
+  const fs = await import('node:fs/promises');
+  fileConfig = JSON.parse(await fs.readFile(CONFIG_PATH, 'utf8'));
+} catch {
+  fileConfig = {};
+}
+
 function need(name) {
   const v = process.env[name];
-  return v && v.trim() ? v.trim() : null;
+  if (v && v.trim()) return v.trim();
+  const fromFile = fileConfig[name];
+  return fromFile && String(fromFile).trim() ? String(fromFile).trim() : null;
 }
 
 function toTopicAddress(addr) {
@@ -142,11 +159,15 @@ async function main() {
   const botToken = need('TELEGRAM_BOT_TOKEN');
   const chatId = need('TELEGRAM_CHAT_ID');
 
-  if (!tokenAddress || !poolAddress || !botToken || !chatId) {
-    console.log(
-      'Buy bot not fully configured yet (SDOGE_TOKEN_ADDRESS / POOL_ADDRESS / ' +
-      'TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) — this is expected before launch. Skipping run.'
-    );
+  const missing = [
+    !tokenAddress && 'SDOGE_TOKEN_ADDRESS',
+    !poolAddress && 'POOL_ADDRESS',
+    !botToken && 'TELEGRAM_BOT_TOKEN',
+    !chatId && 'TELEGRAM_CHAT_ID',
+  ].filter(Boolean);
+
+  if (missing.length) {
+    console.log(`Buy bot not fully configured yet — still missing: ${missing.join(', ')}. Skipping run.`);
     return;
   }
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>$SDOGE — The Stable Doge | Stable. Simple. On Arc.</title>
-<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USDC treasury. Stable, simple, on Arc — fixed supply, 1% tax, buyback & burn, redeemable reserve." />
+<meta name="description" content="$SDOGE is a meme token on Arc backed by a real USDC treasury. Stable, simple, on Arc — fixed supply, 1% tax, buyback-funded treasury, redeemable reserve." />
 
 <!-- Social share preview. og:image must be an absolute URL for Telegram/Twitter/Discord
      crawlers to fetch it — replace with the real production URL before launch,
@@ -169,9 +169,10 @@
         </div>
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-burn.jpg" alt="" /></div>
-          <h3>Buyback &amp; Burn</h3>
+          <h3>Buyback</h3>
           <p>The rest of every trade buys $SDOGE back from the open market
-          and burns it — tightening supply with every swap, forever.</p>
+          and adds it to the Treasury — reinforcing the reserve with every
+          single swap, forever.</p>
         </div>
         <div class="card">
           <div class="card__icon"><img src="assets/img/icon-redeem.jpg" alt="" /></div>
@@ -230,7 +231,7 @@
               </div>
               <div class="legend-item">
                 <span class="legend-dot legend-dot--burn"></span>
-                <span>Buyback &amp; Burn <strong>40%</strong></span>
+                <span>Buyback <strong>40%</strong></span>
               </div>
             </div>
           </div>
@@ -256,7 +257,7 @@
             <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
           </h3>
           <div class="contract-box__row contract-box__row--tight">
-            <code id="contractAddress">TBA — published at launch</code>
+            <code id="contractAddress">0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405</code>
             <button class="btn btn--ghost btn--small" id="copyBtn">Copy</button>
           </div>
           <div class="tri-card__rows">
@@ -270,8 +271,9 @@
 
       <p class="fine-print">
         Design goal, not a promise: the mechanism is built so the Treasury
-        floor trends up as trade tax accumulates and supply burns — there is
-        no yield strategy behind it right now. Reserve value can still move
+        floor trends up as trade tax accumulates and buybacks add to the
+        reserve — there is no yield strategy behind it right now. Reserve
+        value can still move
         with market conditions and smart-contract risk. Nothing here is
         financial advice, a price peg, or a guaranteed return — see the
         disclaimer below.
@@ -304,7 +306,7 @@
         <div class="roadmap__item">
           <span class="roadmap__phase">Phase 4</span>
           <h3>Beyond</h3>
-          <p>Wider listings, deeper liquidity, continued buyback &amp; burn — and exploring a yield-bearing upgrade for the Treasury (like USYC) once the fundamentals are proven out. Good boy keeps growing.</p>
+          <p>Wider listings, deeper liquidity, continued buybacks into the Treasury — and exploring a yield-bearing upgrade for the reserve (like USYC) once the fundamentals are proven out. Good boy keeps growing.</p>
         </div>
       </div>
     </div>
@@ -335,7 +337,7 @@
         <div class="step">
           <span class="step__number">4</span>
           <h3>Swap &amp; hold</h3>
-          <p>Swap USDC for $SDOGE. Every trade feeds the Treasury and the burn. Good boy.</p>
+          <p>Swap USDC for $SDOGE. Every trade feeds the Treasury — direct deposit or buyback, it all ends up in the reserve. Good boy.</p>
         </div>
       </div>
 
@@ -365,8 +367,9 @@
           <div class="accordion__panel">
             <p>A fixed-supply meme token on Arc with a built-in Treasury.
             A portion of every trade is deposited into USDC reserves and
-            another portion buys back and burns supply. It's a meme coin
-            with a mechanism, not a promise of profit.</p>
+            another portion buys $SDOGE back from the market and adds it to
+            the same Treasury. It's a meme coin with a mechanism, not a
+            promise of profit.</p>
           </div>
         </div>
         <div class="accordion__item">
