@@ -1,0 +1,12 @@
+{
+  "name": "Cyberpunk Doge",
+  "description": "Stable in a volatile future. Part of the Stable Doge collection.",
+  "image": "ipfs://REPLACE_ME/cyberpunk-doge.png",
+  "attributes": [
+    { "trait_type": "Character", "value": "Shiba" },
+    { "trait_type": "Background", "value": "Black (Neon Glow)" },
+    { "trait_type": "Outfit", "value": "Neon-Trimmed Jacket" },
+    { "trait_type": "Headwear", "value": "Holographic Visor" },
+    { "trait_type": "USDC Branding", "value": "Yes" }
+  ]
+}

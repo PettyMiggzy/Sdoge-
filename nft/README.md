@@ -2,8 +2,9 @@
 
 A small roster of named/themed Doge characters, each with its own limited
 mintable supply, minted with native USDC. Contract and metadata are built;
-the collection isn't deployed or fully art-complete yet (8 of an intended
-10 designs have finished art).
+all 12 designs now have finished art (the original target was 10 - the
+4 AI-generated additions all turned out well, so all 4 were kept rather
+than trimmed back down). Not deployed yet.
 
 ## Contract: `contracts/contracts/SDOGECollectibles.sol`
 
@@ -48,15 +49,16 @@ npx hardhat run scripts/deploy-collectibles.js --network arc
 ```
 
 Then, once deployed, the owner calls `createDesign()` once per finished
-design (see `nft/metadata/` below for the 8 defined so far) - nothing is
-mintable until that's done.
+design (see `nft/metadata/` below for all 12) - nothing is mintable
+until that's done.
 
 ## Reference art and metadata
 
-`nft/reference/` holds the 8 finished character pieces (tracked in git,
-unlike `nft/assets/` below); `nft/metadata/{1-8}.json` are their ERC-1155
-metadata files (standard `name`/`description`/`image`/`attributes`
-shape), matching the design-ID order they're expected to be created in:
+`nft/reference/` holds all 12 finished character pieces (tracked in git,
+unlike `nft/assets/` below); `nft/metadata/{1-12}.json` are their
+ERC-1155 metadata files (standard `name`/`description`/`image`/
+`attributes` shape), matching the design-ID order they're expected to be
+created in:
 
 | ID | File | Character | Outfit | Background | USDC branding |
 |---|---|---|---|---|---|
@@ -68,6 +70,10 @@ shape), matching the design-ID order they're expected to be created in:
 | 6 | `cap-doge.jpg` | Shiba | None (plain) | Blue | Yes |
 | 7 | `blazed-doge.jpg` | Shiba | None (plain) | Orange | Yes |
 | 8 | `degen-doge.jpg` | Shiba | Gold chain (DEGEN + USDC pendants) | Orange | Yes |
+| 9 | `samurai-doge.png` | Shiba | Samurai armor | Red | Yes |
+| 10 | `viking-doge.png` | Husky | Fur cloak & horned helmet | Icy Blue | Yes |
+| 11 | `cyberpunk-doge.png` | Shiba | Neon-trimmed jacket | Black (neon glow) | Yes |
+| 12 | `champion-doge.png` | Shiba | Boxing gloves & belt | Gold | Yes |
 
 `blazed-doge` reuses `cap-doge`'s cap/outfit/character but adds bloodshot
 eyes and a dazed open mouth - the classic "stoned" meme expression - as
@@ -79,67 +85,43 @@ alongside the USDC one.
 
 The `image` field in each metadata file is a placeholder
 (`ipfs://REPLACE_ME/...`) - these haven't been pinned to permanent
-storage yet. Do that (nft.storage, Pinata, or similar) and update all 8
+storage yet. Do that (nft.storage, Pinata, or similar) and update all 12
 files before deploying for real; a metadata `image` pointing at nothing
 is a broken collection the moment someone opens it in a wallet.
 
 Two base characters run through the full-outfit designs (a grey/silver
-husky, an orange/tan shiba); `cap-doge` is noticeably plainer than the
-rest, which could hint at a rarity structure (plain = common, full
-costume = rare) - not confirmed, just noted as a real possibility.
+husky, an orange/tan shiba); `cap-doge` and `blazed-doge` are noticeably
+plainer than the rest, which could hint at a rarity structure (plain =
+common, full costume = rare) - not confirmed, just noted as a real
+possibility.
 
-## The remaining designs - no image generation available here
+## Designs 9-12: generated with Venice's API
 
-8 of 10 are done, so only 2 more are needed to hit that number - the 4
-prompts below are kept as options rather than trimmed to exactly 2, in
-case one or two don't turn out well, or a bigger-than-10 set is fine.
+Designs 1-8 came from elsewhere; 9-12 (Samurai, Viking, Cyberpunk,
+Champion) were generated directly with Venice's image API
+(`api.venice.ai/api/v1/image/generate`, `gpt-image-2` model) once an API
+key was provided, using the style guide below distilled from the first 8.
+The key itself was kept out of the git repo entirely (a session-local
+scratchpad file, never committed) - it needs to go into a real secret
+store (GitHub Actions secrets, most likely) if this needs to run
+automatically later rather than by hand.
 
-This environment's image tools are editing-only (crop, color, expand,
-vectorize) - there is no working text-to-image generation available (the
-one tool that could plausibly do it explicitly states generative content
-creation isn't currently enabled here). The remaining designs need to be
-generated elsewhere, using whatever tool produced the existing 8.
+One quirk worth recording: `gpt-image-2` returned 1024x768 regardless of
+the `width`/`height: 1024` requested in the API call (that model appears
+to ignore those fields in favor of its own default aspect ratio) - fixed
+by center-cropping to a 768x768 square with Pillow after the fact, to
+match the square format of designs 1-8. Worth re-checking against
+Venice's docs for a model/parameter that produces square output natively
+if more designs get generated later, rather than continuing to crop.
 
-**Style guide**, reverse-engineered from the existing pieces, for
-consistency: flat cel-shaded/vector cartoon illustration, thick black
-outlines, head-and-shoulders bust portrait, chibi-proportioned doge face
-with a smug/confident half-smile (often one raised eyebrow) and pink
-blush marks on the cheeks, solid single-color background (no gradient, no
-scene detail), a Circle USDC "($)" logo worked into the outfit as a
-patch/badge/print. Alternate between the orange/tan shiba base and the
+**Style guide**, reverse-engineered from designs 1-8 and reused for 9-12:
+flat cel-shaded/vector cartoon illustration, thick black outlines,
+head-and-shoulders bust portrait, chibi-proportioned doge face with a
+smug/confident half-smile (often one raised eyebrow) and pink blush marks
+on the cheeks, solid single-color background (no gradient, no scene
+detail), a Circle USDC "($)" logo worked into the outfit as a
+patch/badge/print. Alternates between the orange/tan shiba base and the
 grey/silver husky base.
-
-Four candidate prompts, picked to be distinct from the existing 8 and
-from each other (no overlap with SWAT/space/streetwear/plain/blazed/degen):
-
-1. **Samurai Doge** - "A [shiba/husky] dog character wearing traditional
-   samurai armor with a katana sheathed at its side, a Circle USDC ($)
-   logo emblazoned on the chest armor, dramatic red solid background.
-   Flat cel-shaded cartoon style, thick black outlines, smug half-smile
-   with one raised eyebrow, pink blush cheeks, head-and-shoulders bust
-   portrait, chibi proportions."
-2. **Viking Doge** - "A [shiba/husky] dog character wearing a fur-lined
-   cloak and a horned helmet, gripping a battle axe, a Circle USDC ($)
-   logo etched into a round shield, icy pale-blue solid background. Flat
-   cel-shaded cartoon style, thick black outlines, smug half-smile with
-   one raised eyebrow, pink blush cheeks, head-and-shoulders bust
-   portrait, chibi proportions."
-3. **Cyberpunk Doge** - "A [shiba/husky] dog character wearing a
-   neon-trimmed jacket and a holographic visor, a glowing Circle USDC ($)
-   logo on the jacket's shoulder patch, dark near-black solid background
-   with neon glow accents. Flat cel-shaded cartoon style, thick black
-   outlines, smug half-smile with one raised eyebrow, pink blush cheeks,
-   head-and-shoulders bust portrait, chibi proportions."
-4. **Champion Doge** - "A [shiba/husky] dog character wearing red boxing
-   gloves and a championship belt with a large Circle USDC ($) logo
-   buckle, gold solid background. Flat cel-shaded cartoon style, thick
-   black outlines, smug half-smile with one raised eyebrow, pink blush
-   cheeks, head-and-shoulders bust portrait, chibi proportions."
-
-Whichever generator made the existing 8 will match this style far more
-reliably than a fresh model would - use that one if at all possible.
-Drop the results into `nft/reference/` and say so; I'll write their
-`metadata/8+.json` files and they're ready for `createDesign()`.
 
 ## How it'd connect to staking
 
@@ -157,7 +139,7 @@ since the mechanic (which designs boost, by how much) isn't decided.
 
 - Mint price per design - `priceWei` defaults to whatever `createDesign`
   is called with; no numbers decided yet.
-- Whether all 10 designs get the same max supply or different ones per
+- Whether all 12 designs get the same max supply or different ones per
   design (e.g. rarer designs capped lower).
 - The NFT-boosts-staking mechanic mentioned above.
 - Where metadata/images actually get hosted (IPFS vs. the site itself).
@@ -165,6 +147,6 @@ since the mechanic (which designs boost, by how much) isn't decided.
 ## Bulk-generated assets
 
 If this becomes a generative trait-combination collection later (as
-opposed to this fixed 10-design roster), that output goes under
+opposed to this fixed 12-design roster), that output goes under
 `nft/assets/` - already `.gitignore`d so a full collection's worth of
 images doesn't bloat the repo. Not used yet, and not the current plan.
