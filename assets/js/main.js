@@ -42,26 +42,30 @@ document.querySelectorAll('.accordion__item').forEach((item) => {
   });
 });
 
-// Copy contract address (disabled until a real address is live)
+// Copy contract address (disabled until a real address is live) - only
+// present on index.html, so this whole block is skipped on other pages
+// that share this file (staking.html, nft.html) rather than throwing.
 const copyBtn = document.getElementById('copyBtn');
 const contractAddress = document.getElementById('contractAddress');
 
-copyBtn.addEventListener('click', async () => {
-  const text = contractAddress.textContent.trim();
-  const isPlaceholder = text.toUpperCase().includes('TBA');
+if (copyBtn && contractAddress) {
+  copyBtn.addEventListener('click', async () => {
+    const text = contractAddress.textContent.trim();
+    const isPlaceholder = text.toUpperCase().includes('TBA');
 
-  if (isPlaceholder) {
-    copyBtn.textContent = 'Not live yet';
-    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-    return;
-  }
+    if (isPlaceholder) {
+      copyBtn.textContent = 'Not live yet';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      return;
+    }
 
-  try {
-    await navigator.clipboard.writeText(text);
-    copyBtn.textContent = 'Copied!';
-  } catch (err) {
-    copyBtn.textContent = 'Copy failed';
-  } finally {
-    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-  }
-});
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = 'Copied!';
+    } catch (err) {
+      copyBtn.textContent = 'Copy failed';
+    } finally {
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+    }
+  });
+}
