@@ -40,6 +40,49 @@ Arc's own docs say pinning to paris is an obsolete workaround. This also
 means `SDOGEStaking.sol` has compiled against Cancun since this change,
 though nothing in it needed the newer opcodes.
 
+## User-uploaded NFTs: burn $SDOGE to mint your own
+
+`contracts/contracts/SDOGECommunityMint.sol` - a second, separate contract
+from the curated collection above. Anyone can mint their *own* 1-of-1
+NFT from art they host themselves, paid for by burning $SDOGE instead of
+USDC:
+
+- **ERC-721, not ERC-1155** - every mint is a unique token pointing at a
+  caller-supplied `tokenURI`, not a copy of a shared design.
+- **`mint(uri)` is fully permissionless** - no admin approval step, no
+  automated content filter, no design roster to register against first.
+  This was an explicit choice between three options (open, an owner
+  approval queue, or an automated moderation filter) - **open was chosen
+  deliberately**, not the default by omission. Worth knowing plainly: a
+  smart contract can't inspect what a URI actually points to, so nothing
+  on-chain stops someone from minting something illegal, infringing, or
+  offensive under this collection's name. If that turns out to matter in
+  practice, the fix is upstream of this contract (whatever mints the
+  metadata/uploads it), not a rewrite of `mint()` itself.
+- **Costs `burnAmount` (default 1,000,000) $SDOGE**, owner-tunable via
+  `setBurnAmount` if the token's price moves enough to matter. Sent to
+  the standard dead address (`0x000...dEaD`), not some token-specific
+  burn call - checked the deployed $SDOGE token's actual bytecode first
+  (it's an EIP-1167 minimal-proxy clone; checked the real implementation
+  contract, not the proxy stub) and confirmed it exposes only standard
+  ERC-20 functions, no `burn`/`burnFrom`/`redeem` of any kind. The dead-
+  address transfer is the correct fallback for a token with no native
+  burn - not a guess.
+- Callers need to `approve()` this contract for `burnAmount` first, same
+  pattern as any ERC-20 spend.
+
+12 tests cover minting/burning accounting, sequential token IDs across
+different minters, insufficient-allowance/balance reverts, tuning
+`burnAmount` (and that already-minted NFTs aren't affected by a later
+change), and a live reentrancy-attack scenario proving the guard actually
+blocks a reentrant `mint()` from an ERC-721 receive hook, not just
+trusting the modifier untested.
+
+Deploy with `COMMUNITY_MINT_OWNER_ADDRESS=0x... npx hardhat run
+scripts/deploy-community-mint.js --network arc` - live immediately, no
+setup step needed afterward (unlike the curated collection, there's no
+design to register first).
+
 ## Deploying and setting up designs
 
 ```bash

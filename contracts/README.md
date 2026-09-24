@@ -1,8 +1,9 @@
 # $SDOGE Staking
 
-This directory also holds `contracts/SDOGECollectibles.sol`, the $SDOGE
-NFT collection contract - see `../nft/README.md` for that one; everything
-below is about staking specifically.
+This directory also holds two other contracts, documented in `../nft/README.md`
+rather than here: `SDOGECollectibles.sol` (the curated NFT collection) and
+`SDOGECommunityMint.sol` (permissionless user-upload NFTs, burn $SDOGE to
+mint). Everything below is about staking specifically.
 
 Stake $SDOGE into one of 5 fixed lock tiers, earn native USDC. Longer
 locks earn faster, not just longer. The primary funding source costs the
