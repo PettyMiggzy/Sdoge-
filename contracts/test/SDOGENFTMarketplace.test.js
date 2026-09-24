@@ -1,359 +1,411 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
+
+const E = (n) => ethers.parseEther(String(n));
+const ERC721 = 0;
+const ERC1155 = 1;
 
 async function deployFixture() {
-  const [owner, alice, bob, stranger] = await ethers.getSigners();
+  const [owner, alice, bob, carol, treasury, stranger] = await ethers.getSigners();
 
-  const MockERC20 = await ethers.getContractFactory("MockERC20");
-  const sdoge = await MockERC20.deploy("Stable Doge", "SDOGE");
+  const sdoge = await (await ethers.getContractFactory("MockERC20")).deploy("Stable Doge", "SDOGE");
+  const communityMint = await (await ethers.getContractFactory("SDOGECommunityMint")).deploy(
+    await sdoge.getAddress(),
+    owner.address
+  );
+  const collectibles = await (await ethers.getContractFactory("SDOGECollectibles")).deploy(
+    owner.address,
+    "https://example.test/metadata/",
+    treasury.address
+  );
+  const marketplace = await (await ethers.getContractFactory("SDOGENFTMarketplace")).deploy(
+    owner.address,
+    await communityMint.getAddress(),
+    await collectibles.getAddress(),
+    treasury.address
+  );
+  const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(
+    await sdoge.getAddress(),
+    owner.address
+  );
 
-  const CommunityMint = await ethers.getContractFactory("SDOGECommunityMint");
-  const communityMint = await CommunityMint.deploy(await sdoge.getAddress(), owner.address);
-
-  const Collectibles = await ethers.getContractFactory("SDOGECollectibles");
-  const collectibles = await Collectibles.deploy(owner.address, "https://example.test/metadata/");
-
-  const Marketplace = await ethers.getContractFactory("SDOGENFTMarketplace");
-  const marketplace = await Marketplace.deploy(owner.address);
-
-  // Alice mints a real community-mint NFT (tokenId 1) by burning SDOGE - the
-  // ERC-721 side of the marketplace.
-  await sdoge.mint(alice.address, ethers.parseEther("10000000"));
+  // Alice mints community NFT #1 (ERC-721 side).
+  await sdoge.mint(alice.address, E("10000000"));
   await sdoge.connect(alice).approve(await communityMint.getAddress(), ethers.MaxUint256);
-  await communityMint.connect(alice).mint("ipfs://alice-art.json");
+  await communityMint.connect(alice).mint("ipfs://alice-art.json", ethers.MaxUint256);
 
-  // Bob mints 5 real copies of a collectibles design (designId 1) with
-  // native USDC - the ERC-1155 side of the marketplace.
-  await collectibles.connect(owner).createDesign("Test Doge", 100, ethers.parseEther("1"));
-  await collectibles.connect(bob).mint(1, 5, { value: ethers.parseEther("5") });
+  // Bob mints 5 copies of design 1 (ERC-1155 side).
+  await collectibles.connect(owner).createDesign(1, "Test Doge", 100, E("1"), 10);
+  await collectibles.connect(owner).setPublicMint(1, true);
+  await collectibles.connect(bob).mint(1, 5, { value: E("5") });
 
-  return { owner, alice, bob, stranger, sdoge, communityMint, collectibles, marketplace };
+  const mp = await marketplace.getAddress();
+  const cm = await communityMint.getAddress();
+  const col = await collectibles.getAddress();
+  return { owner, alice, bob, carol, treasury, stranger, sdoge, communityMint, collectibles, marketplace, staking, mp, cm, col };
 }
 
-const communityMintAddr = async (c) => c.getAddress();
+async function listAlice721(f, price = E("10")) {
+  await f.communityMint.connect(f.alice).approve(f.mp, 1);
+  await f.marketplace.connect(f.alice).listERC721(f.cm, 1, price);
+}
+
+async function listBob1155(f, amount = 5, price = E("2")) {
+  await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
+  await f.marketplace.connect(f.bob).listERC1155(f.col, 1, amount, price);
+}
+
+const bal = (a) => ethers.provider.getBalance(a);
 
 describe("SDOGENFTMarketplace", function () {
   describe("deployment", function () {
-    it("sets the owner and sane defaults", async function () {
-      const { owner, marketplace } = await deployFixture();
-      expect(await marketplace.owner()).to.equal(owner.address);
-      expect(await marketplace.feeBps()).to.equal(200);
-      expect(await marketplace.rewardsPool()).to.equal(ethers.ZeroAddress);
-      expect(await marketplace.nextListingId()).to.equal(1);
+    it("binds the two SDOGE collections and sane defaults", async function () {
+      const f = await deployFixture();
+      expect(await f.marketplace.owner()).to.equal(f.owner.address);
+      expect(await f.marketplace.communityMint()).to.equal(f.cm);
+      expect(await f.marketplace.collectibles()).to.equal(f.col);
+      expect(await f.marketplace.feeRecipient()).to.equal(f.treasury.address);
+      expect(await f.marketplace.feeBps()).to.equal(200);
+      expect(await f.marketplace.rewardsPool()).to.equal(ethers.ZeroAddress);
+    });
+
+    it("rejects zero addresses", async function () {
+      const f = await deployFixture();
+      const M = await ethers.getContractFactory("SDOGENFTMarketplace");
+      await expect(M.deploy(f.owner.address, ethers.ZeroAddress, f.col, f.treasury.address)).to.be.revertedWith(
+        "collection is zero address"
+      );
+      await expect(M.deploy(f.owner.address, f.cm, f.col, ethers.ZeroAddress)).to.be.revertedWith(
+        "fee recipient is zero address"
+      );
     });
   });
 
-  describe("listERC721", function () {
-    it("lists a token the caller owns and has approved, and emits Listed", async function () {
-      const { alice, communityMint, marketplace } = await deployFixture();
-      const nftAddr = await communityMintAddr(communityMint);
-      await communityMint.connect(alice).approve(await marketplace.getAddress(), 1);
-
-      await expect(marketplace.connect(alice).listERC721(nftAddr, 1, ethers.parseEther("10")))
-        .to.emit(marketplace, "Listed")
-        .withArgs(1, alice.address, nftAddr, 0, 1, 1, ethers.parseEther("10"));
-
-      const listing = await marketplace.getListing(1);
-      expect(listing.seller).to.equal(alice.address);
-      expect(listing.amount).to.equal(1);
-      expect(listing.active).to.equal(true);
+  describe("listing moves the NFT into escrow", function () {
+    it("ERC-721: escrows the token and emits Listed with the fee rate", async function () {
+      const f = await deployFixture();
+      await f.communityMint.connect(f.alice).approve(f.mp, 1);
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10")))
+        .to.emit(f.marketplace, "Listed")
+        .withArgs(1, f.alice.address, f.cm, ERC721, 1, 1, E("10"), 200);
+      expect(await f.communityMint.ownerOf(1)).to.equal(f.mp);
+      const l = await f.marketplace.getListing(1);
+      expect(l.seller).to.equal(f.alice.address);
+      expect(l.active).to.equal(true);
+      expect(l.feeBps).to.equal(200);
     });
 
-    it("also accepts a blanket setApprovalForAll instead of a per-token approve", async function () {
-      const { alice, communityMint, marketplace } = await deployFixture();
-      const nftAddr = await communityMintAddr(communityMint);
-      await communityMint.connect(alice).setApprovalForAll(await marketplace.getAddress(), true);
-      await expect(marketplace.connect(alice).listERC721(nftAddr, 1, ethers.parseEther("10"))).to.not.be.reverted;
+    it("ERC-721: the same token can't be listed twice", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("5"))).to.be.reverted;
     });
 
-    it("reverts if the caller doesn't own the token", async function () {
-      const { bob, communityMint, marketplace } = await deployFixture();
-      const nftAddr = await communityMintAddr(communityMint);
-      await expect(
-        marketplace.connect(bob).listERC721(nftAddr, 1, ethers.parseEther("10"))
-      ).to.be.revertedWith("not the owner");
+    it("ERC-1155: escrows exactly the listed copies", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 3);
+      expect(await f.collectibles.balanceOf(f.mp, 1)).to.equal(3);
+      expect(await f.collectibles.balanceOf(f.bob.address, 1)).to.equal(2);
+      // can't list more than is left in the wallet
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 3, E("2"))).to.be.reverted;
     });
 
-    it("reverts if the marketplace hasn't been approved", async function () {
-      const { alice, communityMint, marketplace } = await deployFixture();
-      const nftAddr = await communityMintAddr(communityMint);
-      await expect(
-        marketplace.connect(alice).listERC721(nftAddr, 1, ethers.parseEther("10"))
-      ).to.be.revertedWith("marketplace not approved");
-    });
-
-    it("reverts on a zero price", async function () {
-      const { alice, communityMint, marketplace } = await deployFixture();
-      const nftAddr = await communityMintAddr(communityMint);
-      await communityMint.connect(alice).approve(await marketplace.getAddress(), 1);
-      await expect(marketplace.connect(alice).listERC721(nftAddr, 1, 0)).to.be.revertedWith("price must be > 0");
-    });
-  });
-
-  describe("listERC1155", function () {
-    it("lists a quantity the caller holds and has approved, and emits Listed", async function () {
-      const { bob, collectibles, marketplace } = await deployFixture();
-      const nftAddr = await collectibles.getAddress();
-      await collectibles.connect(bob).setApprovalForAll(await marketplace.getAddress(), true);
-
-      await expect(marketplace.connect(bob).listERC1155(nftAddr, 1, 3, ethers.parseEther("2")))
-        .to.emit(marketplace, "Listed")
-        .withArgs(1, bob.address, nftAddr, 1, 1, 3, ethers.parseEther("2"));
-
-      const listing = await marketplace.getListing(1);
-      expect(listing.amount).to.equal(3);
-    });
-
-    it("reverts if the caller doesn't hold enough copies", async function () {
-      const { bob, collectibles, marketplace } = await deployFixture();
-      const nftAddr = await collectibles.getAddress();
-      await collectibles.connect(bob).setApprovalForAll(await marketplace.getAddress(), true);
-      await expect(
-        marketplace.connect(bob).listERC1155(nftAddr, 1, 6, ethers.parseEther("2"))
-      ).to.be.revertedWith("insufficient balance");
-    });
-
-    it("reverts if the marketplace hasn't been approved", async function () {
-      const { bob, collectibles, marketplace } = await deployFixture();
-      const nftAddr = await collectibles.getAddress();
-      await expect(
-        marketplace.connect(bob).listERC1155(nftAddr, 1, 3, ethers.parseEther("2"))
-      ).to.be.revertedWith("marketplace not approved");
-    });
-  });
-
-  describe("updatePrice / cancelListing", function () {
-    async function listAliceToken(marketplace, alice, communityMint) {
-      const nftAddr = await communityMintAddr(communityMint);
-      await communityMint.connect(alice).approve(await marketplace.getAddress(), 1);
-      await marketplace.connect(alice).listERC721(nftAddr, 1, ethers.parseEther("10"));
-    }
-
-    it("lets the seller update the price", async function () {
-      const { alice, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint);
-      await expect(marketplace.connect(alice).updatePrice(1, ethers.parseEther("5")))
-        .to.emit(marketplace, "PriceUpdated")
-        .withArgs(1, ethers.parseEther("5"));
-      expect((await marketplace.getListing(1)).pricePerUnit).to.equal(ethers.parseEther("5"));
-    });
-
-    it("blocks a non-seller from updating the price", async function () {
-      const { alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint);
-      await expect(marketplace.connect(bob).updatePrice(1, ethers.parseEther("5"))).to.be.revertedWith(
-        "not your listing"
+    it("needs the marketplace approved first", async function () {
+      const f = await deployFixture();
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"))).to.be.revertedWithCustomError(
+        f.communityMint,
+        "ERC721InsufficientApproval"
+      );
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"))).to.be.revertedWithCustomError(
+        f.collectibles,
+        "ERC1155MissingApprovalForAll"
       );
     });
 
-    it("lets the seller cancel, and a cancelled listing can't be bought", async function () {
-      const { alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint);
-      await expect(marketplace.connect(alice).cancelListing(1)).to.emit(marketplace, "Cancelled").withArgs(1);
-
-      await expect(
-        marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("10") })
-      ).to.be.revertedWith("not active");
+    it("only accepts the two SDOGE collections", async function () {
+      const f = await deployFixture();
+      const Fake = await ethers.getContractFactory("MockERC20");
+      const fake = await Fake.deploy("Fake", "FAKE");
+      await expect(f.marketplace.connect(f.bob).listERC1155(await fake.getAddress(), 1, 1, E("1"))).to.be.revertedWith(
+        "only SDOGE Collectibles"
+      );
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.cm, 1, 1, E("1"))).to.be.revertedWith(
+        "only SDOGE Collectibles"
+      );
+      await expect(f.marketplace.connect(f.alice).listERC721(f.col, 1, E("1"))).to.be.revertedWith(
+        "only SDOGE Community Art"
+      );
     });
 
-    it("blocks a non-seller from cancelling", async function () {
-      const { alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint);
-      await expect(marketplace.connect(bob).cancelListing(1)).to.be.revertedWith("not your listing");
+    it("rejects prices below 0.01 USDC or in 6-decimal units", async function () {
+      const f = await deployFixture();
+      await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
+      const list = (p) => f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, p);
+      await expect(list(0)).to.be.revertedWith("price below 0.01 USDC (prices use 18 decimals)");
+      await expect(list(40_000_000n)).to.be.revertedWith("price below 0.01 USDC (prices use 18 decimals)");
+      await expect(list(E("1") + 1n)).to.be.revertedWith("price must be whole micro-USDC");
+      await list(E("0.01"));
+    });
+
+    it("refuses NFTs sent directly instead of listed", async function () {
+      const f = await deployFixture();
+      await expect(
+        f.collectibles.connect(f.bob).safeTransferFrom(f.bob.address, f.mp, 1, 1, "0x")
+      ).to.be.revertedWith("list it instead");
+      await expect(
+        f.communityMint.connect(f.alice)["safeTransferFrom(address,address,uint256)"](f.alice.address, f.mp, 1)
+      ).to.be.revertedWith("list it instead");
     });
   });
 
-  describe("buy - ERC721", function () {
-    async function listAliceToken(marketplace, alice, communityMint, price = "10") {
-      const nftAddr = await communityMintAddr(communityMint);
-      await communityMint.connect(alice).approve(await marketplace.getAddress(), 1);
-      await marketplace.connect(alice).listERC721(nftAddr, 1, ethers.parseEther(price));
-    }
-
-    it("transfers the NFT, pays the seller minus the fee, and sends the fee to the owner (no rewardsPool set)", async function () {
-      const { owner, alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint, "10");
-
-      const aliceBefore = await ethers.provider.getBalance(alice.address);
-      const ownerBefore = await ethers.provider.getBalance(owner.address);
-
-      await expect(marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("10") }))
-        .to.emit(marketplace, "Sold")
-        .withArgs(1, bob.address, 1, ethers.parseEther("10"), ethers.parseEther("0.2"));
-
-      expect(await communityMint.ownerOf(1)).to.equal(bob.address);
-      expect(await ethers.provider.getBalance(alice.address)).to.equal(aliceBefore + ethers.parseEther("9.8"));
-      expect(await ethers.provider.getBalance(owner.address)).to.equal(ownerBefore + ethers.parseEther("0.2"));
-
-      const listing = await marketplace.getListing(1);
-      expect(listing.active).to.equal(false);
-      expect(listing.amount).to.equal(0);
+  describe("updating and cancelling", function () {
+    it("lets only the seller update the price, within the price rules", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await expect(f.marketplace.connect(f.bob).updatePrice(1, E("20"))).to.be.revertedWith("not your listing");
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, 35_000_000n)).to.be.revertedWith(
+        "price below 0.01 USDC (prices use 18 decimals)"
+      );
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("20")))
+        .to.emit(f.marketplace, "PriceUpdated")
+        .withArgs(1, E("20"));
     });
 
-    it("routes the fee to rewardsPool.contributeUSDC() when one is set", async function () {
-      const { owner, alice, bob, sdoge, communityMint, marketplace } = await deployFixture();
-
-      const Staking = await ethers.getContractFactory("SDOGEStaking");
-      const staking = await Staking.deploy(await sdoge.getAddress(), owner.address);
-      await marketplace.connect(owner).setRewardsPool(await staking.getAddress());
-
-      await listAliceToken(marketplace, alice, communityMint, "10");
-      await marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("10") });
-
-      expect(await staking.unallocatedUsdc()).to.equal(ethers.parseEther("0.2"));
-      expect(await ethers.provider.getBalance(await staking.getAddress())).to.equal(ethers.parseEther("0.2"));
-    });
-
-    it("reverts on incorrect payment (too little or too much)", async function () {
-      const { alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint, "10");
-      await expect(
-        marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("9") })
-      ).to.be.revertedWith("incorrect payment");
-      await expect(
-        marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("11") })
-      ).to.be.revertedWith("incorrect payment");
-    });
-
-    it("reverts buying amount != 1 on an ERC-721 listing", async function () {
-      const { alice, bob, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint, "10");
-      await expect(
-        marketplace.connect(bob).buy(1, 2, { value: ethers.parseEther("20") })
-      ).to.be.revertedWith("invalid amount");
-    });
-
-    it("reverts a stale listing after the seller transfers the NFT away", async function () {
-      const { alice, bob, stranger, communityMint, marketplace } = await deployFixture();
-      await listAliceToken(marketplace, alice, communityMint, "10");
-
-      // Alice sells/gives the token away outside the marketplace entirely.
-      await communityMint.connect(alice).transferFrom(alice.address, stranger.address, 1);
-
-      await expect(
-        marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("10") })
-      ).to.be.reverted; // communityMint itself reverts the safeTransferFrom (alice no longer owns it)
-    });
-
-    it("blocks a reentrant buy() from a malicious seller's receive() hook", async function () {
-      const { owner, alice, bob, sdoge, communityMint, marketplace } = await deployFixture();
-      const marketplaceAddr = await marketplace.getAddress();
-      const nftAddr = await communityMintAddr(communityMint);
-
-      const ReentrantSeller = await ethers.getContractFactory("ReentrantSeller");
-      const attacker = await ReentrantSeller.deploy();
-      const attackerAddr = await attacker.getAddress();
-
-      await attacker.setTargets(nftAddr, marketplaceAddr);
-      await sdoge.mint(attackerAddr, ethers.parseEther("10000000"));
-      await attacker.approveToken(await sdoge.getAddress(), nftAddr);
-
-      // Attacker mints and lists TWO of its own NFTs (tokenId 2 and 3 -
-      // alice already holds tokenId 1 from the fixture).
-      await attacker.mintAndList("ipfs://attacker-1.json", nftAddr, ethers.parseEther("10")); // listing 1
-      await attacker.mintAndList("ipfs://attacker-2.json", nftAddr, ethers.parseEther("1")); // listing 2
-
-      // When paid for listing 1, the attacker's receive() will try to buy
-      // listing 2 using the proceeds it just received.
-      await attacker.armReentry(2, ethers.parseEther("1"));
-
-      await expect(marketplace.connect(bob).buy(1, 1, { value: ethers.parseEther("10") })).to.not.be.reverted;
-
-      expect(await attacker.reentrantCallAttempted()).to.equal(true);
-      expect(await attacker.reentrantCallReverted()).to.equal(true); // nonReentrant blocked it
-
-      // Listing 1 (the real, outer purchase) went through...
-      expect(await communityMint.ownerOf(2)).to.equal(bob.address);
-      // ...but listing 2 (the reentrant attempt) did not.
-      const listing2 = await marketplace.getListing(2);
-      expect(listing2.active).to.equal(true);
-      expect(await communityMint.ownerOf(3)).to.equal(attackerAddr);
+    it("cancelling returns the escrowed NFT, even while paused", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await listBob1155(f, 4);
+      await f.marketplace.connect(f.owner).pause();
+      await expect(f.marketplace.connect(f.bob).cancelListing(1)).to.be.revertedWith("not your listing");
+      await f.marketplace.connect(f.alice).cancelListing(1);
+      await f.marketplace.connect(f.bob).cancelListing(2);
+      expect(await f.communityMint.ownerOf(1)).to.equal(f.alice.address);
+      expect(await f.collectibles.balanceOf(f.bob.address, 1)).to.equal(5);
+      await f.marketplace.connect(f.owner).unpause();
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") })).to.be.revertedWith("not active");
     });
   });
 
-  describe("buy - ERC1155", function () {
-    async function listBobCopies(marketplace, bob, collectibles, amount, price) {
-      const nftAddr = await collectibles.getAddress();
-      await collectibles.connect(bob).setApprovalForAll(await marketplace.getAddress(), true);
-      await marketplace.connect(bob).listERC1155(nftAddr, 1, amount, ethers.parseEther(price));
-    }
-
-    it("supports a partial buy, leaving the rest of the listing active", async function () {
-      const { alice, bob, collectibles, marketplace } = await deployFixture();
-      await listBobCopies(marketplace, bob, collectibles, 5, "2");
-
-      await marketplace.connect(alice).buy(1, 2, { value: ethers.parseEther("4") });
-
-      expect(await collectibles.balanceOf(alice.address, 1)).to.equal(2);
-      expect(await collectibles.balanceOf(bob.address, 1)).to.equal(3);
-
-      const listing = await marketplace.getListing(1);
-      expect(listing.active).to.equal(true);
-      expect(listing.amount).to.equal(3);
+  describe("buying", function () {
+    it("ERC-721: NFT to the buyer, 98% to the seller, 2% to the fee recipient", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      const [a0, t0] = [await bal(f.alice.address), await bal(f.treasury.address)];
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") }))
+        .to.emit(f.marketplace, "Sold")
+        .withArgs(1, f.carol.address, 1, E("10"), E("0.2"));
+      expect(await f.communityMint.ownerOf(1)).to.equal(f.carol.address);
+      expect((await bal(f.alice.address)) - a0).to.equal(E("9.8"));
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("0.2"));
+      expect((await f.marketplace.getListing(1)).active).to.equal(false);
+      expect(await bal(f.mp)).to.equal(0);
     });
 
-    it("closes the listing once the full amount is bought (possibly across multiple buys)", async function () {
-      const { alice, stranger, bob, collectibles, marketplace } = await deployFixture();
-      await listBobCopies(marketplace, bob, collectibles, 5, "2");
-
-      await marketplace.connect(alice).buy(1, 3, { value: ethers.parseEther("6") });
-      await marketplace.connect(stranger).buy(1, 2, { value: ethers.parseEther("4") });
-
-      const listing = await marketplace.getListing(1);
-      expect(listing.active).to.equal(false);
-      expect(listing.amount).to.equal(0);
-      expect(await collectibles.balanceOf(alice.address, 1)).to.equal(3);
-      expect(await collectibles.balanceOf(stranger.address, 1)).to.equal(2);
+    it("requires the exact payment and a valid amount", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("9") })).to.be.revertedWith("incorrect payment");
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("11") })).to.be.revertedWith("incorrect payment");
+      await expect(f.marketplace.connect(f.carol).buy(1, 2, { value: E("20") })).to.be.revertedWith("invalid amount");
+      await expect(f.marketplace.connect(f.carol).buy(1, 0, { value: 0 })).to.be.revertedWith("invalid amount");
     });
 
-    it("reverts buying more than what remains listed", async function () {
-      const { alice, bob, collectibles, marketplace } = await deployFixture();
-      await listBobCopies(marketplace, bob, collectibles, 5, "2");
-      await expect(
-        marketplace.connect(alice).buy(1, 6, { value: ethers.parseEther("12") })
-      ).to.be.revertedWith("invalid amount");
+    it("ERC-1155: partial buys shrink the listing; the last one closes it", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 5, E("2"));
+      await f.marketplace.connect(f.carol).buy(1, 2, { value: E("4") });
+      expect(await f.collectibles.balanceOf(f.carol.address, 1)).to.equal(2);
+      expect((await f.marketplace.getListing(1)).amount).to.equal(3);
+      await expect(f.marketplace.connect(f.carol).buy(1, 4, { value: E("8") })).to.be.revertedWith("invalid amount");
+      await f.marketplace.connect(f.alice).buy(1, 3, { value: E("6") });
+      expect((await f.marketplace.getListing(1)).active).to.equal(false);
+      expect(await f.collectibles.balanceOf(f.mp, 1)).to.equal(0);
     });
 
-    it("reverts a stale listing after the seller revokes approval", async function () {
-      const { alice, bob, collectibles, marketplace } = await deployFixture();
-      await listBobCopies(marketplace, bob, collectibles, 5, "2");
-      await collectibles.connect(bob).setApprovalForAll(await marketplace.getAddress(), false);
+    it("a stale or revived listing can't exist: sold items are gone from escrow", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 2, E("1"));
+      await f.marketplace.connect(f.carol).buy(1, 2, { value: E("2") });
+      // Bob later holds copies again and re-approves: the old listing stays dead
+      await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("1") })).to.be.revertedWith("not active");
+    });
+  });
 
-      await expect(marketplace.connect(alice).buy(1, 1, { value: ethers.parseEther("2") })).to.be.reverted;
+  describe("fees", function () {
+    it("go to the staking pool's contributeUSDC when one is set", async function () {
+      const f = await deployFixture();
+      await f.marketplace.connect(f.owner).setRewardsPool(await f.staking.getAddress());
+      await listAlice721(f);
+      await f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") });
+      expect(await f.staking.unallocatedUsdc()).to.equal(E("0.2"));
+    });
+
+    it("the pool must be a contract", async function () {
+      const f = await deployFixture();
+      await expect(f.marketplace.connect(f.owner).setRewardsPool(f.stranger.address)).to.be.revertedWith(
+        "pool must be a contract"
+      );
+    });
+
+    it("a pool that refuses the fee never blocks a sale; the fee waits for flushFees", async function () {
+      const f = await deployFixture();
+      await f.marketplace.connect(f.owner).setRewardsPool(await f.sdoge.getAddress()); // no contributeUSDC
+      await listAlice721(f);
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") })).to.emit(f.marketplace, "FeeDeferred");
+      expect(await f.marketplace.pendingFees()).to.equal(E("0.2"));
+      await expect(f.marketplace.flushFees()).to.be.revertedWith("fee recipient refused");
+      await f.marketplace.connect(f.owner).setRewardsPool(await f.staking.getAddress());
+      await f.marketplace.connect(f.stranger).flushFees();
+      expect(await f.staking.unallocatedUsdc()).to.equal(E("0.2"));
+      expect(await f.marketplace.pendingFees()).to.equal(0);
+    });
+
+    it("never charge more than the rate when listed, but a later cut applies", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 5, E("10"));
+      await f.marketplace.connect(f.owner).setFeeBps(1000);
+      const t0 = await bal(f.treasury.address);
+      await f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") });
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("0.2"), "raise ignored");
+      await f.marketplace.connect(f.owner).setFeeBps(100);
+      const t1 = await bal(f.treasury.address);
+      await f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") });
+      expect((await bal(f.treasury.address)) - t1).to.equal(E("0.1"), "cut applied");
+      await expect(f.marketplace.connect(f.owner).setFeeBps(1001)).to.be.revertedWith("fee too high");
+    });
+  });
+
+  describe("sellers that can't receive USDC", function () {
+    it("the sale still goes through and the proceeds wait for withdrawal", async function () {
+      const f = await deployFixture();
+      const Seller = await ethers.getContractFactory("MarketSeller");
+      const seller = await Seller.deploy();
+      const sAddr = await seller.getAddress();
+      await f.collectibles.connect(f.bob).safeTransferFrom(f.bob.address, sAddr, 1, 2, "0x");
+      await seller.list(f.mp, f.col, 1, 2, E("3"));
+
+      await expect(f.marketplace.connect(f.carol).buy(1, 2, { value: E("6") })).to.emit(
+        f.marketplace,
+        "ProceedsCredited"
+      );
+      expect(await f.collectibles.balanceOf(f.carol.address, 1)).to.equal(2);
+      expect(await f.marketplace.proceeds(sAddr)).to.equal(E("5.88"));
+
+      const before = await bal(f.alice.address);
+      await seller.withdraw(f.mp, f.alice.address);
+      expect((await bal(f.alice.address)) - before).to.equal(E("5.88"));
+      expect(await f.marketplace.proceeds(sAddr)).to.equal(0);
+      expect(await bal(f.mp)).to.equal(0);
+    });
+  });
+
+  describe("reentrancy", function () {
+    it("a seller re-entering buy() from its receive() gets nothing and can't block the sale", async function () {
+      const f = await deployFixture();
+      const Attacker = await ethers.getContractFactory("ReentrantSeller");
+      const attacker = await Attacker.deploy();
+      const aAddr = await attacker.getAddress();
+      await attacker.setTargets(f.cm, f.mp);
+      await f.sdoge.mint(aAddr, E("10000000"));
+      await attacker.approveToken(await f.sdoge.getAddress(), f.cm);
+      await attacker.mintAndList("ipfs://attacker-1.json", f.cm, E("10")); // listing 1, token 2
+      await attacker.mintAndList("ipfs://attacker-2.json", f.cm, E("1")); // listing 2, token 3
+      await attacker.armReentry(2, E("1"));
+
+      const before = await bal(aAddr);
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      expect(await f.communityMint.ownerOf(2)).to.equal(f.bob.address);
+      expect((await f.marketplace.getListing(2)).active).to.equal(true);
+      expect(await f.communityMint.ownerOf(3)).to.equal(f.mp);
+      // the seller got its 9.8 either directly or as withdrawable proceeds
+      expect((await bal(aAddr)) - before + (await f.marketplace.proceeds(aAddr))).to.equal(E("9.8"));
+    });
+  });
+
+  describe("reading listings", function () {
+    it("pages through active listings only", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await listBob1155(f, 1, E("1"));
+      await f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("2"));
+      expect(await f.marketplace.activeListingCount()).to.equal(3);
+      await f.marketplace.connect(f.carol).buy(2, 1, { value: E("1") });
+      expect(await f.marketplace.activeListingCount()).to.equal(2);
+      const [ids, items] = await f.marketplace.getActiveListings(0, 10);
+      expect(ids.map(Number).sort()).to.deep.equal([1, 3]);
+      expect(items.every((l) => l.active)).to.equal(true);
+      const [page2] = await f.marketplace.getActiveListings(1, 1);
+      expect(page2.length).to.equal(1);
+      const [none] = await f.marketplace.getActiveListings(5, 10);
+      expect(none.length).to.equal(0);
     });
   });
 
   describe("admin", function () {
-    it("lets the owner set feeBps up to the cap", async function () {
-      const { owner, marketplace } = await deployFixture();
-      await expect(marketplace.connect(owner).setFeeBps(1000)).to.emit(marketplace, "FeeBpsUpdated").withArgs(1000);
-      expect(await marketplace.feeBps()).to.equal(1000);
-    });
-
-    it("rejects a feeBps above the 10% cap", async function () {
-      const { owner, marketplace } = await deployFixture();
-      await expect(marketplace.connect(owner).setFeeBps(1001)).to.be.revertedWith("fee too high");
-    });
-
-    it("only the owner can set feeBps or rewardsPool", async function () {
-      const { alice, marketplace } = await deployFixture();
-      await expect(marketplace.connect(alice).setFeeBps(100)).to.be.revertedWithCustomError(
-        marketplace,
+    it("pause stops listing and buying only", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 2, E("1"));
+      await expect(f.marketplace.connect(f.stranger).pause()).to.be.revertedWithCustomError(
+        f.marketplace,
         "OwnableUnauthorizedAccount"
       );
-      await expect(marketplace.connect(alice).setRewardsPool(alice.address)).to.be.revertedWithCustomError(
-        marketplace,
-        "OwnableUnauthorizedAccount"
+      await f.marketplace.connect(f.owner).pause();
+      await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("1") })).to.be.revertedWithCustomError(
+        f.marketplace,
+        "EnforcedPause"
+      );
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"))).to.be.revertedWithCustomError(
+        f.marketplace,
+        "EnforcedPause"
+      );
+      await f.marketplace.connect(f.owner).unpause();
+      await f.marketplace.connect(f.carol).buy(1, 1, { value: E("1") });
+    });
+
+    it("rescues NFTs sent in without the hooks, but never escrowed ones", async function () {
+      const f = await deployFixture();
+      await f.communityMint.connect(f.alice).transferFrom(f.alice.address, f.mp, 1); // no hook
+      await f.marketplace.connect(f.owner).rescueStrayNft(f.cm, 1, 1, f.alice.address);
+      expect(await f.communityMint.ownerOf(1)).to.equal(f.alice.address);
+
+      await listAlice721(f);
+      await expect(f.marketplace.connect(f.owner).rescueStrayNft(f.cm, 1, 1, f.owner.address)).to.be.revertedWith(
+        "not stray"
+      );
+      await listBob1155(f, 2, E("1"));
+      await expect(f.marketplace.connect(f.owner).rescueStrayNft(f.col, 1, 1, f.owner.address)).to.be.revertedWith(
+        "not stray"
       );
     });
 
-    it("lets the owner point rewardsPool back at address(0) to fall back to direct owner payment", async function () {
-      const { owner, marketplace } = await deployFixture();
-      await marketplace.connect(owner).setRewardsPool(owner.address);
-      await expect(marketplace.connect(owner).setRewardsPool(ethers.ZeroAddress))
-        .to.emit(marketplace, "RewardsPoolUpdated")
-        .withArgs(ethers.ZeroAddress);
-      expect(await marketplace.rewardsPool()).to.equal(ethers.ZeroAddress);
+    it("sweeps forced-in USDC but never proceeds or pending fees", async function () {
+      const f = await deployFixture();
+      await expect(f.marketplace.connect(f.owner).sweepSurplus()).to.be.revertedWith("no surplus");
+      await network.provider.send("hardhat_setBalance", [f.mp, ethers.toQuantity(E("3"))]);
+      const t0 = await bal(f.treasury.address);
+      await f.marketplace.connect(f.owner).sweepSurplus();
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("3"));
+    });
+
+    it("ownership moves in two steps and can't be renounced", async function () {
+      const f = await deployFixture();
+      await expect(f.marketplace.connect(f.owner).renounceOwnership()).to.be.revertedWith("renounce disabled");
+      await f.marketplace.connect(f.owner).transferOwnership(f.alice.address);
+      expect(await f.marketplace.owner()).to.equal(f.owner.address);
+      await f.marketplace.connect(f.alice).acceptOwnership();
+      expect(await f.marketplace.owner()).to.equal(f.alice.address);
+    });
+
+    it("only the owner changes fees, pool and recipient", async function () {
+      const f = await deployFixture();
+      const who = f.marketplace.connect(f.stranger);
+      for (const call of [() => who.setFeeBps(100), () => who.setRewardsPool(ethers.ZeroAddress), () => who.setFeeRecipient(f.stranger.address)]) {
+        await expect(call()).to.be.revertedWithCustomError(f.marketplace, "OwnableUnauthorizedAccount");
+      }
+      await expect(f.marketplace.connect(f.owner).setFeeRecipient(ethers.ZeroAddress)).to.be.revertedWith(
+        "fee recipient is zero address"
+      );
     });
   });
 });

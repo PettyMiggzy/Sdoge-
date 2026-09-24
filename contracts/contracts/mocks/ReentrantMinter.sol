@@ -5,7 +5,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface ISDOGECommunityMint {
-    function mint(string calldata uri) external returns (uint256);
+    function mint(string calldata uri, uint256 maxBurnAmount) external returns (uint256);
 }
 
 /// @notice Attempts to re-enter mint() from the ERC-721 receive hook, to
@@ -27,13 +27,13 @@ contract ReentrantMinter is IERC721Receiver {
 
     function attackMint(string calldata uri) external {
         attacking = true;
-        target.mint(uri);
+        target.mint(uri, type(uint256).max);
     }
 
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         if (attacking) {
             attacking = false;
-            target.mint("reentrant-attempt");
+            target.mint("reentrant-attempt", type(uint256).max);
         }
         return this.onERC721Received.selector;
     }

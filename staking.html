@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>$SDOGE Staking — Stake, Earn, On Arc</title>
-<meta name="description" content="Stake $SDOGE on Arc across 5 lock tiers, earn native USDC. Longer locks earn faster, and the reward pool is funded entirely by early-withdrawal penalties — no tax revenue, no Treasury money." />
+<meta name="description" content="Stake $SDOGE on Arc across 5 lock tiers and earn native USDC. Longer locks earn faster. Rewards come from SDOGE NFT profits, plus whatever early exits forfeit." />
 
 <link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,10 +62,9 @@
 
     <p class="hero__subtitle">
       Stake $SDOGE across 5 lock tiers and earn native USDC. Longer locks
-      earn faster — and unlike most staking pools, the rewards aren't
-      funded by tax revenue or Treasury money. They're funded by impatient
-      stakers: leave a lock early and your forfeited principal + reward
-      goes straight into everyone else's pool.
+      earn faster. The USDC comes from SDOGE NFT profits, and anyone who
+      leaves a lock early forfeits their reward back into the pool for
+      the stakers who stay.
     </p>
 
     <div class="hero__cta">
@@ -106,7 +105,7 @@
           <div class="stat-item__icon"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.8L12 15.8 6.4 19.4l2-6.8L3 8.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
           <div>
             <div class="stat-item__label">Funded By</div>
-            <div class="stat-item__value" style="font-size: 15px;">Early-exit penalties</div>
+            <div class="stat-item__value" style="font-size: 15px;">NFT profits</div>
           </div>
         </div>
       </div>
@@ -227,13 +226,13 @@
   <section class="section section--alt">
     <div class="container">
       <div class="eyebrow">Why stake</div>
-      <h2 class="section__title">Commitment gets rewarded. Impatience funds it.</h2>
+      <h2 class="section__title">Commitment gets rewarded. Leaving early costs you.</h2>
 
       <div class="feature-row">
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.8L12 15.8 6.4 19.4l2-6.8L3 8.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
           <h3>5 Lock Tiers</h3>
-          <p>7 / 30 / 90 / 180 / 365 days, from 1.0&times; up to 3.0&times; reward weight. Owner-tunable, never retroactive on stakes already open.</p>
+          <p>7 / 30 / 90 / 180 / 365 days, from 1.0&times; up to 3.0&times; reward weight. A stake's lock, multiplier and penalty are fixed the moment you open it.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
@@ -242,8 +241,8 @@
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 21c-4-2-7-5.5-7-10V6l7-3 7 3v5c0 4.5-3 8-7 10z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
-          <h3>Self-Funded, Not Tax-Funded</h3>
-          <p>No tax revenue, no Treasury money in the reward pool. It's funded entirely by early-exit penalties — impatient stakers fund patient ones.</p>
+          <h3>Funded by NFT Profits</h3>
+          <p>Every marketplace resale fee flows into the pool automatically, the team adds NFT sale profits, and rewards forfeited by early exits go back in.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.3" opacity="0.5"/></svg></div>
@@ -273,11 +272,13 @@
         <div class="accordion__item">
           <button class="accordion__trigger">What happens if I withdraw early? <span>+</span></button>
           <div class="accordion__panel">
-            <p>Before 80% of your committed lock, withdrawing costs you a
-            15% principal penalty (owner-tunable, capped at 30%) plus
-            100% of that stake's unclaimed reward — not a pro-rated
-            slice, all of it. That forfeited value funds everyone else's
-            rewards. After 80%, none of this applies.</p>
+            <p>Before your stake matures (80% of its lock), leaving costs a
+            principal penalty (15% today, and fixed for your stake the
+            moment you open it) plus 100% of that stake's unclaimed reward.
+            The forfeited reward goes back into the pool for everyone else,
+            and the SDOGE penalty goes to the Treasury to be turned into
+            rewards. The site shows the exact cost and asks you to confirm
+            before an early exit. After 80%, none of this applies.</p>
           </div>
         </div>
         <div class="accordion__item">
@@ -291,21 +292,23 @@
         <div class="accordion__item">
           <button class="accordion__trigger">Where do rewards actually come from? <span>+</span></button>
           <div class="accordion__panel">
-            <p>Entirely from early-withdrawal penalties paid by other
-            stakers who leave before their lock matures — not tax
-            revenue, not Treasury USDC. Checked real Aave/Morpho yield on
-            Arc first and it was near 0% a week after launch, so a
-            self-funded penalty pool was built instead of relying on
-            that. Anyone can also voluntarily top up the pool directly.</p>
+            <p>From SDOGE NFT profits: the 2% fee on every marketplace
+            resale flows in automatically, and the team adds USDC from NFT
+            sales. Rewards forfeited by early exits go back in, and anyone
+            can top up the pool. The size of the pool depends on NFT
+            volume, so it isn't guaranteed. The Treasury schedules each
+            reward period, and if a week passes without one, anyone can
+            restart it from what's waiting in the pool.</p>
           </div>
         </div>
         <div class="accordion__item">
           <button class="accordion__trigger">Can I withdraw part of a stake? <span>+</span></button>
           <div class="accordion__panel">
-            <p>Yes, partial withdrawals are allowed — but touching a
-            locked stake at all (even partially) forfeits that stake's
-            full accrued reward, so there's no way to cherry-pick around
-            the penalty by withdrawing a little at a time.</p>
+            <p>Yes. From a matured stake it costs nothing. From a stake that
+            hasn't matured, taking any part out forfeits that stake's whole
+            accrued reward and charges the penalty on the part you take.
+            Each stake is its own position, so your other stakes aren't
+            touched.</p>
           </div>
         </div>
       </div>
@@ -354,14 +357,16 @@
       Locking tokens exposes you to smart-contract risk and to $SDOGE's
       own price movement for the full lock duration. The early-withdrawal
       penalty is real and enforced by the contract, not a suggestion.
+      Rewards depend on NFT volume and are not guaranteed.
       This is not financial advice — do your own research.
     </p>
     <p class="copyright">© <span id="year"></span> $SDOGE. All rights reserved. Stable. Simple. On Arc.</p>
   </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
 <script src="assets/js/main.js"></script>
+<script src="assets/js/arc.js"></script>
 <script src="assets/js/staking.js"></script>
 </body>
 </html>

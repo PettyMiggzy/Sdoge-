@@ -1,16 +1,18 @@
 // $SDOGE Staking UI.
 //
-// Works in two modes, automatically:
-// - STAKING_CONTRACT_ADDRESS unset (today): tier picker/calculations use
-//   the contract's own documented defaults (verified against
-//   contracts/contracts/SDOGEStaking.sol directly, not guessed) so the
-//   page is fully browsable and the math is correct, but wallet actions
-//   are disabled with an explicit "not live yet" state.
-// - STAKING_CONTRACT_ADDRESS set (after deploy): tier data, balances, and
-//   every stake/claim/withdraw action read and write the real contract.
+// Two modes, automatically:
+// - STAKING_CONTRACT_ADDRESS unset (today): the tier picker shows the contract's documented
+//   defaults so the page is browsable, and wallet actions are disabled ("not live yet").
+// - STAKING_CONTRACT_ADDRESS set (after deploy): everything reads the live contract on Arc and
+//   every action writes to it.
 //
-// Drop the real address in below once contracts/README.md's deploy step
-// has run - nothing else here needs to change.
+// Safety rules this file follows (from the audit):
+// - Reads go to Arc's RPC (arc.js); every write first checks the wallet is on Arc.
+// - Lock status uses chain time, never the browser clock.
+// - Tier terms are re-read right before staking and passed to stake(), which refuses to open a
+//   stake on terms that changed in the meantime.
+// - Leaving early always shows the exact penalty and forfeited reward and needs a confirm.
+// - Approvals are for the exact amount being staked.
 const STAKING_CONTRACT_ADDRESS = ''; // e.g. '0x...'
 const SDOGE_TOKEN_ADDRESS = '0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405';
 
@@ -19,42 +21,52 @@ const DEFAULT_TIER_MULT_BPS = [10000, 12000, 15000, 20000, 30000];
 const DEFAULT_EARLY_UNLOCK_BPS = 8000;
 
 const STAKING_ABI = [
-  'function stake(uint8 tier, uint256 amount) returns (uint256 stakeId)',
-  'function withdraw(uint256 stakeId, uint256 amount, address[] recipients, uint256[] splitAmounts) returns (uint256 payout, uint256 rewardPaid)',
-  'function exitStake(uint256 stakeId) returns (uint256 payout, uint256 rewardPaid)',
-  'function claimReward(uint256 stakeId) returns (uint256 rewardPaid)',
+  'function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps) returns (uint256 stakeId)',
+  'function exitStake(uint256 stakeId, bool allowEarly) returns (uint256 payout, uint256 reward)',
+  'function claimReward(uint256 stakeId) returns (uint256 reward)',
+  'function claimDeferredRewards(address to) returns (uint256 amount)',
+  'function deferredRewards(address) view returns (uint256)',
   'function getStakeIds(address user) view returns (uint256[])',
-  'function stakes(uint256) view returns (address owner, uint8 tier, uint256 amount, uint256 weighted, uint256 startTime, uint256 unlockTime, uint256 rewardPerWeightedSharePaid, uint256 accruedReward, bool closed)',
+  'function stakes(uint256) view returns (address owner, uint8 tier, uint32 multiplierBps, uint16 penaltyBps, bool closed, uint256 amount, uint256 weighted, uint256 startTime, uint256 unlockTime, uint256 matureTime, uint256 rewardPerWeightedSharePaid, uint256 accruedReward)',
   'function pendingReward(uint256 stakeId) view returns (uint256)',
-  'function effectiveUnlockTime(uint256 stakeId) view returns (uint256)',
+  'function previewExit(uint256 stakeId) view returns (uint256 payout, uint256 reward, uint256 penalty, uint256 forfeitedReward, bool early)',
   'function tierDuration(uint256) view returns (uint256)',
   'function tierMultiplierBps(uint256) view returns (uint256)',
   'function earlyUnlockThresholdBps() view returns (uint256)',
+  'function earlyWithdrawPenaltyBps() view returns (uint256)',
   'function totalPrincipalStaked() view returns (uint256)',
   'function unallocatedUsdc() view returns (uint256)',
+  'function rewardsRemaining() view returns (uint256)',
 ];
 
 const ERC20_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function allowance(address,address) view returns (uint256)',
   'function approve(address,uint256) returns (bool)',
-  'function decimals() view returns (uint8)',
 ];
 
 const isDeployed = () => STAKING_CONTRACT_ADDRESS && STAKING_CONTRACT_ADDRESS.length === 42;
 
 let provider, signer, userAddress;
-let staking, sdoge;
+let stakingWrite, sdogeWrite;
+const stakingRead = isDeployed() ? new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, arcReadProvider) : null;
+const sdogeRead = new ethers.Contract(SDOGE_TOKEN_ADDRESS, ERC20_ABI, arcReadProvider);
+
 let tierData = DEFAULT_TIER_DAYS.map((days, i) => ({
   tier: i,
-  days,
-  multiplierBps: DEFAULT_TIER_MULT_BPS[i],
+  duration: BigInt(days * 86400),
+  multiplierBps: BigInt(DEFAULT_TIER_MULT_BPS[i]),
 }));
 let earlyUnlockBps = DEFAULT_EARLY_UNLOCK_BPS;
+let liveReady = false; // true once the live contract and its terms have been read
 let selectedTier = 0;
 
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { maximumFractionDigits: d });
 const short = (addr) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+const days = (seconds) => Number(seconds) / 86400;
+const usdc = (wei, d = 4) => `${fmt(ethers.formatEther(wei), d)} USDC`;
+const sdogeAmt = (wei) => `${fmt(ethers.formatUnits(wei, 18))} SDOGE`;
+const reason = (err) => err?.shortMessage || err?.reason || err?.message || 'unknown error';
 
 function renderTierGrid() {
   const grid = document.getElementById('tierGrid');
@@ -63,8 +75,8 @@ function renderTierGrid() {
       (t) => `
       <label class="tier-option ${t.tier === selectedTier ? 'is-selected' : ''}" data-tier="${t.tier}">
         <input type="radio" name="tier" value="${t.tier}" ${t.tier === selectedTier ? 'checked' : ''} />
-        <div class="tier-option__mult">${(t.multiplierBps / 10000).toFixed(1)}&times;</div>
-        <div class="tier-option__len">${t.days}d</div>
+        <div class="tier-option__mult">${(Number(t.multiplierBps) / 10000).toFixed(1)}&times;</div>
+        <div class="tier-option__len">${fmt(days(t.duration), 1)}d</div>
       </label>`
     )
     .join('');
@@ -80,33 +92,51 @@ function renderTierGrid() {
 
 function updateMetaRow() {
   const t = tierData[selectedTier];
-  document.getElementById('metaLockLength').textContent = `${t.days} days`;
-  document.getElementById('metaMultiplier').textContent = `${(t.multiplierBps / 10000).toFixed(1)}×`;
-  const earlyUnlockDays = (t.days * earlyUnlockBps) / 10000;
+  document.getElementById('metaLockLength').textContent = `${fmt(days(t.duration), 1)} days`;
+  document.getElementById('metaMultiplier').textContent = `${(Number(t.multiplierBps) / 10000).toFixed(1)}×`;
+  const earlyUnlockDays = (days(t.duration) * earlyUnlockBps) / 10000;
   document.getElementById('metaEarlyUnlock').textContent = `~${earlyUnlockDays.toFixed(1)} days`;
+}
+
+function showUnavailable(message) {
+  liveReady = false;
+  for (const id of ['metaLockLength', 'metaMultiplier', 'metaEarlyUnlock', 'statTotalStaked', 'statRewardPool']) {
+    document.getElementById(id).textContent = 'Unavailable';
+  }
+  const btn = document.getElementById('connectOrStakeBtn');
+  if (userAddress) {
+    btn.textContent = 'Staking unavailable';
+    btn.disabled = true;
+  }
+  console.error(message);
+}
+
+async function readTier(i) {
+  const [duration, multiplierBps] = await Promise.all([stakingRead.tierDuration(i), stakingRead.tierMultiplierBps(i)]);
+  return { tier: i, duration, multiplierBps };
 }
 
 async function loadTierDataFromChain() {
   if (!isDeployed()) return;
+  if (!(await hasCodeOnArc(STAKING_CONTRACT_ADDRESS))) {
+    showUnavailable(`No staking contract at ${STAKING_CONTRACT_ADDRESS} on Arc.`);
+    return;
+  }
   try {
-    const roProvider = provider || new ethers.BrowserProvider(window.ethereum);
-    const ro = new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, roProvider);
-    const days = [];
-    const mults = [];
-    for (let i = 0; i < 5; i++) {
-      const [d, m] = await Promise.all([ro.tierDuration(i), ro.tierMultiplierBps(i)]);
-      days.push(Number(d) / 86400);
-      mults.push(Number(m));
-    }
-    tierData = days.map((d, i) => ({ tier: i, days: d, multiplierBps: mults[i] }));
-    earlyUnlockBps = Number(await ro.earlyUnlockThresholdBps());
-
-    const totalStaked = await ro.totalPrincipalStaked();
+    tierData = await Promise.all([0, 1, 2, 3, 4].map(readTier));
+    earlyUnlockBps = Number(await stakingRead.earlyUnlockThresholdBps());
+    const [totalStaked, remaining, unallocated] = await Promise.all([
+      stakingRead.totalPrincipalStaked(),
+      stakingRead.rewardsRemaining(),
+      stakingRead.unallocatedUsdc(),
+    ]);
     document.getElementById('statTotalStaked').textContent = fmt(ethers.formatUnits(totalStaked, 18));
-    const unalloc = await ro.unallocatedUsdc();
-    document.getElementById('statRewardPool').textContent = `${fmt(ethers.formatEther(unalloc), 2)} USDC`;
+    document.getElementById('statRewardPool').textContent = usdc(remaining + unallocated, 2);
+    liveReady = true;
   } catch (err) {
-    console.error('Could not load live tier data, using documented defaults:', err);
+    // Never fall back to the defaults here: they may no longer be the real terms.
+    showUnavailable(`Could not read the staking contract: ${reason(err)}`);
+    return;
   }
   renderTierGrid();
   updateMetaRow();
@@ -117,133 +147,197 @@ async function connectWallet() {
     alert('No wallet found. Install MetaMask or another injected wallet to continue.');
     return false;
   }
+  if (!(await ensureArcNetwork())) return false;
   provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send('eth_requestAccounts', []);
   signer = await provider.getSigner();
   userAddress = await signer.getAddress();
 
-  sdoge = new ethers.Contract(SDOGE_TOKEN_ADDRESS, ERC20_ABI, signer);
-  if (isDeployed()) staking = new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, signer);
+  sdogeWrite = new ethers.Contract(SDOGE_TOKEN_ADDRESS, ERC20_ABI, signer);
+  if (isDeployed()) stakingWrite = new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, signer);
 
+  const live = isDeployed() && liveReady;
   document.getElementById('overviewWallet').textContent = short(userAddress);
-  document.getElementById('connectOrStakeBtn').textContent = isDeployed() ? 'Stake' : 'Staking not live yet';
-  document.getElementById('connectOrStakeBtn').disabled = !isDeployed();
-  document.getElementById('claimAllBtn').disabled = !isDeployed();
+  const btn = document.getElementById('connectOrStakeBtn');
+  btn.textContent = !isDeployed() ? 'Staking not live yet' : live ? 'Stake' : 'Staking unavailable';
+  btn.disabled = !live;
+  document.getElementById('claimAllBtn').disabled = !live;
 
   await refreshBalance();
-  if (isDeployed()) await refreshOverview();
+  if (live) await refreshOverview();
   return true;
 }
 
 async function refreshBalance() {
-  if (!sdoge || !userAddress) return;
+  if (!userAddress) return;
   try {
-    const bal = await sdoge.balanceOf(userAddress);
+    const bal = await sdogeRead.balanceOf(userAddress);
     document.getElementById('sdogeBalance').textContent = fmt(ethers.formatUnits(bal, 18));
   } catch (err) {
     console.error('balanceOf failed:', err);
   }
 }
 
-async function refreshOverview() {
-  if (!staking || !userAddress) return;
-  try {
-    const ids = await staking.getStakeIds(userAddress);
-    let totalStaked = 0n;
-    let totalRewards = 0n;
-    const rows = [];
+async function loadMyStakes() {
+  const [ids, now] = await Promise.all([stakingRead.getStakeIds(userAddress), arcNow()]);
+  const rows = [];
+  for (const id of ids) {
+    const s = await stakingRead.stakes(id);
+    if (s.closed) continue;
+    const reward = await stakingRead.pendingReward(id);
+    rows.push({ id, tier: Number(s.tier), amount: s.amount, reward, mature: now >= s.matureTime, matureTime: s.matureTime });
+  }
+  return rows;
+}
 
-    for (const id of ids) {
-      const s = await staking.stakes(id);
-      if (s.closed) continue;
-      const reward = await staking.pendingReward(id);
-      totalStaked += s.amount;
-      totalRewards += reward;
-      const unlockAt = await staking.effectiveUnlockTime(id);
-      const unlocked = BigInt(Math.floor(Date.now() / 1000)) >= unlockAt;
-      rows.push({ id, tier: s.tier, amount: s.amount, reward, unlocked });
+async function refreshOverview() {
+  if (!stakingRead || !userAddress || !liveReady) return;
+  try {
+    const [rows, deferred] = await Promise.all([loadMyStakes(), stakingRead.deferredRewards(userAddress)]);
+    let staked = 0n;
+    let ready = 0n;
+    let atRisk = 0n;
+    for (const r of rows) {
+      staked += r.amount;
+      if (r.mature) ready += r.reward;
+      else atRisk += r.reward;
     }
 
-    document.getElementById('overviewStaked').textContent = `${fmt(ethers.formatUnits(totalStaked, 18))} SDOGE`;
-    document.getElementById('overviewRewards').textContent = `${fmt(ethers.formatEther(totalRewards), 4)} USDC`;
+    document.getElementById('overviewStaked').textContent = sdogeAmt(staked);
+    document.getElementById('overviewRewards').textContent =
+      `${usdc(ready + deferred)} ready` + (atRisk > 0n ? ` · ${usdc(atRisk)} still at risk` : '');
     document.getElementById('overviewCount').textContent = String(rows.length);
 
     const list = document.getElementById('myStakesList');
-    list.innerHTML = rows.length
-      ? rows
-          .map(
-            (r) => `
+    const html = rows.map(
+      (r) => `
         <div class="stake-row">
-          <span>#${r.id} &middot; Tier ${r.tier} &middot; ${fmt(ethers.formatUnits(r.amount, 18))} SDOGE</span>
-          <span class="stake-row__tag">${r.unlocked ? 'Unlocked' : 'Locked'}</span>
-          <button class="chip-btn" data-exit="${r.id}">Exit</button>
+          <span>#${r.id} &middot; Tier ${r.tier} &middot; ${sdogeAmt(r.amount)} &middot; ${usdc(r.reward)}</span>
+          <span class="stake-row__tag">${
+            r.mature ? 'Matured' : `Locked until ${new Date(Number(r.matureTime) * 1000).toLocaleDateString()}`
+          }</span>
+          ${r.mature && r.reward > 0n ? `<button class="chip-btn" data-claim="${r.id}">Claim</button>` : ''}
+          <button class="chip-btn" data-exit="${r.id}">${r.mature ? 'Exit' : 'Exit early'}</button>
         </div>`
-          )
-          .join('')
-      : '<p class="empty-state">No stakes yet.</p>';
+    );
+    if (deferred > 0n) {
+      html.unshift(`
+        <div class="stake-row">
+          <span>Payout waiting for you: ${usdc(deferred)}</span>
+          <button class="chip-btn" data-deferred="1">Collect</button>
+        </div>`);
+    }
+    list.innerHTML = html.length ? html.join('') : '<p class="empty-state">No stakes yet.</p>';
 
-    list.querySelectorAll('[data-exit]').forEach((btn) => {
-      btn.addEventListener('click', () => exitStake(BigInt(btn.dataset.exit)));
-    });
+    list.querySelectorAll('[data-exit]').forEach((btn) => btn.addEventListener('click', () => exitStake(BigInt(btn.dataset.exit))));
+    list.querySelectorAll('[data-claim]').forEach((btn) => btn.addEventListener('click', () => claimOne(BigInt(btn.dataset.claim))));
+    list.querySelectorAll('[data-deferred]').forEach((btn) => btn.addEventListener('click', collectDeferred));
   } catch (err) {
     console.error('refreshOverview failed:', err);
   }
 }
 
-async function ensureAllowance(amountWei) {
-  const allowance = await sdoge.allowance(userAddress, STAKING_CONTRACT_ADDRESS);
-  if (allowance < amountWei) {
-    const tx = await sdoge.approve(STAKING_CONTRACT_ADDRESS, ethers.MaxUint256);
-    await tx.wait();
-  }
+async function ready() {
+  if (!userAddress && !(await connectWallet())) return false;
+  if (!liveReady) return false;
+  return ensureArcNetwork();
 }
 
 async function doStake() {
   const raw = document.getElementById('stakeAmount').value;
   if (!raw || Number(raw) <= 0) return alert('Enter an amount to stake.');
-  const amountWei = ethers.parseUnits(raw, 18);
+  if (!(await ready())) return;
+  let amountWei;
+  try {
+    amountWei = ethers.parseUnits(raw, 18);
+  } catch {
+    return alert('Enter a valid amount.');
+  }
 
   try {
-    await ensureAllowance(amountWei);
-    const tx = await staking.stake(selectedTier, amountWei);
-    await tx.wait();
+    // Re-read the terms right now; the contract rejects the stake if they change again.
+    const live = await readTier(selectedTier);
+    const shown = tierData[selectedTier];
+    if (live.duration !== shown.duration || live.multiplierBps !== shown.multiplierBps) {
+      tierData[selectedTier] = live;
+      renderTierGrid();
+      updateMetaRow();
+      return alert('This tier\'s terms just changed. Check the new lock length and multiplier, then stake again.');
+    }
+    const allowance = await sdogeRead.allowance(userAddress, STAKING_CONTRACT_ADDRESS);
+    if (allowance < amountWei) await (await sdogeWrite.approve(STAKING_CONTRACT_ADDRESS, amountWei)).wait();
+    await (await stakingWrite.stake(selectedTier, amountWei, live.duration, live.multiplierBps)).wait();
     document.getElementById('stakeAmount').value = '';
     await refreshBalance();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert('Stake failed - see console for details.');
+    alert(`Stake failed: ${reason(err)}`);
   }
 }
 
 async function exitStake(stakeId) {
+  if (!(await ready())) return;
   try {
-    const tx = await staking.exitStake(stakeId);
-    await tx.wait();
+    const p = await stakingRead.previewExit(stakeId);
+    if (!p.early) {
+      await (await stakingWrite.exitStake(stakeId, false)).wait();
+    } else {
+      const ok = confirm(
+        `This stake hasn't matured yet.\n\n` +
+          `Leaving now costs ${sdogeAmt(p.penalty)} (the early-exit penalty) and forfeits ${usdc(p.forfeitedReward)} of reward.\n` +
+          `You would get back ${sdogeAmt(p.payout)}.\n\nExit early anyway?`
+      );
+      if (!ok) return;
+      await (await stakingWrite.exitStake(stakeId, true)).wait();
+    }
     await refreshBalance();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert('Exit failed - see console for details.');
+    alert(`Exit failed: ${reason(err)}`);
   }
 }
 
-async function claimAll() {
-  if (!staking || !userAddress) return;
+async function claimOne(stakeId) {
+  if (!(await ready())) return;
   try {
-    const ids = await staking.getStakeIds(userAddress);
-    for (const id of ids) {
-      const reward = await staking.pendingReward(id);
-      if (reward > 0n) {
-        const tx = await staking.claimReward(id);
-        await tx.wait();
-      }
-    }
+    await (await stakingWrite.claimReward(stakeId)).wait();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert('Claim failed - see console for details.');
+    alert(`Claim failed: ${reason(err)}`);
   }
+}
+
+async function collectDeferred() {
+  if (!(await ready())) return;
+  try {
+    await (await stakingWrite.claimDeferredRewards(userAddress)).wait();
+    await refreshOverview();
+  } catch (err) {
+    console.error(err);
+    alert(`Collect failed: ${reason(err)}`);
+  }
+}
+
+// Claims every matured stake that has something to claim. Locked stakes are skipped (their
+// reward is still at risk), and one failure doesn't stop the rest.
+async function claimAll() {
+  if (!(await ready())) return;
+  const rows = (await loadMyStakes()).filter((r) => r.mature && r.reward > 0n);
+  if (!rows.length) return alert('Nothing ready to claim yet. Rewards on locked stakes unlock when the stake matures.');
+  const failed = [];
+  for (const r of rows) {
+    try {
+      await (await stakingWrite.claimReward(r.id)).wait();
+    } catch (err) {
+      console.error(err);
+      failed.push(`#${r.id}: ${reason(err)}`);
+    }
+  }
+  await refreshOverview();
+  if (failed.length) alert(`Some claims failed:\n${failed.join('\n')}`);
 }
 
 // ---------- wire up ----------
@@ -264,17 +358,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('connectWalletHero')?.addEventListener('click', connectWallet);
 
   document.getElementById('maxStakeBtn').addEventListener('click', async () => {
-    if (!sdoge || !userAddress) return connectWallet();
-    const bal = await sdoge.balanceOf(userAddress);
+    if (!userAddress) return connectWallet();
+    const bal = await sdogeRead.balanceOf(userAddress);
     document.getElementById('stakeAmount').value = ethers.formatUnits(bal, 18);
   });
 
   document.querySelectorAll('.percent-row button').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (!sdoge || !userAddress) return connectWallet();
-      const bal = await sdoge.balanceOf(userAddress);
-      const pct = Number(btn.dataset.pct);
-      const amount = (bal * BigInt(pct)) / 100n;
+      if (!userAddress) return connectWallet();
+      const bal = await sdogeRead.balanceOf(userAddress);
+      const amount = (bal * BigInt(Number(btn.dataset.pct))) / 100n;
       document.getElementById('stakeAmount').value = ethers.formatUnits(amount, 18);
     });
   });

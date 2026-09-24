@@ -1,12 +1,14 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 const DAY = 24 * 60 * 60;
 const TIER = { SEVEN_DAY: 0, THIRTY_DAY: 1, NINETY_DAY: 2, ONE_EIGHTY_DAY: 3, THREE_SIXTY_FIVE_DAY: 4 };
+const E = (n) => ethers.parseEther(String(n));
+const USDC_VIEW = "0x3600000000000000000000000000000000000000";
 
 async function deployFixture() {
-  const [owner, alice, bob, stranger] = await ethers.getSigners();
+  const [owner, alice, bob, carol, stranger, notifier] = await ethers.getSigners();
 
   const MockERC20 = await ethers.getContractFactory("MockERC20");
   const sdoge = await MockERC20.deploy("Stable Doge", "SDOGE");
@@ -14,689 +16,680 @@ async function deployFixture() {
   const Staking = await ethers.getContractFactory("SDOGEStaking");
   const staking = await Staking.deploy(await sdoge.getAddress(), owner.address);
 
-  const amount = ethers.parseEther("1000000");
-  for (const user of [alice, bob, stranger]) {
+  const amount = E("10000000");
+  for (const user of [alice, bob, carol, stranger]) {
     await sdoge.mint(user.address, amount);
     await sdoge.connect(user).approve(await staking.getAddress(), amount);
   }
-
-  return { owner, alice, bob, stranger, sdoge, staking };
+  return { owner, alice, bob, carol, stranger, notifier, sdoge, staking };
 }
 
-// Native-value funding helper - on Arc this would be real USDC, here it's
-// the Hardhat network's native currency, which is what the contract expects.
-async function fund(staking, owner, amountEth) {
-  await staking.connect(owner).notifyRewardAmount({ value: ethers.parseEther(amountEth) });
+// On Arc the reward currency is native USDC; here it's Hardhat's native coin, which is what the
+// contract handles.
+async function fund(staking, owner, amount) {
+  await staking.connect(owner).notifyRewardAmount({ value: E(amount) });
 }
 
-async function stakeAndGetId(staking, signer, tier, amountEth) {
-  const tx = await staking.connect(signer).stake(tier, ethers.parseEther(amountEth));
+async function stakeAndGetId(staking, signer, tier, amount) {
+  const [d, m] = await Promise.all([staking.tierDuration(tier), staking.tierMultiplierBps(tier)]);
+  const tx = await staking.connect(signer).stake(tier, typeof amount === "bigint" ? amount : E(amount), d, m);
   const receipt = await tx.wait();
   for (const log of receipt.logs) {
     try {
       const parsed = staking.interface.parseLog(log);
       if (parsed && parsed.name === "Staked") return parsed.args.stakeId;
     } catch {
-      // not one of this contract's events - ignore
+      // another contract's event
     }
   }
   throw new Error("Staked event not found");
 }
 
+const balanceOf = (addr) => ethers.provider.getBalance(addr);
+
+// The contract's native balance must always equal exactly what it owes.
+async function expectBooksBalance(staking) {
+  const bal = await balanceOf(await staking.getAddress());
+  const owed = (await staking.unallocatedUsdc()) + (await staking.rewardsOutstanding());
+  expect(bal).to.equal(owed);
+}
+
 describe("SDOGEStaking", function () {
   describe("staking", function () {
-    it("stakes into a tier and records correct state", async function () {
-      const { alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+    it("stakes into a tier and snapshots its terms", async function () {
+      const { alice, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      const start = BigInt(await time.latest());
 
-      const s = await staking.stakes(stakeId);
+      const s = await staking.stakes(id);
       expect(s.owner).to.equal(alice.address);
       expect(s.tier).to.equal(TIER.THIRTY_DAY);
-      expect(s.amount).to.equal(ethers.parseEther("100"));
-      expect(s.weighted).to.equal(ethers.parseEther("120")); // 100 * 1.2x
+      expect(s.multiplierBps).to.equal(12000);
+      expect(s.penaltyBps).to.equal(1500);
+      expect(s.amount).to.equal(E("100"));
+      expect(s.weighted).to.equal(E("120"));
+      expect(s.startTime).to.equal(start);
+      expect(s.unlockTime).to.equal(start + BigInt(30 * DAY));
+      expect(s.matureTime).to.equal(start + BigInt(24 * DAY));
       expect(s.closed).to.equal(false);
-
-      const startTime = await time.latest();
-      expect(s.unlockTime).to.equal(BigInt(startTime) + BigInt(30 * DAY));
-
-      expect(await staking.totalPrincipalStaked()).to.equal(ethers.parseEther("100"));
-      expect(await staking.totalWeightedSupply()).to.equal(ethers.parseEther("120"));
-      expect(await sdoge.balanceOf(await staking.getAddress())).to.equal(ethers.parseEther("100"));
+      expect(await staking.effectiveUnlockTime(id)).to.equal(start + BigInt(24 * DAY));
+      expect(await staking.totalPrincipalStaked()).to.equal(E("100"));
+      expect(await staking.totalWeightedSupply()).to.equal(E("120"));
     });
 
-    it("rejects staking 0", async function () {
+    it("rejects staking 0 and an invalid tier", async function () {
       const { alice, staking } = await deployFixture();
-      await expect(staking.connect(alice).stake(TIER.SEVEN_DAY, 0)).to.be.revertedWith("cannot stake 0");
+      await expect(staking.connect(alice).stake(0, 0, 7 * DAY, 10000)).to.be.revertedWith("cannot stake 0");
+      await expect(staking.connect(alice).stake(5, E("1"), 7 * DAY, 10000)).to.be.revertedWith("invalid tier");
     });
 
-    it("rejects an invalid tier", async function () {
-      const { alice, staking } = await deployFixture();
-      await expect(staking.connect(alice).stake(5, ethers.parseEther("100"))).to.be.revertedWith("invalid tier");
+    it("refuses to stake if the tier's terms changed since the page read them", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await staking.connect(owner).setTierDuration(TIER.SEVEN_DAY, 10 * DAY);
+      await expect(staking.connect(alice).stake(TIER.SEVEN_DAY, E("1"), 7 * DAY, 10000)).to.be.revertedWith(
+        "tier terms changed"
+      );
+      await expect(staking.connect(alice).stake(TIER.SEVEN_DAY, E("1"), 10 * DAY, 12000)).to.be.revertedWith(
+        "tier terms changed"
+      );
+      await staking.connect(alice).stake(TIER.SEVEN_DAY, E("1"), 10 * DAY, 10000);
     });
 
-    it("lets a user hold multiple simultaneous stakes without merging them", async function () {
+    it("keeps multiple stakes of one user separate", async function () {
       const { alice, staking } = await deployFixture();
-      const id1 = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      const id2 = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "50");
-      const id3 = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "25"); // same tier, second position
-
-      expect(id1).to.not.equal(id2);
-      expect(id2).to.not.equal(id3);
-
-      const ids = await staking.getStakeIds(alice.address);
-      expect(ids.map((x) => x.toString())).to.deep.equal([id1, id2, id3].map((x) => x.toString()));
-
-      expect(await staking.totalPrincipalStaked()).to.equal(ethers.parseEther("175"));
-      // weighted: 100*1.0 + 50*1.2 + 25*1.0 = 100 + 60 + 25 = 185
-      expect(await staking.totalWeightedSupply()).to.equal(ethers.parseEther("185"));
+      const a = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      const b = await stakeAndGetId(staking, alice, TIER.THREE_SIXTY_FIVE_DAY, "50");
+      expect(a).to.not.equal(b);
+      expect(await staking.getStakeIds(alice.address)).to.deep.equal([a, b]);
+      expect((await staking.stakes(b)).weighted).to.equal(E("150"));
     });
   });
 
-  describe("withdrawing (matured)", function () {
-    it("withdraws full principal back with no penalty once matured", async function () {
-      const { alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await time.increase(7 * DAY + 1);
-      const before = await sdoge.balanceOf(alice.address);
-
-      const amount = ethers.parseEther("100");
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount]);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + amount);
-      const s = await staking.stakes(stakeId);
-      expect(s.amount).to.equal(0);
-      expect(s.closed).to.equal(true);
-    });
-
-    it("exitStake() withdraws the full remaining amount to msg.sender without needing pre-computed payout", async function () {
+  describe("exits after maturity", function () {
+    it("exitStake returns full principal and the reward", async function () {
       const { owner, alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await fund(staking, owner, "7");
-      await time.increase(7 * DAY + 1);
       const before = await sdoge.balanceOf(alice.address);
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1000");
+      await fund(staking, owner, "7");
+      await time.increase(8 * DAY);
 
-      await staking.connect(alice).exitStake(stakeId);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("100"));
-      const s = await staking.stakes(stakeId);
-      expect(s.amount).to.equal(0);
-      expect(s.closed).to.equal(true);
-      expect(await staking.pendingReward(stakeId)).to.equal(0);
+      const ethBefore = await balanceOf(alice.address);
+      const tx = await staking.connect(alice).exitStake(id, false);
+      const rc = await tx.wait();
+      const gas = rc.gasUsed * rc.gasPrice;
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before);
+      expect((await balanceOf(alice.address)) + gas - ethBefore).to.be.closeTo(E("7"), E("0.000001"));
+      expect((await staking.stakes(id)).closed).to.equal(true);
+      expect(await staking.totalWeightedSupply()).to.equal(0);
+      await expectBooksBalance(staking);
     });
 
-    it("exitStake() applies the early penalty and reward forfeiture too, since it shares withdraw()'s accounting", async function () {
-      const { owner, alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+    it("exitStake(id, false) refuses an early exit instead of charging the penalty", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
       await fund(staking, owner, "7");
-      await time.increase(3 * DAY);
-      const before = await sdoge.balanceOf(alice.address);
-
-      await staking.connect(alice).exitStake(stakeId);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + ethers.parseEther("85"));
-      expect(await staking.unallocatedTokens()).to.equal(ethers.parseEther("15"));
-      expect(await staking.unallocatedUsdc()).to.be.gt(0); // forfeited reward
+      await time.increase(24 * DAY - 10);
+      await expect(staking.connect(alice).exitStake(id, false)).to.be.revertedWith("exit would be early");
     });
 
-    it("supports a partial withdrawal, leaving the stake open", async function () {
+    it("withdraws part of a matured stake and keeps the rest running", async function () {
       const { alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await time.increase(7 * DAY + 1);
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await time.increase(7 * DAY);
       const before = await sdoge.balanceOf(alice.address);
-
-      const partial = ethers.parseEther("40");
-      await staking.connect(alice).withdraw(stakeId, partial, [alice.address], [partial]);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + partial);
-      const s = await staking.stakes(stakeId);
-      expect(s.amount).to.equal(ethers.parseEther("60"));
+      await staking.connect(alice).withdraw(id, E("40"), [alice.address], [E("40")]);
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + E("40"));
+      const s = await staking.stakes(id);
+      expect(s.amount).to.equal(E("60"));
+      expect(s.weighted).to.equal(E("60"));
       expect(s.closed).to.equal(false);
     });
 
-    it("splits the payout across up to 4 recipient wallets", async function () {
-      const { alice, bob, stranger, owner, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await time.increase(7 * DAY + 1);
+    it("splits a payout across up to 4 wallets, never to the staking contract itself", async function () {
+      const { alice, bob, carol, stranger, sdoge, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await time.increase(7 * DAY);
+      const self = await staking.getAddress();
+      await expect(
+        staking.connect(alice).withdraw(id, E("100"), [bob.address, self], [E("50"), E("50")])
+      ).to.be.revertedWith("recipient is the staking contract");
+      await expect(
+        staking.connect(alice).withdraw(id, E("100"), [bob.address, ethers.ZeroAddress], [E("50"), E("50")])
+      ).to.be.revertedWith("recipient is zero address");
 
-      const amount = ethers.parseEther("100");
-      const recipients = [alice.address, bob.address, stranger.address, owner.address];
-      const splits = [
-        ethers.parseEther("10"),
-        ethers.parseEther("20"),
-        ethers.parseEther("30"),
-        ethers.parseEther("40"),
-      ];
-      const before = await Promise.all(recipients.map((r) => sdoge.balanceOf(r)));
-
-      await staking.connect(alice).withdraw(stakeId, amount, recipients, splits);
-
-      const after = await Promise.all(recipients.map((r) => sdoge.balanceOf(r)));
-      for (let i = 0; i < recipients.length; i++) {
-        expect(after[i]).to.equal(before[i] + splits[i]);
-      }
+      const [b0, c0, s0] = await Promise.all([
+        sdoge.balanceOf(bob.address),
+        sdoge.balanceOf(carol.address),
+        sdoge.balanceOf(stranger.address),
+      ]);
+      await staking
+        .connect(alice)
+        .withdraw(id, E("100"), [bob.address, carol.address, stranger.address], [E("10"), E("30"), E("60")]);
+      expect(await sdoge.balanceOf(bob.address)).to.equal(b0 + E("10"));
+      expect(await sdoge.balanceOf(carol.address)).to.equal(c0 + E("30"));
+      expect(await sdoge.balanceOf(stranger.address)).to.equal(s0 + E("60"));
     });
 
-    it("rejects withdrawing 0, more than staked, or from a closed/foreign stake", async function () {
+    it("rejects malformed withdrawals", async function () {
       const { alice, bob, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await time.increase(7 * DAY + 1);
-
-      await expect(
-        staking.connect(alice).withdraw(stakeId, 0, [alice.address], [0])
-      ).to.be.revertedWith("invalid amount");
-
-      const tooMuch = ethers.parseEther("101");
-      await expect(
-        staking.connect(alice).withdraw(stakeId, tooMuch, [alice.address], [tooMuch])
-      ).to.be.revertedWith("invalid amount");
-
-      const amount = ethers.parseEther("100");
-      await expect(
-        staking.connect(bob).withdraw(stakeId, amount, [bob.address], [amount])
-      ).to.be.revertedWith("not your stake");
-
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount]);
-      await expect(
-        staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount])
-      ).to.be.revertedWith("stake already closed"); // fully withdrawn above
-    });
-
-    it("rejects malformed recipient/split arrays", async function () {
-      const { alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await time.increase(7 * DAY + 1);
-      const amount = ethers.parseEther("100");
-
-      await expect(staking.connect(alice).withdraw(stakeId, amount, [], [])).to.be.revertedWith(
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await time.increase(7 * DAY);
+      const w = (amt, rs, ss, who = alice) => staking.connect(who).withdraw(id, amt, rs, ss);
+      await expect(w(E("100"), [], [])).to.be.revertedWith("1-4 recipients");
+      await expect(w(E("100"), Array(5).fill(bob.address), Array(5).fill(E("20")))).to.be.revertedWith(
         "1-4 recipients"
       );
+      await expect(w(E("100"), [bob.address], [E("1"), E("1")])).to.be.revertedWith(
+        "recipients/amounts length mismatch"
+      );
+      await expect(w(E("100"), [bob.address], [E("99")])).to.be.revertedWith("split amounts must sum to payout");
+      await expect(w(0, [bob.address], [0])).to.be.revertedWith("invalid amount");
+      await expect(w(E("101"), [bob.address], [E("101")])).to.be.revertedWith("invalid amount");
+      await expect(w(E("100"), [bob.address], [E("100")], bob)).to.be.revertedWith("not your stake");
+      await staking.connect(alice).exitStake(id, false);
+      await expect(staking.connect(alice).exitStake(id, false)).to.be.revertedWith("stake already closed");
+    });
 
-      const fiveAddrs = Array(5).fill(alice.address);
-      const fiveSplits = Array(5).fill(amount / 5n);
-      await expect(
-        staking.connect(alice).withdraw(stakeId, amount, fiveAddrs, fiveSplits)
-      ).to.be.revertedWith("1-4 recipients");
-
-      await expect(
-        staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount, 0n])
-      ).to.be.revertedWith("recipients/amounts length mismatch");
-
-      await expect(
-        staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount - 1n])
-      ).to.be.revertedWith("split amounts must sum to payout");
-
-      await expect(
-        staking.connect(alice).withdraw(stakeId, amount, [ethers.ZeroAddress], [amount])
-      ).to.be.revertedWith("recipient is zero address");
+    it("a split sized for a matured exit reverts if the stake is still early", async function () {
+      const { alice, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      await time.increase(10 * DAY);
+      await expect(staking.connect(alice).withdraw(id, E("100"), [alice.address], [E("100")])).to.be.revertedWith(
+        "split amounts must sum to payout"
+      );
     });
   });
 
-  describe("early withdrawal penalty", function () {
-    it("applies the default 15% penalty on principal when withdrawing early", async function () {
-      const { alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      const before = await sdoge.balanceOf(alice.address);
-
-      const amount = ethers.parseEther("100");
-      const payout = ethers.parseEther("85");
-      await expect(staking.connect(alice).withdraw(stakeId, amount, [alice.address], [payout]))
-        .to.emit(staking, "EarlyWithdrawPenalty")
-        .withArgs(alice.address, stakeId, ethers.parseEther("15"));
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + payout);
-      expect(await staking.unallocatedTokens()).to.equal(ethers.parseEther("15"));
-    });
-
-    it("forfeits ALL of a stake's accrued reward on early withdrawal, not a pro-rated slice", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      await fund(staking, owner, "7"); // 7-day default rewardsDuration
-      await time.increase(3 * DAY); // well inside the 30-day lock, reward has accrued
-
-      expect(await staking.pendingReward(stakeId)).to.be.gt(0);
-
-      // Alice is the sole staker, so ~3 of the 7-day/7-ETH pool's 3 elapsed
-      // days is hers to forfeit here - read from the emitted event rather
-      // than a separately-fetched pendingReward() snapshot, since that read
-      // and this transaction land in different blocks (a few more seconds
-      // of accrual happen in between).
-      const amount = ethers.parseEther("10"); // partial early withdrawal
-      const payout = ethers.parseEther("8.5"); // 15% penalty
-      const tx = await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [payout]);
-      const receipt = await tx.wait();
-      const forfeitedEvent = receipt.logs
-        .map((log) => {
-          try {
-            return staking.interface.parseLog(log);
-          } catch {
-            return null;
-          }
-        })
-        .find((parsed) => parsed && parsed.name === "RewardForfeited");
-
-      expect(forfeitedEvent.args.amount).to.be.closeTo(ethers.parseEther("3"), ethers.parseEther("0.01"));
-      expect(await staking.pendingReward(stakeId)).to.equal(0);
-      expect(await staking.unallocatedUsdc()).to.equal(forfeitedEvent.args.amount);
-    });
-
-    it("charges no penalty and forfeits nothing once the tier has matured", async function () {
+  describe("early exits", function () {
+    it("charges 15% of principal and forfeits all accrued reward into the pool", async function () {
       const { owner, alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await fund(staking, owner, "7");
-      await time.increase(7 * DAY + 1);
-
       const before = await sdoge.balanceOf(alice.address);
-      const amount = ethers.parseEther("100");
-      const { rewardPaid } = await staking.connect(alice).withdraw.staticCall(
-        stakeId,
-        amount,
-        [alice.address],
-        [amount]
-      );
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount]);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + amount);
-      expect(await staking.unallocatedTokens()).to.equal(0);
-      expect(rewardPaid).to.be.closeTo(ethers.parseEther("7"), ethers.parseEther("0.001"));
-    });
-
-    it("a partial early withdrawal leaves the remainder staked and accruing afresh", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "1000");
       await fund(staking, owner, "7");
       await time.increase(3 * DAY);
+      const unallocatedBefore = await staking.unallocatedUsdc();
+      const [payout, , penalty, forfeited, early] = await staking.previewExit(id);
+      expect(early).to.equal(true);
+      expect(payout).to.equal(E("850"));
+      expect(penalty).to.equal(E("150"));
+      expect(forfeited).to.be.closeTo(E("3"), E("0.001"));
 
-      const amount = ethers.parseEther("40");
-      const payout = ethers.parseEther("34");
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [payout]);
+      await staking.connect(alice).exitStake(id, true);
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before - E("150"));
+      expect(await staking.unallocatedTokens()).to.equal(E("150"));
+      expect((await staking.unallocatedUsdc()) - unallocatedBefore).to.be.closeTo(E("3"), E("0.001"));
+      await expectBooksBalance(staking);
+    });
 
-      const s = await staking.stakes(stakeId);
-      expect(s.amount).to.equal(ethers.parseEther("60"));
-      expect(s.closed).to.equal(false);
-      expect(await staking.pendingReward(stakeId)).to.equal(0); // just forfeited
+    it("a partial early withdrawal forfeits that stake's whole reward and the rest accrues afresh", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "1000");
+      await fund(staking, owner, "7");
+      await time.increase(2 * DAY);
+      await staking.connect(alice).withdraw(id, E("500"), [alice.address], [E("425")]);
+      expect((await staking.stakes(id)).accruedReward).to.equal(0);
+      expect(await staking.pendingReward(id)).to.be.lt(E("0.001"));
+      await time.increase(DAY);
+      expect(await staking.pendingReward(id)).to.be.closeTo(E("1"), E("0.001"));
+    });
 
-      await time.increase(1 * DAY);
-      expect(await staking.pendingReward(stakeId)).to.be.gt(0); // accruing again on the remaining 60
+    it("counts a stake as matured at 80% of its lock", async function () {
+      const { owner, alice, bob, sdoge, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      const b = await stakeAndGetId(staking, bob, TIER.THIRTY_DAY, "100");
+      await fund(staking, owner, "7");
+      await time.increase(24 * DAY - 30);
+      await expect(staking.connect(bob).claimReward(b)).to.be.revertedWith(
+        "still locked - matures or a full early exit settles reward"
+      );
+      await time.increase(60);
+      await staking.connect(bob).claimReward(b);
+      const before = await sdoge.balanceOf(alice.address);
+      await staking.connect(alice).exitStake(a, false);
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + E("100"));
     });
   });
 
-  describe("80% early-unlock threshold", function () {
-    it("charges no penalty and forfeits nothing once 80% of the lock has elapsed, before full maturity", async function () {
-      const { owner, alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100"); // 30 days -> 80% = 24 days
-      await fund(staking, owner, "7");
-      await time.increase(24 * DAY + 1); // past 80%, still short of the full 30
-
+  describe("a stake's terms can't change after it opens", function () {
+    it("raising the tier's multiplier later doesn't trap the stake", async function () {
+      const { owner, alice, staking, sdoge } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await staking.connect(owner).setTierMultiplier(TIER.SEVEN_DAY, 12000);
+      await time.increase(7 * DAY);
       const before = await sdoge.balanceOf(alice.address);
-      const amount = ethers.parseEther("100");
-      const { rewardPaid } = await staking
-        .connect(alice)
-        .withdraw.staticCall(stakeId, amount, [alice.address], [amount]);
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [amount]);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + amount); // full principal, no penalty
-      expect(await staking.unallocatedTokens()).to.equal(0);
-      expect(rewardPaid).to.be.gt(0); // reward paid, not forfeited
+      await staking.connect(alice).exitStake(id, false);
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + E("100"));
+      expect(await staking.totalWeightedSupply()).to.equal(0);
     });
 
-    it("still applies the penalty just before the 80% mark", async function () {
-      const { alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100"); // 80% = 24 days
-      await time.increase(23 * DAY);
+    it("lowering it later removes exactly the stake's own weight", async function () {
+      const { owner, alice, bob, carol, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.THREE_SIXTY_FIVE_DAY, "1000");
+      await stakeAndGetId(staking, bob, TIER.THREE_SIXTY_FIVE_DAY, "1000");
+      await staking.connect(owner).setTierMultiplier(TIER.THREE_SIXTY_FIVE_DAY, 20000);
+      await stakeAndGetId(staking, carol, TIER.THREE_SIXTY_FIVE_DAY, "1000");
+      expect(await staking.totalWeightedSupply()).to.equal(E("8000"));
 
+      await time.increase(292 * DAY);
+      await staking.connect(alice).withdraw(a, E("999"), [alice.address], [E("999")]);
+      expect((await staking.stakes(a)).weighted).to.equal(E("3"));
+      expect(await staking.totalWeightedSupply()).to.equal(E("5003"));
+      await staking.connect(alice).exitStake(a, false);
+      expect(await staking.totalWeightedSupply()).to.equal(E("5000"));
+    });
+
+    it("penalty and maturity changes only apply to new stakes", async function () {
+      const { owner, alice, bob, sdoge, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      await staking.connect(owner).setEarlyWithdrawPenalty(3000);
+      await staking.connect(owner).setEarlyUnlockThreshold(10000);
+      const b = await stakeAndGetId(staking, bob, TIER.THIRTY_DAY, "100");
+      expect((await staking.stakes(b)).penaltyBps).to.equal(3000);
+
+      await time.increase(25 * DAY);
       const before = await sdoge.balanceOf(alice.address);
-      const amount = ethers.parseEther("100");
-      const payout = ethers.parseEther("85");
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [payout]);
+      await staking.connect(alice).exitStake(a, false); // matured at day 24 under ITS terms
+      expect(await sdoge.balanceOf(alice.address)).to.equal(before + E("100"));
 
-      expect(await sdoge.balanceOf(alice.address)).to.equal(before + payout); // penalty still applied
-      expect(await staking.unallocatedTokens()).to.equal(ethers.parseEther("15"));
+      await expect(staking.connect(bob).exitStake(b, false)).to.be.revertedWith("exit would be early");
+      const [payout] = await staking.previewExit(b);
+      expect(payout).to.equal(E("70"));
     });
 
-    it("lets claimReward() collect once 80% has elapsed, even though full maturity hasn't", async function () {
+    it("rounding never leaves weight behind on closed stakes", async function () {
+      const { alice, bob, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, ethers.parseEther("1234.567890123456789012"));
+      const b = await stakeAndGetId(staking, bob, TIER.NINETY_DAY, ethers.parseEther("777.777777777777777777"));
+      await time.increase(80 * DAY);
+      const partA = ethers.parseEther("500.000000000000000003");
+      await staking.connect(alice).withdraw(a, partA, [alice.address], [partA]);
+      await staking.connect(alice).exitStake(a, false);
+      const partB = ethers.parseEther("333.333333333333333331");
+      await staking.connect(bob).withdraw(b, partB, [bob.address], [partB]);
+      await staking.connect(bob).exitStake(b, false);
+      expect(await staking.totalWeightedSupply()).to.equal(0);
+      expect(await staking.totalPrincipalStaked()).to.equal(0);
+    });
+  });
+
+  describe("rewards", function () {
+    it("pays a higher tier proportionally more", async function () {
+      const { owner, alice, bob, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1000");
+      const b = await stakeAndGetId(staking, bob, TIER.THREE_SIXTY_FIVE_DAY, "1000");
+      await fund(staking, owner, "8");
+      await time.increase(7 * DAY);
+      expect(await staking.pendingReward(a)).to.be.closeTo(E("2"), E("0.001"));
+      expect(await staking.pendingReward(b)).to.be.closeTo(E("6"), E("0.001"));
+    });
+
+    it("splits by size within a tier", async function () {
+      const { owner, alice, bob, staking } = await deployFixture();
+      const a = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "300");
+      const b = await stakeAndGetId(staking, bob, TIER.SEVEN_DAY, "100");
+      await fund(staking, owner, "4");
+      await time.increase(7 * DAY);
+      expect(await staking.pendingReward(a)).to.be.closeTo(E("3"), E("0.001"));
+      expect(await staking.pendingReward(b)).to.be.closeTo(E("1"), E("0.001"));
+    });
+
+    it("claimReward pays a matured stake without touching principal", async function () {
       const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
       await fund(staking, owner, "7");
-      await time.increase(24 * DAY + 1);
-
-      await expect(staking.connect(alice).claimReward(stakeId)).to.not.be.reverted;
+      await time.increase(7 * DAY);
+      await expect(staking.connect(alice).claimReward(id)).to.emit(staking, "RewardPaid");
+      expect((await staking.stakes(id)).amount).to.equal(E("100"));
+      expect(await staking.pendingReward(id)).to.equal(0);
+      await expectBooksBalance(staking);
     });
+  });
 
-    it("effectiveUnlockTime() reports 80% of the way from startTime to unlockTime", async function () {
-      const { alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      const s = await staking.stakes(stakeId);
-
-      const expected = s.startTime + ((s.unlockTime - s.startTime) * 8000n) / 10000n;
-      expect(await staking.effectiveUnlockTime(stakeId)).to.equal(expected);
-    });
-
-    it("only the owner can tune the threshold, bounded to (0%, 100%]", async function () {
+  describe("USDC accounting", function () {
+    it("rewards streamed before anyone stakes go back to the pool, not nowhere", async function () {
       const { owner, alice, staking } = await deployFixture();
-      await expect(staking.connect(alice).setEarlyUnlockThreshold(9000)).to.be.revertedWithCustomError(
+      await fund(staking, owner, "7");
+      await time.increase(2 * DAY);
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      expect(await staking.unallocatedUsdc()).to.be.closeTo(E("2"), E("0.001"));
+      await time.increase(8 * DAY);
+      await staking.connect(alice).exitStake(id, false);
+      // the 2 USDC nobody earned can be scheduled again
+      const id2 = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await staking.connect(owner).notifyRewardAmount();
+      await time.increase(8 * DAY);
+      expect(await staking.pendingReward(id2)).to.be.closeTo(E("2"), E("0.001"));
+      await expectBooksBalance(staking);
+    });
+
+    it("rewards streamed after everyone exits go back to the pool too", async function () {
+      const { owner, alice, bob, staking } = await deployFixture();
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await fund(staking, owner, "7");
+      await time.increase(6 * DAY);
+      await staking.connect(alice).exitStake(id, false);
+      await time.increase(2 * DAY);
+      await stakeAndGetId(staking, bob, TIER.SEVEN_DAY, "100"); // triggers the global update
+      expect(await staking.unallocatedUsdc()).to.be.closeTo(E("1"), E("0.001"));
+      await expectBooksBalance(staking);
+    });
+
+    it("a re-notify can never slow down rewards already promised", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await fund(staking, owner, "7");
+      const finish = await staking.periodFinish();
+      await time.increase(DAY);
+      await expect(staking.connect(owner).notifyRewardAmount()).to.be.revertedWith("would slow the current payout");
+      await expect(staking.connect(owner).notifyRewardAmount({ value: E("0.1") })).to.be.revertedWith(
+        "would slow the current payout"
+      );
+      const rate = await staking.rewardRate();
+      await fund(staking, owner, "2");
+      expect(await staking.rewardRate()).to.be.gte(rate);
+      expect(await staking.periodFinish()).to.be.gt(finish);
+      await expectBooksBalance(staking);
+    });
+
+    it("refuses to promise more USDC than it holds", async function () {
+      const { owner, alice, staking } = await deployFixture();
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await fund(staking, owner, "7");
+      await network.provider.send("hardhat_setBalance", [await staking.getAddress(), "0x0"]);
+      await time.increase(8 * DAY);
+      await expect(staking.connect(owner).notifyRewardAmount({ value: E("1") })).to.be.revertedWith(
+        "not enough USDC for what's owed"
+      );
+    });
+
+    it("recoverERC20 can never move the staking token or USDC", async function () {
+      const { owner, staking, sdoge } = await deployFixture();
+      await expect(staking.connect(owner).recoverERC20(await sdoge.getAddress(), 1)).to.be.revertedWith(
+        "cannot withdraw the staking token"
+      );
+      await expect(staking.connect(owner).recoverERC20(USDC_VIEW, 1)).to.be.revertedWith("cannot withdraw USDC");
+
+      const MockERC20 = await ethers.getContractFactory("MockERC20");
+      const other = await MockERC20.deploy("Other", "OTH");
+      await other.mint(await staking.getAddress(), E("5"));
+      await staking.connect(owner).recoverERC20(await other.getAddress(), E("5"));
+      expect(await other.balanceOf(owner.address)).to.equal(E("5"));
+    });
+
+    it("absorbSurplus turns forced-in USDC and stray SDOGE into pool money", async function () {
+      const { owner, alice, stranger, staking, sdoge } = await deployFixture();
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await fund(staking, owner, "7");
+      const addr = await staking.getAddress();
+      const bal = await balanceOf(addr);
+      await network.provider.send("hardhat_setBalance", [addr, ethers.toQuantity(bal + E("5"))]);
+      await sdoge.mint(addr, E("42"));
+      const unallocatedBefore = await staking.unallocatedUsdc();
+
+      await staking.connect(stranger).absorbSurplus();
+      expect((await staking.unallocatedUsdc()) - unallocatedBefore).to.equal(E("5"));
+      expect(await staking.unallocatedTokens()).to.equal(E("42"));
+      await expectBooksBalance(staking);
+      await expect(staking.connect(stranger).absorbSurplus()).to.emit(staking, "SurplusAbsorbed").withArgs(0, 0);
+    });
+
+    it("anyone can restart rewards from the pool once it's been idle for a week", async function () {
+      const { owner, alice, stranger, staking } = await deployFixture();
+      await expect(staking.connect(stranger).notifyUnallocated()).to.be.revertedWith("nobody is staked");
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
+      await staking.connect(stranger).contributeUSDC({ value: E("7") });
+      await staking.connect(stranger).notifyUnallocated(); // no period has ever run
+      await staking.connect(stranger).contributeUSDC({ value: E("7") });
+      await expect(staking.connect(stranger).notifyUnallocated()).to.be.revertedWith(
+        "owner or notifier schedules for now"
+      );
+      await time.increase(14 * DAY + 1);
+      await staking.connect(stranger).notifyUnallocated();
+      await expectBooksBalance(staking);
+      expect(await staking.owner()).to.equal(owner.address);
+    });
+
+    it("stays exactly solvent through a long random mix of actions", async function () {
+      const { owner, alice, bob, carol, stranger, staking } = await deployFixture();
+      const users = [alice, bob, carol];
+      const open = [];
+      let seed = 12345;
+      const rnd = (n) => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed % n;
+      };
+      for (let step = 0; step < 90; step++) {
+        const op = rnd(7);
+        if (op <= 1) {
+          const u = users[rnd(3)];
+          const amount = ethers.parseEther(`${1 + rnd(5000)}.123456789`);
+          open.push({ u, id: await stakeAndGetId(staking, u, rnd(5), amount) });
+        } else if (op === 2 && open.length) {
+          const { u, id } = open.splice(rnd(open.length), 1)[0];
+          await staking.connect(u).exitStake(id, true);
+        } else if (op === 3 && open.length) {
+          const { u, id } = open[rnd(open.length)];
+          if (await staking.isMature(id)) await staking.connect(u).claimReward(id);
+        } else if (op === 4) {
+          const running = BigInt(await time.latest()) < (await staking.periodFinish());
+          if (!running) await staking.connect(owner).notifyRewardAmount({ value: E(1 + rnd(20)) });
+        } else if (op === 5) {
+          await staking.connect(stranger).contributeUSDC({ value: E("0.5") });
+        } else {
+          await time.increase(rnd(20) * DAY + rnd(DAY));
+        }
+        await expectBooksBalance(staking);
+      }
+      await time.increase(400 * DAY);
+      for (const { u, id } of open) await staking.connect(u).exitStake(id, false);
+      await expectBooksBalance(staking);
+      expect(await staking.totalWeightedSupply()).to.equal(0);
+      // With nobody staked and the stream over, the next update hands per-stake rounding dust
+      // back to the pool, so nothing owed is left but deferred payouts (none here).
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1");
+      expect(await staking.rewardsOutstanding()).to.equal(await staking.totalDeferredRewards());
+      expect(await staking.rewardsOutstanding()).to.equal(0);
+      await expectBooksBalance(staking);
+    });
+  });
+
+  describe("stakers that can't receive USDC", function () {
+    it("still get their principal back; the reward waits for them to pull it", async function () {
+      const { owner, bob, staking, sdoge } = await deployFixture();
+      const NoReceive = await ethers.getContractFactory("NoReceiveStaker");
+      const nr = await NoReceive.deploy(await staking.getAddress(), await sdoge.getAddress());
+      await sdoge.mint(await nr.getAddress(), E("100"));
+      await nr.approveAndStake(TIER.SEVEN_DAY, E("100"));
+      await fund(staking, owner, "7");
+      await time.increase(8 * DAY);
+
+      await expect(nr.exit()).to.emit(staking, "RewardDeferred");
+      expect(await sdoge.balanceOf(await nr.getAddress())).to.equal(E("100"));
+      const owed = await staking.deferredRewards(await nr.getAddress());
+      expect(owed).to.be.closeTo(E("7"), E("0.000001"));
+      await expectBooksBalance(staking);
+
+      const before = await balanceOf(bob.address);
+      await nr.claimDeferred(bob.address);
+      expect((await balanceOf(bob.address)) - before).to.equal(owed);
+      expect(await staking.deferredRewards(await nr.getAddress())).to.equal(0);
+      await expectBooksBalance(staking);
+    });
+  });
+
+  describe("tokens: contributions and sweeps", function () {
+    it("sweeps only to the owner-set sink; the notifier can trigger but not choose", async function () {
+      const { owner, alice, carol, stranger, notifier, sdoge, staking } = await deployFixture();
+      await staking.connect(owner).setNotifier(notifier.address);
+      await staking.connect(stranger).contributeTokens(E("10"));
+      const id = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
+      await staking.connect(alice).exitStake(id, true); // 15 penalty
+      expect(await staking.unallocatedTokens()).to.equal(E("25"));
+
+      await expect(staking.connect(stranger).sweepTokens()).to.be.revertedWith("not owner or notifier");
+      const before = await sdoge.balanceOf(owner.address);
+      await staking.connect(notifier).sweepTokens();
+      expect(await sdoge.balanceOf(owner.address)).to.equal(before + E("25"));
+      await expect(staking.connect(notifier).sweepTokens()).to.be.revertedWith("nothing to sweep");
+
+      await expect(staking.connect(notifier).setTokenSink(notifier.address)).to.be.revertedWithCustomError(
         staking,
         "OwnableUnauthorizedAccount"
       );
-      await expect(staking.connect(owner).setEarlyUnlockThreshold(0)).to.be.revertedWith(
-        "threshold out of range"
-      );
-      await expect(staking.connect(owner).setEarlyUnlockThreshold(10001)).to.be.revertedWith(
-        "threshold out of range"
-      );
-
-      await staking.connect(owner).setEarlyUnlockThreshold(9000);
-      expect(await staking.earlyUnlockThresholdBps()).to.equal(9000);
-    });
-  });
-
-  describe("reward accrual with tier multipliers", function () {
-    it("pays a higher tier proportionally more per token for equal principal and time", async function () {
-      const { owner, alice, bob, staking } = await deployFixture();
-      const aliceId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100"); // 1.0x
-      const bobId = await stakeAndGetId(staking, bob, TIER.THREE_SIXTY_FIVE_DAY, "100"); // 3.0x
-      await fund(staking, owner, "7");
-      await time.increase(7 * DAY);
-
-      const aliceReward = await staking.pendingReward(aliceId);
-      const bobReward = await staking.pendingReward(bobId);
-
-      // weighted 100:300 -> 1/4 and 3/4 of the ~7 ETH pool
-      expect(aliceReward).to.be.closeTo(ethers.parseEther("1.75"), ethers.parseEther("0.01"));
-      expect(bobReward).to.be.closeTo(ethers.parseEther("5.25"), ethers.parseEther("0.01"));
-      expect(aliceReward + bobReward).to.be.lte(ethers.parseEther("7"));
+      await expect(staking.connect(owner).setTokenSink(ethers.ZeroAddress)).to.be.revertedWith("bad sink");
+      await staking.connect(owner).setTokenSink(carol.address);
+      await staking.connect(stranger).contributeTokens(E("5"));
+      const c0 = await sdoge.balanceOf(carol.address);
+      await staking.connect(owner).sweepTokens();
+      expect(await sdoge.balanceOf(carol.address)).to.equal(c0 + E("5"));
     });
 
-    it("splits rewards proportionally to stake size and time staked within the same tier", async function () {
-      const { owner, alice, bob, staking } = await deployFixture();
-      const aliceId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await fund(staking, owner, "7");
-      await time.increase(3.5 * DAY);
-
-      const bobId = await stakeAndGetId(staking, bob, TIER.SEVEN_DAY, "100");
-      await time.increase(3.5 * DAY);
-
-      const aliceReward = await staking.pendingReward(aliceId);
-      const bobReward = await staking.pendingReward(bobId);
-
-      expect(aliceReward).to.be.closeTo(ethers.parseEther("5.25"), ethers.parseEther("0.01"));
-      expect(bobReward).to.be.closeTo(ethers.parseEther("1.75"), ethers.parseEther("0.01"));
-      expect(aliceReward + bobReward).to.be.lte(ethers.parseEther("7"));
-    });
-
-    it("claimReward() pays out a matured stake's reward without touching principal", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      await fund(staking, owner, "7");
-      await time.increase(7 * DAY + 1);
-
-      const before = await ethers.provider.getBalance(alice.address);
-      const tx = await staking.connect(alice).claimReward(stakeId);
-      const receipt = await tx.wait();
-      const gasCost = receipt.gasUsed * receipt.gasPrice;
-      const after = await ethers.provider.getBalance(alice.address);
-
-      expect(after - before + gasCost).to.be.closeTo(ethers.parseEther("7"), ethers.parseEther("0.001"));
-
-      const s = await staking.stakes(stakeId);
-      expect(s.amount).to.equal(ethers.parseEther("100")); // principal untouched
-      expect(s.closed).to.equal(false);
-      expect(await staking.pendingReward(stakeId)).to.equal(0);
-    });
-
-    it("claimReward() reverts while the stake is still locked", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      await fund(staking, owner, "7");
-      await time.increase(3 * DAY);
-
-      await expect(staking.connect(alice).claimReward(stakeId)).to.be.revertedWith(
-        "still locked - matures or a full early exit settles reward"
-      );
-    });
-  });
-
-  describe("permissionless contributions", function () {
-    it("lets anyone add USDC to the pool, folded in by the next notifyRewardAmount()", async function () {
-      const { owner, alice, stranger, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-
-      await expect(staking.connect(stranger).contributeUSDC({ value: ethers.parseEther("3") }))
-        .to.emit(staking, "UsdcContributed")
-        .withArgs(stranger.address, ethers.parseEther("3"));
-      expect(await staking.unallocatedUsdc()).to.equal(ethers.parseEther("3"));
-
-      await fund(staking, owner, "4"); // 4 new + 3 unallocated = 7 total
-      expect(await staking.unallocatedUsdc()).to.equal(0);
-
-      await time.increase(7 * DAY);
-      expect(await staking.pendingReward(stakeId)).to.be.closeTo(
-        ethers.parseEther("7"),
-        ethers.parseEther("0.01")
-      );
-    });
-
-    it("rejects contributing 0 USDC", async function () {
+    it("rejects zero contributions", async function () {
       const { stranger, staking } = await deployFixture();
-      await expect(staking.connect(stranger).contributeUSDC({ value: 0 })).to.be.revertedWith(
-        "send some USDC"
-      );
-    });
-
-    it("lets anyone donate $SDOGE, added to unallocatedTokens", async function () {
-      const { stranger, sdoge, staking } = await deployFixture();
-      const before = await sdoge.balanceOf(await staking.getAddress());
-
-      await expect(staking.connect(stranger).contributeTokens(ethers.parseEther("50")))
-        .to.emit(staking, "TokensContributed")
-        .withArgs(stranger.address, ethers.parseEther("50"));
-
-      expect(await staking.unallocatedTokens()).to.equal(ethers.parseEther("50"));
-      expect(await sdoge.balanceOf(await staking.getAddress())).to.equal(before + ethers.parseEther("50"));
-    });
-
-    it("rejects contributing 0 tokens", async function () {
-      const { stranger, staking } = await deployFixture();
+      await expect(staking.connect(stranger).contributeUSDC()).to.be.revertedWith("send some USDC");
       await expect(staking.connect(stranger).contributeTokens(0)).to.be.revertedWith("cannot contribute 0");
     });
   });
 
-  describe("sweeping tokens", function () {
-    it("lets owner or notifier sweep unallocatedTokens out", async function () {
-      const { owner, alice, sdoge, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      const amount = ethers.parseEther("100");
-      await staking.connect(alice).withdraw(stakeId, amount, [alice.address], [ethers.parseEther("85")]); // 15 penalty
-
-      const treasury = ethers.Wallet.createRandom().address;
-      await expect(staking.connect(owner).sweepTokens(treasury))
-        .to.emit(staking, "TokensSwept")
-        .withArgs(treasury, ethers.parseEther("15"));
-
-      expect(await sdoge.balanceOf(treasury)).to.equal(ethers.parseEther("15"));
-      expect(await staking.unallocatedTokens()).to.equal(0);
-    });
-
-    it("lets a designated notifier sweep without being owner", async function () {
-      const { owner, alice, bob, staking } = await deployFixture();
-      await staking.connect(owner).setNotifier(bob.address);
-      await staking.connect(alice).contributeTokens(ethers.parseEther("10"));
-
-      await expect(staking.connect(bob).sweepTokens(bob.address)).to.not.be.reverted;
-    });
-
-    it("rejects sweeping from a random address, to the zero address, or when empty", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      await staking.connect(alice).contributeTokens(ethers.parseEther("10"));
-
-      await expect(staking.connect(alice).sweepTokens(alice.address)).to.be.revertedWith(
+  describe("admin", function () {
+    it("only the owner or notifier can schedule rewards; only the owner sets the notifier", async function () {
+      const { owner, alice, stranger, notifier, staking } = await deployFixture();
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1");
+      await expect(staking.connect(stranger).notifyRewardAmount({ value: E("7") })).to.be.revertedWith(
         "not owner or notifier"
       );
-      await expect(staking.connect(owner).sweepTokens(ethers.ZeroAddress)).to.be.revertedWith(
-        "cannot sweep to zero address"
-      );
-
-      await staking.connect(owner).sweepTokens(owner.address);
-      await expect(staking.connect(owner).sweepTokens(owner.address)).to.be.revertedWith(
-        "nothing to sweep"
-      );
-    });
-  });
-
-  describe("admin controls", function () {
-    it("only the owner or notifier can fund rewards", async function () {
-      const { alice, staking } = await deployFixture();
-      await expect(
-        staking.connect(alice).notifyRewardAmount({ value: ethers.parseEther("1") })
-      ).to.be.revertedWith("not owner or notifier");
-    });
-
-    it("only the owner can set the notifier", async function () {
-      const { alice, staking } = await deployFixture();
-      await expect(staking.connect(alice).setNotifier(alice.address)).to.be.revertedWithCustomError(
+      await expect(staking.connect(stranger).setNotifier(stranger.address)).to.be.revertedWithCustomError(
         staking,
         "OwnableUnauthorizedAccount"
       );
+      await staking.connect(owner).setNotifier(notifier.address);
+      await staking.connect(notifier).notifyRewardAmount({ value: E("7") });
+      await expect(staking.connect(owner).notifyRewardAmount({ value: 1 })).to.be.revertedWith(
+        "would slow the current payout"
+      );
     });
 
-    it("lets a designated notifier fund rewards without being owner", async function () {
-      const { owner, alice, staking } = await deployFixture();
-      await staking.connect(owner).setNotifier(alice.address);
-      await expect(staking.connect(alice).notifyRewardAmount({ value: ethers.parseEther("7") })).to.not
-        .be.reverted;
-    });
-
-    it("rejects a reward funding too small to produce a nonzero rate", async function () {
+    it("rejects a funding too small for a nonzero rate", async function () {
       const { owner, staking } = await deployFixture();
-      await expect(staking.connect(owner).notifyRewardAmount({ value: 1n })).to.be.revertedWith(
+      await expect(staking.connect(owner).notifyRewardAmount({ value: 1000 })).to.be.revertedWith(
         "reward rate is 0 (amount too small for duration)"
       );
     });
 
-    it("only the owner can change rewardsDuration, and only between periods", async function () {
+    it("rewardsDuration changes only between periods, within 1-90 days", async function () {
       const { owner, alice, staking } = await deployFixture();
-      await expect(staking.connect(alice).setRewardsDuration(DAY)).to.be.revertedWithCustomError(
-        staking,
-        "OwnableUnauthorizedAccount"
-      );
-
+      await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1");
       await fund(staking, owner, "7");
-      await expect(staking.connect(owner).setRewardsDuration(DAY)).to.be.revertedWith(
+      await expect(staking.connect(owner).setRewardsDuration(14 * DAY)).to.be.revertedWith(
         "previous period still active"
       );
-
-      await time.increase(7 * DAY);
-      await staking.connect(owner).setRewardsDuration(DAY);
-      expect(await staking.rewardsDuration()).to.equal(DAY);
+      await time.increase(8 * DAY);
+      await expect(staking.connect(owner).setRewardsDuration(12 * 3600)).to.be.revertedWith("duration out of range");
+      await expect(staking.connect(owner).setRewardsDuration(91 * DAY)).to.be.revertedWith("duration out of range");
+      await expect(staking.connect(owner).setRewardsDuration(604800000)).to.be.revertedWith("duration out of range");
+      await staking.connect(owner).setRewardsDuration(14 * DAY);
+      expect(await staking.rewardsDuration()).to.equal(14 * DAY);
     });
 
-    it("only the owner can set the early-withdrawal penalty, capped at 30%", async function () {
+    it("penalty is capped at 30% and the threshold stays in (0%, 100%]", async function () {
       const { owner, alice, staking } = await deployFixture();
+      await expect(staking.connect(owner).setEarlyWithdrawPenalty(3001)).to.be.revertedWith("penalty too high");
       await expect(staking.connect(alice).setEarlyWithdrawPenalty(1000)).to.be.revertedWithCustomError(
         staking,
         "OwnableUnauthorizedAccount"
       );
-      await expect(staking.connect(owner).setEarlyWithdrawPenalty(3001)).to.be.revertedWith(
-        "penalty too high"
-      );
-      await staking.connect(owner).setEarlyWithdrawPenalty(500);
-      expect(await staking.earlyWithdrawPenaltyBps()).to.equal(500);
+      await expect(staking.connect(owner).setEarlyUnlockThreshold(0)).to.be.revertedWith("threshold out of range");
+      await expect(staking.connect(owner).setEarlyUnlockThreshold(10001)).to.be.revertedWith("threshold out of range");
+      await staking.connect(owner).setEarlyWithdrawPenalty(3000);
+      await staking.connect(owner).setEarlyUnlockThreshold(10000);
     });
 
-    it("only the owner can tune a tier's multiplier, bounded to (0, 10x]", async function () {
+    it("tier multipliers stay within 1x-10x and in tier order", async function () {
+      const { owner, staking } = await deployFixture();
+      await expect(staking.connect(owner).setTierMultiplier(0, 9999)).to.be.revertedWith("multiplier out of range");
+      await expect(staking.connect(owner).setTierMultiplier(4, 100001)).to.be.revertedWith("multiplier out of range");
+      await expect(staking.connect(owner).setTierMultiplier(0, 12001)).to.be.revertedWith("above the tier over it");
+      await expect(staking.connect(owner).setTierMultiplier(2, 11999)).to.be.revertedWith("below the tier under it");
+      await expect(staking.connect(owner).setTierMultiplier(5, 20000)).to.be.revertedWith("invalid tier");
+      await staking.connect(owner).setTierMultiplier(4, 100000);
+      await staking.connect(owner).setTierMultiplier(0, 12000);
+    });
+
+    it("tier durations stay within 1 day-5 years and strictly in tier order", async function () {
       const { owner, alice, staking } = await deployFixture();
-      await expect(
-        staking.connect(alice).setTierMultiplier(TIER.SEVEN_DAY, 20000)
-      ).to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
-      await expect(staking.connect(owner).setTierMultiplier(TIER.SEVEN_DAY, 0)).to.be.revertedWith(
-        "multiplier out of range"
+      const id = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "1");
+      const unlock = (await staking.stakes(id)).unlockTime;
+      await expect(staking.connect(owner).setTierDuration(0, 12 * 3600)).to.be.revertedWith("duration out of range");
+      await expect(staking.connect(owner).setTierDuration(4, 6 * 365 * DAY)).to.be.revertedWith(
+        "duration out of range"
       );
-      await expect(
-        staking.connect(owner).setTierMultiplier(TIER.SEVEN_DAY, 100001)
-      ).to.be.revertedWith("multiplier out of range");
-
-      await staking.connect(owner).setTierMultiplier(TIER.SEVEN_DAY, 15000);
-      expect(await staking.tierMultiplierBps(TIER.SEVEN_DAY)).to.equal(15000);
+      await expect(staking.connect(owner).setTierDuration(0, 30 * DAY)).to.be.revertedWith(
+        "not shorter than the tier over it"
+      );
+      await expect(staking.connect(owner).setTierDuration(2, 30 * DAY)).to.be.revertedWith(
+        "not longer than the tier under it"
+      );
+      await staking.connect(owner).setTierDuration(0, 14 * DAY);
+      expect((await staking.stakes(id)).unlockTime).to.equal(unlock, "open stakes keep their lock");
     });
 
-    it("only the owner can tune a tier's duration, and it doesn't affect existing stakes", async function () {
+    it("ownership moves in two steps and can't be renounced", async function () {
       const { owner, alice, staking } = await deployFixture();
-      const stakeId = await stakeAndGetId(staking, alice, TIER.SEVEN_DAY, "100");
-      const originalUnlock = (await staking.stakes(stakeId)).unlockTime;
-
-      await expect(staking.connect(alice).setTierDuration(TIER.SEVEN_DAY, DAY)).to.be.revertedWithCustomError(
-        staking,
-        "OwnableUnauthorizedAccount"
-      );
-      await expect(staking.connect(owner).setTierDuration(TIER.SEVEN_DAY, 0)).to.be.revertedWith(
-        "duration must be > 0"
-      );
-
-      await staking.connect(owner).setTierDuration(TIER.SEVEN_DAY, DAY);
-      expect(await staking.tierDuration(TIER.SEVEN_DAY)).to.equal(DAY);
-      expect((await staking.stakes(stakeId)).unlockTime).to.equal(originalUnlock); // unchanged
+      await expect(staking.connect(owner).renounceOwnership()).to.be.revertedWith("renounce disabled");
+      await staking.connect(owner).transferOwnership(alice.address);
+      expect(await staking.owner()).to.equal(owner.address);
+      await staking.connect(alice).acceptOwnership();
+      expect(await staking.owner()).to.equal(alice.address);
     });
 
-    it("recoverERC20 can rescue an unrelated token but never the staking token", async function () {
-      const { owner, staking, sdoge } = await deployFixture();
-
-      const MockERC20 = await ethers.getContractFactory("MockERC20");
-      const other = await MockERC20.deploy("Random", "RND");
-      await other.mint(await staking.getAddress(), ethers.parseEther("50"));
-
-      await expect(staking.connect(owner).recoverERC20(await sdoge.getAddress(), 1)).to.be.revertedWith(
-        "cannot withdraw the staking token"
+    it("can't be deployed with USDC as the staking token", async function () {
+      const { owner } = await deployFixture();
+      const Staking = await ethers.getContractFactory("SDOGEStaking");
+      await expect(Staking.deploy(USDC_VIEW, owner.address)).to.be.revertedWith("staking token cannot be USDC");
+      await expect(Staking.deploy(ethers.ZeroAddress, owner.address)).to.be.revertedWith(
+        "staking token is zero address"
       );
-
-      await staking.connect(owner).recoverERC20(await other.getAddress(), ethers.parseEther("50"));
-      expect(await other.balanceOf(owner.address)).to.equal(ethers.parseEther("50"));
     });
   });
 
-  describe("accounting invariant", function () {
-    it("the contract's SDOGE balance always equals staked principal plus unallocated tokens", async function () {
-      const { alice, bob, sdoge, staking } = await deployFixture();
-      const id1 = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "100");
-      await stakeAndGetId(staking, bob, TIER.NINETY_DAY, "200");
-      await staking.connect(alice).contributeTokens(ethers.parseEther("5"));
-
-      const amount = ethers.parseEther("40");
-      await staking.connect(alice).withdraw(id1, amount, [alice.address], [ethers.parseEther("34")]); // early, 15% penalty
-
-      const contractBalance = await sdoge.balanceOf(await staking.getAddress());
-      const totalPrincipal = await staking.totalPrincipalStaked();
-      const unallocated = await staking.unallocatedTokens();
-      expect(contractBalance).to.equal(totalPrincipal + unallocated);
-
-      // Bob's full 200 must still be withdrawable in full once matured.
-      await time.increase(90 * DAY + 1);
-      const bobBefore = await sdoge.balanceOf(bob.address);
-      const ids = await staking.getStakeIds(bob.address);
-      const full = ethers.parseEther("200");
-      await staking.connect(bob).withdraw(ids[0], full, [bob.address], [full]);
-      expect(await sdoge.balanceOf(bob.address)).to.equal(bobBefore + full);
+  describe("invariants", function () {
+    it("the SDOGE balance always equals principal plus unallocated tokens", async function () {
+      const { owner, alice, bob, stranger, sdoge, staking } = await deployFixture();
+      const addr = await staking.getAddress();
+      const check = async () =>
+        expect(await sdoge.balanceOf(addr)).to.equal(
+          (await staking.totalPrincipalStaked()) + (await staking.unallocatedTokens())
+        );
+      const a = await stakeAndGetId(staking, alice, TIER.THIRTY_DAY, "1000");
+      const b = await stakeAndGetId(staking, bob, TIER.SEVEN_DAY, "500");
+      await check();
+      await staking.connect(stranger).contributeTokens(E("50"));
+      await check();
+      await staking.connect(alice).exitStake(a, true);
+      await check();
+      await time.increase(7 * DAY);
+      await staking.connect(bob).withdraw(b, E("200"), [bob.address], [E("200")]);
+      await check();
+      await staking.connect(owner).sweepTokens();
+      await check();
     });
   });
 
   describe("reentrancy", function () {
-    it("blocks a reentrant claimReward() call from a malicious receiver", async function () {
+    it("a receiver re-entering claimReward gets nothing extra", async function () {
       const { owner, staking, sdoge } = await deployFixture();
-
       const Attacker = await ethers.getContractFactory("ReentrantAttacker");
       const attacker = await Attacker.deploy(await staking.getAddress(), await sdoge.getAddress());
-
-      await sdoge.mint(await attacker.getAddress(), ethers.parseEther("100"));
-      await attacker.approveAndStake(TIER.SEVEN_DAY, ethers.parseEther("100"));
-
+      await sdoge.mint(await attacker.getAddress(), E("100"));
+      await attacker.approveAndStake(TIER.SEVEN_DAY, E("100"));
       await fund(staking, owner, "7");
       await time.increase(7 * DAY + 1);
 
       await attacker.claim();
-
       expect(await attacker.reentryAttempted()).to.equal(true);
       expect(await attacker.reentrySucceeded()).to.equal(false);
-      // The legitimate first claim still succeeded despite the blocked reentry.
-      const stakeId = await attacker.stakeId();
-      expect(await staking.pendingReward(stakeId)).to.equal(0);
+      expect(await staking.pendingReward(await attacker.stakeId())).to.equal(0);
+      await expectBooksBalance(staking);
     });
   });
 });

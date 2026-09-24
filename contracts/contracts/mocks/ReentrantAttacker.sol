@@ -5,14 +5,16 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface ISDOGEStaking {
     function claimReward(uint256 stakeId) external returns (uint256);
-    function stake(uint8 tier, uint256 amount) external returns (uint256);
+    function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps)
+        external
+        returns (uint256);
+    function tierDuration(uint256) external view returns (uint256);
+    function tierMultiplierBps(uint256) external view returns (uint256);
 }
 
-/// @notice Test-only: tries to re-enter claimReward() from within the
-///         native value transfer it triggers, to prove the guard holds.
-///         Exposes approve/stake passthroughs so it can be the staker
-///         itself (msg.sender inside SDOGEStaking) without needing account
-///         impersonation in the test.
+/// @notice Test-only: tries to re-enter claimReward() from within the native value transfer it
+///         triggers, to prove the guard holds. It is the staker itself (msg.sender inside
+///         SDOGEStaking), so no account impersonation is needed.
 contract ReentrantAttacker {
     ISDOGEStaking public immutable staking;
     IERC20 public immutable stakingToken;
@@ -27,7 +29,7 @@ contract ReentrantAttacker {
 
     function approveAndStake(uint8 tier, uint256 amount) external {
         stakingToken.approve(address(staking), amount);
-        stakeId = staking.stake(tier, amount);
+        stakeId = staking.stake(tier, amount, staking.tierDuration(tier), staking.tierMultiplierBps(tier));
     }
 
     function claim() external {

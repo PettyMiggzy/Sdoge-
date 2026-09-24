@@ -5,7 +5,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface ICommunityMintForAttack {
-    function mint(string calldata uri) external returns (uint256);
+    function mint(string calldata uri, uint256 maxBurnAmount) external returns (uint256);
 }
 
 interface IERC721ApproveForAttack {
@@ -18,10 +18,10 @@ interface IMarketplaceForAttack {
 }
 
 /// @notice Acts as a malicious SELLER on SDOGENFTMarketplace: mints its own
-///         SDOGECommunityMint NFT, lists it, and when paid during a buy()
+///         SDOGECommunityMint NFTs, lists them, and when paid during a buy()
 ///         tries to re-enter buy() (on a second listing) from its receive()
-///         hook, to confirm the marketplace's nonReentrant guard actually
-///         blocks it rather than trusting the modifier untested.
+///         hook. The marketplace must neither let that through nor let it
+///         block the outer sale.
 contract ReentrantSeller is IERC721Receiver {
     ICommunityMintForAttack public communityMint;
     IMarketplaceForAttack public marketplace;
@@ -45,7 +45,7 @@ contract ReentrantSeller is IERC721Receiver {
         address nftContract,
         uint256 pricePerUnit
     ) external returns (uint256 tokenId, uint256 listingId) {
-        tokenId = communityMint.mint(uri);
+        tokenId = communityMint.mint(uri, type(uint256).max);
         IERC721ApproveForAttack(nftContract).approve(address(marketplace), tokenId);
         listingId = marketplace.listERC721(nftContract, tokenId, pricePerUnit);
     }

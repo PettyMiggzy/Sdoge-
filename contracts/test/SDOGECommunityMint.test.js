@@ -1,149 +1,157 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
-const DEFAULT_BURN_AMOUNT = ethers.parseEther("1000000");
+const E = (n) => ethers.parseEther(String(n));
+const DEAD = "0x000000000000000000000000000000000000dEaD";
+const MAX = ethers.MaxUint256;
 
 async function deployFixture() {
-  const [owner, alice, bob] = await ethers.getSigners();
-
-  const MockERC20 = await ethers.getContractFactory("MockERC20");
-  const sdoge = await MockERC20.deploy("Mock SDOGE", "mSDOGE");
-
-  const CommunityMint = await ethers.getContractFactory("SDOGECommunityMint");
-  const nft = await CommunityMint.deploy(await sdoge.getAddress(), owner.address);
-
-  // Fund alice/bob with plenty of SDOGE and pre-approve the mint contract,
-  // since every real test here is about mint() itself, not allowance setup.
-  for (const user of [alice, bob]) {
-    await sdoge.mint(user.address, ethers.parseEther("10000000"));
-    await sdoge.connect(user).approve(await nft.getAddress(), ethers.MaxUint256);
+  const [owner, alice, bob, stranger] = await ethers.getSigners();
+  const sdoge = await (await ethers.getContractFactory("MockERC20")).deploy("Stable Doge", "SDOGE");
+  const nft = await (await ethers.getContractFactory("SDOGECommunityMint")).deploy(
+    await sdoge.getAddress(),
+    owner.address
+  );
+  for (const u of [alice, bob]) {
+    await sdoge.mint(u.address, E("10000000"));
+    await sdoge.connect(u).approve(await nft.getAddress(), E("1000000"));
   }
-
-  return { owner, alice, bob, sdoge, nft };
+  return { owner, alice, bob, stranger, sdoge, nft };
 }
 
 describe("SDOGECommunityMint", function () {
   describe("deployment", function () {
-    it("sets the token, owner, and default burn amount", async function () {
+    it("sets the token, owner and the 1,000,000 SDOGE default burn", async function () {
       const { owner, sdoge, nft } = await deployFixture();
       expect(await nft.sdoge()).to.equal(await sdoge.getAddress());
       expect(await nft.owner()).to.equal(owner.address);
-      expect(await nft.burnAmount()).to.equal(DEFAULT_BURN_AMOUNT);
+      expect(await nft.burnAmount()).to.equal(E("1000000"));
       expect(await nft.name()).to.equal("SDOGE Community Art");
-      expect(await nft.symbol()).to.equal("SDOGEART");
     });
 
-    it("rejects the zero address as the token", async function () {
-      const [owner] = await ethers.getSigners();
-      const CommunityMint = await ethers.getContractFactory("SDOGECommunityMint");
-      await expect(CommunityMint.deploy(ethers.ZeroAddress, owner.address)).to.be.revertedWith(
-        "bad token address"
-      );
+    it("refuses a token with no code or without 18 decimals", async function () {
+      const { owner } = await deployFixture();
+      const F = await ethers.getContractFactory("SDOGECommunityMint");
+      await expect(F.deploy(owner.address, owner.address)).to.be.revertedWith("token has no code");
+      const six = await (await ethers.getContractFactory("MockToken6")).deploy();
+      await expect(F.deploy(await six.getAddress(), owner.address)).to.be.revertedWith("token must have 18 decimals");
     });
   });
 
   describe("minting", function () {
-    it("burns the SDOGE, mints a unique NFT with the given URI, and emits Minted", async function () {
+    it("burns the SDOGE to dEaD, mints the NFT with its URI, and emits Minted", async function () {
       const { alice, sdoge, nft } = await deployFixture();
-      const uri = "ipfs://bafy.../alice-doge.json";
-
-      const balanceBefore = await sdoge.balanceOf(alice.address);
-
-      await expect(nft.connect(alice).mint(uri))
+      await expect(nft.connect(alice).mint("ipfs://bafy/alice.json", E("1000000")))
         .to.emit(nft, "Minted")
-        .withArgs(1, alice.address, uri, DEFAULT_BURN_AMOUNT);
-
-      expect(await sdoge.balanceOf(alice.address)).to.equal(balanceBefore - DEFAULT_BURN_AMOUNT);
-      expect(await sdoge.balanceOf(BURN_ADDRESS)).to.equal(DEFAULT_BURN_AMOUNT);
+        .withArgs(1, alice.address, "ipfs://bafy/alice.json", E("1000000"));
       expect(await nft.ownerOf(1)).to.equal(alice.address);
-      expect(await nft.tokenURI(1)).to.equal(uri);
+      expect(await nft.tokenURI(1)).to.equal("ipfs://bafy/alice.json");
+      expect(await sdoge.balanceOf(DEAD)).to.equal(E("1000000"));
+      expect(await sdoge.balanceOf(await nft.getAddress())).to.equal(0);
     });
 
-    it("assigns sequential token IDs across different minters", async function () {
+    it("assigns sequential ids", async function () {
       const { alice, bob, nft } = await deployFixture();
-      await nft.connect(alice).mint("ipfs://one.json");
-      await nft.connect(bob).mint("ipfs://two.json");
-      await nft.connect(alice).mint("ipfs://three.json");
-
-      expect(await nft.ownerOf(1)).to.equal(alice.address);
+      await nft.connect(alice).mint("ipfs://a", MAX);
+      await nft.connect(bob).mint("ipfs://b", MAX);
       expect(await nft.ownerOf(2)).to.equal(bob.address);
-      expect(await nft.ownerOf(3)).to.equal(alice.address);
-      expect(await nft.tokenURI(2)).to.equal("ipfs://two.json");
+      expect(await nft.nextTokenId()).to.equal(3);
     });
 
-    it("rejects an empty URI", async function () {
-      const { alice, nft } = await deployFixture();
-      await expect(nft.connect(alice).mint("")).to.be.revertedWith("empty uri");
-    });
-
-    it("reverts if the caller hasn't approved enough SDOGE", async function () {
-      const { alice, sdoge, nft } = await deployFixture();
-      await sdoge.connect(alice).approve(await nft.getAddress(), ethers.parseEther("1"));
-      await expect(nft.connect(alice).mint("ipfs://x.json")).to.be.revertedWithCustomError(
-        sdoge,
-        "ERC20InsufficientAllowance"
-      );
-    });
-
-    it("reverts if the caller doesn't have enough SDOGE, even with unlimited approval", async function () {
-      const { owner, sdoge, nft } = await deployFixture();
-      // owner never got any minted SDOGE in the fixture, but did not approve either -
-      // approve first so the allowance check passes and the balance check is what fails.
-      await sdoge.connect(owner).approve(await nft.getAddress(), ethers.MaxUint256);
-      await expect(nft.connect(owner).mint("ipfs://x.json")).to.be.revertedWithCustomError(
-        sdoge,
-        "ERC20InsufficientBalance"
-      );
-    });
-
-    it("charges whatever burnAmount is current at mint time", async function () {
+    it("never charges more than the caller's limit", async function () {
       const { owner, alice, sdoge, nft } = await deployFixture();
-      await nft.connect(owner).setBurnAmount(ethers.parseEther("500000"));
-
-      const balanceBefore = await sdoge.balanceOf(alice.address);
-      await nft.connect(alice).mint("ipfs://cheaper.json");
-      expect(await sdoge.balanceOf(alice.address)).to.equal(balanceBefore - ethers.parseEther("500000"));
+      await sdoge.mint(alice.address, E("50000000"));
+      await sdoge.connect(alice).approve(await nft.getAddress(), MAX); // even with a max approval
+      await nft.connect(owner).setBurnAmount(E("50000000"));
+      await expect(nft.connect(alice).mint("ipfs://a", E("1000000"))).to.be.revertedWith(
+        "burn amount is above your limit"
+      );
+      const before = await sdoge.balanceOf(alice.address);
+      await nft.connect(alice).mint("ipfs://a", E("50000000"));
+      expect(before - (await sdoge.balanceOf(alice.address))).to.equal(E("50000000"));
     });
 
-    it("blocks a reentrant mint() call from the ERC-721 receive hook", async function () {
+    it("only accepts well-formed URIs (printable ASCII, no spaces, up to 512 bytes)", async function () {
+      const { alice, nft } = await deployFixture();
+      const bad = "uri must be printable ASCII without spaces";
+      await expect(nft.connect(alice).mint("", MAX)).to.be.revertedWith("uri must be 1-512 bytes");
+      await expect(nft.connect(alice).mint("ipfs://has space", MAX)).to.be.revertedWith(bad);
+      await expect(nft.connect(alice).mint("ipfs://ünicode", MAX)).to.be.revertedWith(bad);
+      await expect(nft.connect(alice).mint("ipfs://x‮", MAX)).to.be.revertedWith(bad); // bidi override
+      await expect(nft.connect(alice).mint("ipfs://x\n", MAX)).to.be.revertedWith(bad);
+      // invalid UTF-8 sent as raw calldata
+      const data = nft.interface.encodeFunctionData("mint", ["ipfs://x", MAX]).replace(
+        "697066733a2f2f78", // "ipfs://x"
+        "fffe66733a2f2f78"
+      );
+      await expect(alice.sendTransaction({ to: await nft.getAddress(), data })).to.be.revertedWith(bad);
+      await expect(nft.connect(alice).mint("ipfs://" + "a".repeat(506), MAX)).to.be.revertedWith(
+        "uri must be 1-512 bytes"
+      );
+      await nft.connect(alice).mint("ipfs://" + "a".repeat(505), MAX);
+    });
+
+    it("reverts without enough approval or balance", async function () {
+      const { stranger, sdoge, nft } = await deployFixture();
+      await expect(nft.connect(stranger).mint("ipfs://a", MAX)).to.be.reverted;
+      await sdoge.connect(stranger).approve(await nft.getAddress(), MAX);
+      await expect(nft.connect(stranger).mint("ipfs://a", MAX)).to.be.reverted;
+      expect(await nft.nextTokenId()).to.equal(1);
+    });
+
+    it("the URI is set before the receiver hook runs", async function () {
       const { sdoge, nft } = await deployFixture();
+      const reader = await (await ethers.getContractFactory("UriReadingReceiver")).deploy();
+      await sdoge.mint(await reader.getAddress(), E("1000000"));
+      await reader.mintVia(await nft.getAddress(), await sdoge.getAddress(), "ipfs://bafy/seen.json");
+      expect(await reader.seenUri()).to.equal("ipfs://bafy/seen.json");
+    });
 
-      const ReentrantMinter = await ethers.getContractFactory("ReentrantMinter");
-      const attacker = await ReentrantMinter.deploy();
-      const attackerAddr = await attacker.getAddress();
-
+    it("blocks a reentrant mint() from the ERC-721 receive hook", async function () {
+      const { sdoge, nft } = await deployFixture();
+      const attacker = await (await ethers.getContractFactory("ReentrantMinter")).deploy();
+      const a = await attacker.getAddress();
       await attacker.setTarget(await nft.getAddress());
-      await sdoge.mint(attackerAddr, ethers.parseEther("10000000"));
+      await sdoge.mint(a, E("10000000"));
       await attacker.approveToken(await sdoge.getAddress(), await nft.getAddress());
-
-      // The outer mint() succeeds, but the reentrant call it triggers from
-      // inside onERC721Received must hit nonReentrant and revert - which
-      // reverts the whole outer transaction too (only one token ever mints).
-      await expect(attacker.attackMint("ipfs://first.json")).to.be.reverted;
-      expect(await nft.nextTokenId()).to.equal(1); // unchanged - nothing minted
+      await expect(attacker.attackMint("ipfs://first.json")).to.be.revertedWithCustomError(
+        nft,
+        "ReentrancyGuardReentrantCall"
+      );
+      expect(await nft.nextTokenId()).to.equal(1);
     });
   });
 
   describe("setBurnAmount", function () {
-    it("lets the owner update it and emits BurnAmountUpdated", async function () {
+    it("lets the owner change it within 1,000-100,000,000 SDOGE", async function () {
       const { owner, nft } = await deployFixture();
-      await expect(nft.connect(owner).setBurnAmount(ethers.parseEther("2000000")))
+      await expect(nft.connect(owner).setBurnAmount(E("2000000")))
         .to.emit(nft, "BurnAmountUpdated")
-        .withArgs(DEFAULT_BURN_AMOUNT, ethers.parseEther("2000000"));
-      expect(await nft.burnAmount()).to.equal(ethers.parseEther("2000000"));
+        .withArgs(E("1000000"), E("2000000"));
+      await expect(nft.connect(owner).setBurnAmount(2_000_000n)).to.be.revertedWith("burn amount out of range"); // no decimals
+      await expect(nft.connect(owner).setBurnAmount(E("999"))).to.be.revertedWith("burn amount out of range");
+      await expect(nft.connect(owner).setBurnAmount(E("100000001"))).to.be.revertedWith("burn amount out of range");
+      await expect(nft.connect(owner).setBurnAmount(MAX)).to.be.revertedWith("burn amount out of range");
     });
 
-    it("rejects a zero amount", async function () {
-      const { owner, nft } = await deployFixture();
-      await expect(nft.connect(owner).setBurnAmount(0)).to.be.revertedWith("burn amount must be > 0");
-    });
-
-    it("only the owner can call it", async function () {
-      const { alice, nft } = await deployFixture();
-      await expect(nft.connect(alice).setBurnAmount(1)).to.be.revertedWithCustomError(
+    it("only the owner can change it; ownership is two-step and can't be renounced", async function () {
+      const { owner, alice, nft } = await deployFixture();
+      await expect(nft.connect(alice).setBurnAmount(E("2000000"))).to.be.revertedWithCustomError(
         nft,
         "OwnableUnauthorizedAccount"
+      );
+      await expect(nft.connect(owner).renounceOwnership()).to.be.revertedWith("renounce disabled");
+      await nft.connect(owner).transferOwnership(alice.address);
+      await nft.connect(alice).acceptOwnership();
+      expect(await nft.owner()).to.equal(alice.address);
+    });
+
+    it("the owner can't move or change anyone's NFT", async function () {
+      const { owner, alice, nft } = await deployFixture();
+      await nft.connect(alice).mint("ipfs://a", MAX);
+      await expect(nft.connect(owner).transferFrom(alice.address, owner.address, 1)).to.be.revertedWithCustomError(
+        nft,
+        "ERC721InsufficientApproval"
       );
     });
   });
