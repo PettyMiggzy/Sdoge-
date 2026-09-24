@@ -1,0 +1,26 @@
+{
+  "_readme": "Matched after normalization: lowercase, leetspeak mapped (0->o, 1->i, 3->e, 4->a, 5->s, 7->t, @->a, $->s). 'reserved' blocks a ticker or whole name that equals the term (anti-impersonation). 'word' terms must be a whole word; elongations like 'niiiigger' still match, but a real word that happens to equal the collapsed form (e.g. 'niger') does not. 'sub' terms match anywhere in the name/description with spaces and punctuation removed. Edit freely; restart the bot to apply.",
+  "reserved": [
+    "usdc", "usdt", "eurc", "usyc", "cirbtc", "circle", "arc", "arcnetwork",
+    "eth", "ether", "ethereum", "weth", "btc", "bitcoin", "wbtc", "sol", "solana",
+    "bnb", "binance", "coinbase", "tether", "uniswap", "uni", "dai", "pyusd",
+    "paypal", "fdusd", "tusd", "usde", "sdoge", "stabledoge", "argus"
+  ],
+  "word": {
+    "minors": ["cp", "loli", "lolis", "shota", "preteen", "preteens", "underage", "jailbait", "pedo", "pedos", "pedophile", "paedo"],
+    "sexual": ["porn", "porno", "xxx", "hentai", "nsfw", "nude", "nudes", "onlyfans", "sexcam", "camgirl"],
+    "hate": [
+      "nigger", "niggers", "nigga", "niggas", "faggot", "faggots", "fag", "fags", "kike", "kikes",
+      "spic", "spics", "chink", "chinks", "gook", "gooks", "wetback", "wetbacks", "tranny", "trannies",
+      "coon", "coons", "raghead", "towelhead", "paki", "dyke", "dykes", "retard", "retards"
+    ],
+    "extremism": ["nazi", "nazis", "hitler", "heilhitler", "siegheil", "kkk", "isis", "alqaeda", "taliban", "hamas", "hezbollah", "jihadi"],
+    "scam": ["airdrop", "giveaway", "freeclaim", "drainer"]
+  },
+  "sub": {
+    "minors": ["childporn", "kiddieporn", "lolicon", "shotacon", "pedophil"],
+    "hate": ["nigger", "faggot"],
+    "extremism": ["1488", "heilhitler", "siegheil", "whitepower"],
+    "sexual": ["pornhub", "xvideos"]
+  }
+}

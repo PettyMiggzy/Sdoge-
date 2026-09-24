@@ -12,3 +12,6 @@ nft/assets/
 
 # Real secrets for running bot/ yourself (pm2) - see bot/.env.example
 .env
+
+# tgpad runtime state: Telegram user ids, bans, launch records (no keys, but not public)
+tgpad/data/

@@ -1,0 +1,36 @@
+{
+  "chainId": 5042,
+  "rpcUrl": "https://rpc.mainnet.arc.io",
+  "explorerUrl": "https://explorer.arc.io",
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+  "factory": "",
+  "hook": "",
+  "router": "",
+  "launchesChannel": "",
+  "allowedGroups": [],
+  "pollIntervalMs": 4000,
+  "limits": {
+    "launchesPerUserPerDay": 3,
+    "launchesPerHourGlobal": 60,
+    "commandsPerUserPerMinute": 20,
+    "reportsPerUserPerDay": 5,
+    "defaultSlippageBps": 500,
+    "maxSlippageBps": 3000,
+    "maxImageBytes": 5000000,
+    "confirmTtlSec": 120,
+    "wizardTtlSec": 900,
+    "exportMessageTtlSec": 60
+  },
+  "moderation": {
+    "provider": "venice",
+    "model": "qwen-3-8-27b",
+    "timeoutMs": 30000
+  },
+  "alerts": {
+    "enabled": true,
+    "minBuyUsdc": 25,
+    "perTokenCooldownSec": 60,
+    "channelMaxPerMinute": 15
+  }
+}
