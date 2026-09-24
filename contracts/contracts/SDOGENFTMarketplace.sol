@@ -5,6 +5,7 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC1155} from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -15,22 +16,30 @@ interface IUsdcRewardsPool {
     function contributeUSDC() external payable;
 }
 
+interface IStudioRegistry {
+    function isCollection(address collection) external view returns (bool);
+}
+
 /// @title SDOGENFTMarketplace
-/// @notice Fixed-price resale for the two $SDOGE NFT collections, and only those two:
-///         SDOGECommunityMint (ERC-721, one-of-a-kind uploads) and SDOGECollectibles (ERC-1155,
-///         copies of named designs). Both addresses are fixed at deployment, so no other contract
-///         can ever be listed here.
+/// @notice Fixed-price resale for $SDOGE NFTs, and only those:
+///         - SDOGECollectibles (ERC-1155 copies of the named designs), fixed at deployment;
+///         - any ERC-721 collection made by SDOGE Studio (the shared Community Art collection and
+///           every creator's own collection), checked against the Studio's registry. Those are
+///           all clones of one audited contract, so a listed NFT always really transfers.
 ///
 /// Escrow: listing moves the NFT (or the listed copies) into this contract, cancelling moves
 /// them back, and buying moves them to the buyer. A listing can therefore never go stale, come
 /// back to life later, be duplicated, or promise copies the seller no longer has.
 ///
 /// Money: prices are native USDC with 18 decimals (1e18 = 1 USDC), at least 0.01 USDC and a
-/// whole number of micro-USDC. The seller is paid straight away; if that payment fails (a
-/// contract that can't receive, a blocklisted address) it waits in `proceeds` for the seller to
-/// withdraw, and the sale still goes through. The fee (2% by default, and never more than the
-/// rate in force when the item was listed) goes to the staking reward pool; if the pool can't
-/// take it right now it waits in `pendingFees` for flushFees(). Nothing about fees can stop a sale.
+/// whole number of micro-USDC. From each sale:
+/// - the fee (2% by default) goes to the staking reward pool; if the pool can't take it right
+///   now it waits in `pendingFees` for flushFees();
+/// - the creator's ERC-2981 royalty (Studio collections, at most 10%) goes to its receiver;
+/// - the rest goes to the seller.
+/// Neither the fee nor the royalty can ever be more than the rate in force when the item was
+/// listed. Seller and royalty payments that fail (a contract that can't receive, a blocklisted
+/// address) wait in `proceeds` for withdrawal, and the sale still goes through.
 contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     enum Standard {
         ERC721,
@@ -43,6 +52,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         Standard standard;
         uint16 feeBps; // fee rate when listed; a buy never charges more than this
         bool active;
+        uint16 royaltyBps; // creator royalty rate when listed; a buy never pays more than this
         uint256 tokenId;
         uint256 amount; // copies still in escrow for this listing (always 1 for ERC-721)
         uint256 pricePerUnit; // native USDC, 18 decimals, per copy
@@ -53,8 +63,10 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     uint256 public constant MAX_FEE_BPS = 1000; // 10% cap
     uint256 public constant SELLER_PUSH_GAS = 50_000;
     uint256 public constant FEE_PUSH_GAS = 100_000;
+    uint256 public constant MAX_ROYALTY_BPS = 1000; // 10% cap, whatever a collection reports
+    uint256 public constant ROYALTY_QUERY_GAS = 30_000;
 
-    IERC721 public immutable communityMint;
+    IStudioRegistry public immutable studio;
     IERC1155 public immutable collectibles;
 
     uint256 public feeBps = 200; // 2%
@@ -69,14 +81,14 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     uint256 public pendingFees; // fees that couldn't be forwarded yet
 
     // Escrow accounting, so NFTs sent here by mistake can be told apart from listed ones.
-    mapping(uint256 => bool) private _escrowed721;
+    mapping(address => mapping(uint256 => bool)) private _escrowed721;
     mapping(uint256 => uint256) private _escrowed1155;
 
     // Active listings, for paginated reads.
     uint256[] private _active;
     mapping(uint256 => uint256) private _activePos; // listingId => index + 1
 
-    bool private _receiving; // set only while a list function pulls an NFT in
+    address private _receivingFrom; // set only while a list function pulls an NFT in
 
     event Listed(
         uint256 indexed listingId,
@@ -86,12 +98,21 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         uint256 tokenId,
         uint256 amount,
         uint256 pricePerUnit,
-        uint256 feeBps
+        uint256 feeBps,
+        uint256 royaltyBps
     );
     event PriceUpdated(uint256 indexed listingId, uint256 newPricePerUnit);
     event Cancelled(uint256 indexed listingId, uint256 returnedAmount);
-    event Sold(uint256 indexed listingId, address indexed buyer, uint256 amount, uint256 totalPaid, uint256 fee);
-    event ProceedsCredited(address indexed seller, uint256 amount);
+    event Sold(
+        uint256 indexed listingId,
+        address indexed buyer,
+        uint256 amount,
+        uint256 totalPaid,
+        uint256 fee,
+        uint256 royalty
+    );
+    event RoyaltyPaid(uint256 indexed listingId, address indexed receiver, uint256 amount);
+    event ProceedsCredited(address indexed account, uint256 amount);
     event ProceedsWithdrawn(address indexed seller, address indexed to, uint256 amount);
     event FeeForwarded(address indexed to, uint256 amount);
     event FeeDeferred(uint256 amount);
@@ -101,35 +122,33 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     event StrayNftRescued(address indexed nftContract, uint256 indexed tokenId, uint256 amount, address to);
     event SurplusSwept(address indexed to, uint256 amount);
 
-    constructor(address owner_, address communityMint_, address collectibles_, address feeRecipient_)
-        Ownable(owner_)
-    {
-        require(communityMint_ != address(0) && collectibles_ != address(0), "collection is zero address");
+    constructor(address owner_, address studio_, address collectibles_, address feeRecipient_) Ownable(owner_) {
+        require(studio_.code.length > 0 && collectibles_.code.length > 0, "collection registry or collectibles has no code");
         require(feeRecipient_ != address(0), "fee recipient is zero address");
-        communityMint = IERC721(communityMint_);
+        studio = IStudioRegistry(studio_);
         collectibles = IERC1155(collectibles_);
         feeRecipient = feeRecipient_;
     }
 
     // ---------- Listing ----------
 
-    /// @notice Lists a SDOGECommunityMint token. Approve this contract for it first; it moves into
-    ///         escrow until it sells or you cancel.
+    /// @notice Lists a token from a SDOGE Studio collection. Approve this contract for it first;
+    ///         it moves into escrow until it sells or you cancel.
     function listERC721(address nftContract, uint256 tokenId, uint256 pricePerUnit)
         external
         whenNotPaused
         nonReentrant
         returns (uint256 listingId)
     {
-        require(nftContract == address(communityMint), "only SDOGE Community Art");
+        require(studio.isCollection(nftContract), "only SDOGE Studio collections");
         _checkPrice(pricePerUnit);
 
-        _receiving = true;
-        communityMint.safeTransferFrom(msg.sender, address(this), tokenId);
-        _receiving = false;
-        _escrowed721[tokenId] = true;
+        _receivingFrom = nftContract;
+        IERC721(nftContract).safeTransferFrom(msg.sender, address(this), tokenId);
+        _receivingFrom = address(0);
+        _escrowed721[nftContract][tokenId] = true;
 
-        listingId = _create(nftContract, Standard.ERC721, tokenId, 1, pricePerUnit);
+        listingId = _create(nftContract, Standard.ERC721, tokenId, 1, pricePerUnit, _royaltyBpsOf(nftContract, tokenId));
     }
 
     /// @notice Lists `amount` copies of a SDOGECollectibles design. Call setApprovalForAll for this
@@ -144,12 +163,12 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         require(amount > 0, "amount must be > 0");
         _checkPrice(pricePerUnit);
 
-        _receiving = true;
+        _receivingFrom = nftContract;
         collectibles.safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
-        _receiving = false;
+        _receivingFrom = address(0);
         _escrowed1155[tokenId] += amount;
 
-        listingId = _create(nftContract, Standard.ERC1155, tokenId, amount, pricePerUnit);
+        listingId = _create(nftContract, Standard.ERC1155, tokenId, amount, pricePerUnit, 0);
     }
 
     function updatePrice(uint256 listingId, uint256 newPricePerUnit) external {
@@ -170,7 +189,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         uint256 amount = l.amount;
         l.amount = 0;
         _deactivate(listingId);
-        _release(l.standard, l.tokenId, msg.sender, amount);
+        _release(l, msg.sender, amount);
         emit Cancelled(listingId, amount);
     }
 
@@ -188,18 +207,23 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         address seller = l.seller;
         uint256 rate = l.feeBps < feeBps ? l.feeBps : feeBps;
         uint256 fee = (totalPrice * rate) / 10_000;
+        (address royaltyTo, uint256 royalty) = _royaltyFor(l, totalPrice);
 
         l.amount -= amount;
         if (l.amount == 0) _deactivate(listingId);
 
-        _release(l.standard, l.tokenId, msg.sender, amount);
-        _paySeller(seller, totalPrice - fee);
+        _release(l, msg.sender, amount);
+        _pay(seller, totalPrice - fee - royalty);
+        if (royalty > 0) {
+            _pay(royaltyTo, royalty);
+            emit RoyaltyPaid(listingId, royaltyTo, royalty);
+        }
         _forwardFee(fee);
 
-        emit Sold(listingId, msg.sender, amount, totalPrice, fee);
+        emit Sold(listingId, msg.sender, amount, totalPrice, fee, royalty);
     }
 
-    /// @notice Sends your waiting proceeds (payments that couldn't be pushed) to `to`.
+    /// @notice Sends your waiting proceeds (sale or royalty payments that couldn't be pushed) to `to`.
     function withdrawProceeds(address payable to) external nonReentrant returns (uint256 amount) {
         require(to != address(0), "bad recipient");
         amount = proceeds[msg.sender];
@@ -291,7 +315,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
             require(amount > 0 && held >= _escrowed1155[tokenId] + amount, "not stray");
             collectibles.safeTransferFrom(address(this), to, tokenId, amount, "");
         } else {
-            require(nftContract != address(communityMint) || !_escrowed721[tokenId], "not stray");
+            require(!_escrowed721[nftContract][tokenId], "not stray");
             IERC721(nftContract).transferFrom(address(this), to, tokenId);
         }
         emit StrayNftRescued(nftContract, tokenId, amount, to);
@@ -315,12 +339,12 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     // ---------- Receiver hooks: only accept NFTs this contract is pulling into escrow ----------
 
     function onERC721Received(address, address, uint256, bytes calldata) external view returns (bytes4) {
-        require(_receiving && msg.sender == address(communityMint), "list it instead");
+        require(_receivingFrom != address(0) && msg.sender == _receivingFrom, "list it instead");
         return IERC721Receiver.onERC721Received.selector;
     }
 
     function onERC1155Received(address, address, uint256, uint256, bytes calldata) external view returns (bytes4) {
-        require(_receiving && msg.sender == address(collectibles), "list it instead");
+        require(_receivingFrom == address(collectibles) && msg.sender == address(collectibles), "list it instead");
         return IERC1155Receiver.onERC1155Received.selector;
     }
 
@@ -344,10 +368,14 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         require(price % PRICE_UNIT == 0, "price must be whole micro-USDC");
     }
 
-    function _create(address nftContract, Standard standard, uint256 tokenId, uint256 amount, uint256 price)
-        private
-        returns (uint256 listingId)
-    {
+    function _create(
+        address nftContract,
+        Standard standard,
+        uint256 tokenId,
+        uint256 amount,
+        uint256 price,
+        uint256 royaltyBps
+    ) private returns (uint256 listingId) {
         listingId = nextListingId++;
         listings[listingId] = Listing({
             seller: msg.sender,
@@ -355,13 +383,42 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
             standard: standard,
             feeBps: uint16(feeBps),
             active: true,
+            royaltyBps: uint16(royaltyBps),
             tokenId: tokenId,
             amount: amount,
             pricePerUnit: price
         });
         _active.push(listingId);
         _activePos[listingId] = _active.length;
-        emit Listed(listingId, msg.sender, nftContract, standard, tokenId, amount, price, feeBps);
+        emit Listed(listingId, msg.sender, nftContract, standard, tokenId, amount, price, feeBps, royaltyBps);
+    }
+
+    /// The collection's royalty rate right now (ERC-2981 on a 10,000 price), capped at 10%.
+    function _royaltyBpsOf(address nftContract, uint256 tokenId) private view returns (uint256) {
+        try IERC2981(nftContract).royaltyInfo{gas: ROYALTY_QUERY_GAS}(tokenId, 10_000) returns (
+            address receiver, uint256 amount
+        ) {
+            if (receiver == address(0)) return 0;
+            return amount > MAX_ROYALTY_BPS ? MAX_ROYALTY_BPS : amount;
+        } catch {
+            return 0;
+        }
+    }
+
+    /// The royalty owed on a sale: what the collection asks now, but never more than the rate
+    /// recorded when the item was listed.
+    function _royaltyFor(Listing storage l, uint256 price) private view returns (address receiver, uint256 amount) {
+        uint256 capBps = l.royaltyBps;
+        if (capBps == 0) return (address(0), 0);
+        try IERC2981(l.nftContract).royaltyInfo{gas: ROYALTY_QUERY_GAS}(l.tokenId, price) returns (
+            address r, uint256 a
+        ) {
+            if (r == address(0)) return (address(0), 0);
+            uint256 cap = (price * capBps) / 10_000;
+            return (r, a < cap ? a : cap);
+        } catch {
+            return (address(0), 0);
+        }
     }
 
     function _deactivate(uint256 listingId) private {
@@ -374,24 +431,25 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         delete _activePos[listingId];
     }
 
-    function _release(Standard standard, uint256 tokenId, address to, uint256 amount) private {
+    function _release(Listing storage l, address to, uint256 amount) private {
         if (amount == 0) return;
-        if (standard == Standard.ERC721) {
-            _escrowed721[tokenId] = false;
-            communityMint.safeTransferFrom(address(this), to, tokenId);
+        if (l.standard == Standard.ERC721) {
+            _escrowed721[l.nftContract][l.tokenId] = false;
+            IERC721(l.nftContract).safeTransferFrom(address(this), to, l.tokenId);
         } else {
-            _escrowed1155[tokenId] -= amount;
-            collectibles.safeTransferFrom(address(this), to, tokenId, amount, "");
+            _escrowed1155[l.tokenId] -= amount;
+            collectibles.safeTransferFrom(address(this), to, l.tokenId, amount, "");
         }
     }
 
-    function _paySeller(address seller, uint256 amount) private {
+    /// Pushes a seller or royalty payment, or keeps it in `proceeds` if the push fails.
+    function _pay(address to, uint256 amount) private {
         if (amount == 0) return;
-        (bool sent,) = seller.call{value: amount, gas: SELLER_PUSH_GAS}("");
+        (bool sent,) = to.call{value: amount, gas: SELLER_PUSH_GAS}("");
         if (!sent) {
-            proceeds[seller] += amount;
+            proceeds[to] += amount;
             totalProceeds += amount;
-            emit ProceedsCredited(seller, amount);
+            emit ProceedsCredited(to, amount);
         }
     }
 

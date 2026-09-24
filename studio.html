@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SDOGE Studio: Mint Your Own NFTs</title>
+<meta name="description" content="Mint your own NFTs on Arc. 1 mint for 5 USDC, or 1,000 for 100 USDC: enough for a whole project collection." />
+
+<link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body class="starfield">
+
+<!-- ===== NAV ===== -->
+<nav class="navbar" id="navbar">
+  <div class="container navbar__inner">
+    <a href="index.html" class="brand">
+      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
+      <span class="brand__name">$SDOGE</span>
+    </a>
+
+    <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+
+    <div class="navbar__links" id="navLinks">
+      <a href="index.html">Home</a>
+      <a href="staking.html">Staking</a>
+      <a href="nft.html">NFT</a>
+      <a href="studio.html" style="color: var(--text-primary);">Studio</a>
+      <a href="nft.html#marketplace">Marketplace</a>
+      <button class="btn btn--primary btn--small js-connect-wallet">Connect Wallet</button>
+    </div>
+
+    <div class="navbar__chain">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 20v-6a7 7 0 0 1 14 0v6M8.5 20v-6a3.5 3.5 0 0 1 7 0v6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>ARC</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<header class="hero" id="top">
+  <div class="hero__bg" style="background-image:url('assets/img/nft-hero.jpg')"></div>
+  <div class="hero__overlay"></div>
+
+  <div class="container hero__inner">
+    <div class="pill">
+      <span class="pill__dot"></span> <span id="studioStatus">Loading...</span>
+    </div>
+
+    <h1 class="hero__title hero__title--gold">
+      <span class="hero__title-brand">SDOGE</span>
+      STUDIO
+    </h1>
+    <p class="hero__title-tagline">Mint your own. <em>On Arc.</em></p>
+
+    <p class="hero__subtitle">
+      Turn your art into NFTs. One mint is 5 USDC, or grab 1,000 mints for
+      100 USDC and launch a whole collection with its own contract, drops
+      and royalties.
+    </p>
+
+    <div class="hero__cta">
+      <a href="#credits" class="btn btn--primary">Get mint credits</a>
+      <a href="#collections" class="btn btn--ghost">Launch a collection</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== PUBLIC DROP (studio.html?drop=0x...) ===== -->
+  <section class="section section--tight" id="dropSection" style="display:none;">
+    <div class="container">
+      <div class="panel">
+        <div class="eyebrow">Public drop</div>
+        <h2 class="section__title" id="dropTitle">Loading...</h2>
+        <p id="dropBadge"></p>
+        <p class="section__lead" id="dropInfo"></p>
+        <div class="studio-row" style="max-width: 420px;">
+          <label class="studio-field">How many (1-20)<input class="studio-input" id="dropQty" type="number" min="1" max="20" value="1" /></label>
+        </div>
+        <button class="btn btn--primary" id="dropMintBtn" disabled>Mint</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FEATURE STRIP ===== -->
+  <section class="section section--tight">
+    <div class="container">
+      <div class="feature-row">
+        <div class="feature-card">
+          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l2.6 7.9H21l-6.7 4.9L16.9 22 12 17.1 7.1 22l2.6-7.2L3 9.9h6.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+          <h3>Your art, your contract</h3>
+          <p>Projects get their own collection with its own name and symbol, owned by them.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 14l4-4 4 4 8-8M20 6h-4v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Cheap at scale</h3>
+          <p>From 5 USDC for one mint down to 0.10 USDC a mint with the 1,000 pack.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <h3>Public drops</h3>
+          <p>Let your community mint at your price. You keep 100% of the sale.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 7H4a1 1 0 0 0-1 1v3a5 5 0 0 0 5 5h1a5 5 0 0 0 5-5V8a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 16v3m-4 2h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <h3>Feeds $SDOGE stakers</h3>
+          <p>A share of every credit sale goes to the staking reward pool, on-chain.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CREDITS ===== -->
+  <section class="section" id="credits">
+    <div class="container">
+      <div class="panel__head" style="margin-bottom: 0;">
+        <div>
+          <div class="eyebrow">Mint credits</div>
+          <h2 class="section__title">1 credit = 1 NFT. Buy in bulk, pay less.</h2>
+        </div>
+        <div class="wallet-status">Your credits: <span id="creditBalance">Connect your wallet</span></div>
+      </div>
+      <div class="package-grid" id="packageGrid"></div>
+      <p class="fine-print">
+        Pay in USDC, or burn $SDOGE where a package shows a SDOGE price
+        (burned SDOGE is gone for good). Credits never expire, can't be
+        transferred or refunded, and only mint. Package terms are
+        re-checked right before you pay.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== COMMUNITY 1-of-1 ===== -->
+  <section class="section section--alt" id="community">
+    <div class="container">
+      <div class="eyebrow">Mint a 1-of-1</div>
+      <h2 class="section__title">Your art, in SDOGE Community Art.</h2>
+      <p class="section__lead">
+        One credit mints a one-of-a-kind NFT of your own art into the shared
+        SDOGE Community Art collection. Minting is open to everyone, with no
+        review. Your token and its metadata can never be changed or moved by
+        anyone else.
+      </p>
+
+      <div class="app-grid">
+        <div class="panel">
+          <div id="cmBuiltFields">
+            <label class="studio-field">Name<input class="studio-input" id="cmName" maxlength="64" placeholder="My Doge" /></label>
+            <label class="studio-field">Description (short)<textarea class="studio-input" id="cmDescription" maxlength="280" placeholder="What it is"></textarea></label>
+            <label class="studio-field">Image link (ipfs:// or https://)<input class="studio-input" id="cmImage" placeholder="ipfs://..." /></label>
+          </div>
+          <label class="studio-field" style="flex-direction: row; align-items: center; gap: 8px;">
+            <input type="checkbox" id="cmOwnUri" /> I already have a metadata URI
+          </label>
+          <div id="cmUriField" style="display:none;">
+            <label class="studio-field">Metadata URI<input class="studio-input" id="cmUri" placeholder="ipfs://.../metadata.json" /></label>
+          </div>
+          <p class="studio-note" id="cmUriLength"></p>
+          <button class="btn btn--primary btn--wide" id="cmMintBtn">Mint (1 credit)</button>
+          <p class="studio-note" id="cmResult"></p>
+        </div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">Preview</span></div>
+          <img class="studio-preview" id="cmPreview" alt="Your image" style="display:none;" />
+          <p class="fine-print" style="margin-top:16px;">
+            You host the image (for example, pin it on IPFS). The name,
+            description and image link are stored on-chain with the token, so
+            there's no metadata file to host. You're responsible for what you
+            mint.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== COLLECTIONS ===== -->
+  <section class="section" id="collections">
+    <div class="container">
+      <div class="eyebrow">For projects</div>
+      <h2 class="section__title">Launch your own collection.</h2>
+      <p class="section__lead">
+        Your own ERC-721 contract, owned by your wallet. Mint in batches,
+        airdrop to your holders, or open a public drop at your price.
+        Every token uses one credit. Royalties (up to 10%) are paid on
+        resales at the SDOGE marketplace. The supply cap can only ever go
+        down.
+      </p>
+
+      <div class="app-grid">
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">New collection</span></div>
+          <div class="studio-row">
+            <label class="studio-field">Name<input class="studio-input" id="ccName" maxlength="64" placeholder="Doge Club" /></label>
+            <label class="studio-field">Symbol<input class="studio-input" id="ccSymbol" maxlength="16" placeholder="DCLUB" /></label>
+          </div>
+          <div class="studio-row">
+            <label class="studio-field">Max supply (empty = no cap yet)<input class="studio-input" id="ccMaxSupply" type="number" min="1" placeholder="1000" /></label>
+            <label class="studio-field">Royalty % (0-10)<input class="studio-input" id="ccRoyalty" placeholder="5" /></label>
+          </div>
+          <button class="btn btn--primary btn--wide" id="ccCreateBtn">Create collection</button>
+        </div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">How a drop works</span></div>
+          <p class="studio-note">
+            1. Pin your metadata folder (1.json, 2.json, ...) and save its
+            base URI. 2. Set the price, a per-wallet limit and optional
+            start and end times. 3. Open the drop and share its link.
+            Collectors pay your price, which goes to you; each mint uses one
+            of your credits, so keep enough for your supply.
+          </p>
+        </div>
+      </div>
+
+      <div class="eyebrow" style="margin-top: 48px;">Your collections</div>
+      <div id="myCollections" class="stakes-list">
+        <p class="empty-state">Connect your wallet to see your collections.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
+      <div>
+        <span class="brand__name">$SDOGE</span>
+        <p>The Stable Doge — on Arc.</p>
+      </div>
+    </div>
+
+    <nav class="footer__nav">
+      <a href="index.html">Home</a>
+      <a href="staking.html">Staking</a>
+      <a href="nft.html">NFT</a>
+      <a href="studio.html">Studio</a>
+    </nav>
+
+    <div class="footer__social">
+      <a href="https://x.com/stabledoge1" target="_blank" rel="noopener" aria-label="X / Twitter">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4l7.5 9.5L4.5 20h2.2l6-6.8 4.6 6.8H21l-7.8-10L20 4h-2.2l-5.5 6.2L7.8 4H4z" fill="currentColor"/></svg>
+      </a>
+      <a href="https://t.me/stabledoge1" target="_blank" rel="noopener" aria-label="Telegram">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 4 2 11.5l6 2M21 4 15 20l-7-6.5M21 4 8 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+
+    <a href="index.html#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+  </div>
+
+  <div class="container">
+    <p class="disclaimer">
+      <strong>Heads up:</strong> SDOGE Studio is a tool. Creators, not the
+      SDOGE team, are responsible for their collections and art; anyone can
+      make a collection, so check who is behind one before you mint from it.
+      NFTs are collectibles, not an investment product. Do your own research.
+    </p>
+    <p class="copyright">© <span id="year"></span> $SDOGE. All rights reserved. Stable. Simple. On Arc.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/arc.js"></script>
+<script src="assets/js/wallet.js"></script>
+<script src="assets/js/studio.js"></script>
+</body>
+</html>

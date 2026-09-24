@@ -1,0 +1,31 @@
+{
+  "_comment": "SDOGE Studio launch settings, read by contracts/scripts/deploy-studio.js. Prices: USDC with up to 6 decimals, SDOGE whole tokens; null means not sold in that currency. poolShareBps: share of USDC credit sales sent to the staking reward pool by withdraw() (5000 = 50%), set once staking is deployed.",
+  "packages": [
+    {
+      "name": "Single",
+      "mints": 1,
+      "priceUsdc": "5",
+      "priceSdoge": "1000000"
+    },
+    {
+      "name": "Starter",
+      "mints": 10,
+      "priceUsdc": "20",
+      "priceSdoge": null
+    },
+    {
+      "name": "Creator",
+      "mints": 100,
+      "priceUsdc": "50",
+      "priceSdoge": null
+    },
+    {
+      "name": "Project",
+      "mints": 1000,
+      "priceUsdc": "100",
+      "priceSdoge": null
+    }
+  ],
+  "poolShareBps": 5000,
+  "communityContractURI": ""
+}

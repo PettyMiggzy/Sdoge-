@@ -1,37 +1,78 @@
+// Deploys SDOGECollectibles (the 12 named designs, ERC-1155) on Arc.
+//
+//   COLLECTIBLES_OWNER_ADDRESS=<team Safe> TREASURY_ADDRESS=<where mint revenue goes> \
+//   COLLECTIBLES_BASE_URI=ipfs://<CID>/ npx hardhat run scripts/deploy-collectibles.js --network arc
+//
+// The base URI must end in "/" (the contract appends "<id>.json") and must already serve all 12
+// metadata files with real images: the script fetches each one and checks its name against
+// nft/designs.json. Then run scripts/setup-designs.js to create the designs (closed), check
+// them, and open them.
 const { ethers } = require("hardhat");
+const c = require("./lib/common");
 
-// Placeholder - replace with wherever metadata actually ends up hosted
-// (IPFS via nft.storage/Pinata, or a URL on the site itself) before
-// deploying for real. The contract appends "<id>.json" itself (see
-// SDOGECollectibles.uri()), so this should end in a trailing slash and
-// must NOT include a literal "{id}" - that EIP-1155 convention isn't used
-// here.
-const DEFAULT_BASE_URI = "https://stabledoge1.example/nft/metadata/";
+const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 
-async function main() {
-  const ownerAddress = process.env.COLLECTIBLES_OWNER_ADDRESS;
-  if (!ownerAddress) {
-    throw new Error(
-      "Set COLLECTIBLES_OWNER_ADDRESS to the Treasury/multisig that should control minting and pricing - " +
-        "do not deploy with a throwaway EOA as owner."
-    );
+function toHttp(uri) {
+  return uri.startsWith("ipfs://") ? IPFS_GATEWAY + uri.slice("ipfs://".length) : uri;
+}
+
+async function checkBaseUri(base, { skipFetch = false, fetchImpl = globalThis.fetch } = {}) {
+  if (!base) throw new Error("Set COLLECTIBLES_BASE_URI to where the 12 metadata files are pinned (ipfs://<CID>/).");
+  if (!/^(ipfs:\/\/|https:\/\/)/.test(base)) throw new Error(`Base URI must start with ipfs:// or https:// (got ${base}).`);
+  if (!base.endsWith("/")) throw new Error(`Base URI must end in "/" - the contract appends "<id>.json" (got ${base}).`);
+  for (const bad of ["{id}", "REPLACE_ME", ".example", "localhost", " "]) {
+    if (base.includes(bad)) throw new Error(`Base URI contains "${bad}": ${base}`);
   }
-  const baseURI = process.env.COLLECTIBLES_BASE_URI || DEFAULT_BASE_URI;
+  if (skipFetch) {
+    console.warn("  WARNING: SKIP_METADATA_CHECK=1 - the metadata at the base URI was not checked.");
+    return base;
+  }
+  const { designs } = c.readRepoJson("nft/designs.json");
+  for (const d of designs) {
+    const url = `${toHttp(base)}${d.id}.json`;
+    let meta;
+    try {
+      const res = await fetchImpl(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      meta = await res.json();
+    } catch (err) {
+      throw new Error(`Could not load ${url}: ${err.message}`);
+    }
+    if (meta.name !== d.name) throw new Error(`${url} is "${meta.name}", expected "${d.name}".`);
+    if (typeof meta.image !== "string" || !meta.image || meta.image.includes("REPLACE_ME")) {
+      throw new Error(`${url} has no real image yet (${meta.image}). Pin the art and update the metadata first.`);
+    }
+  }
+  console.log(`  metadata: all ${designs.length} files at ${base} match nft/designs.json`);
+  return base;
+}
 
-  const Collectibles = await ethers.getContractFactory("SDOGECollectibles");
-  const nft = await Collectibles.deploy(ownerAddress, baseURI);
+async function run(opts) {
+  const { expectedChainId = c.ARC_CHAIN_ID } = opts;
+  await c.preflight(expectedChainId);
+  const owner = await c.checkOwner("COLLECTIBLES_OWNER_ADDRESS", opts.owner, opts);
+  const treasury = c.checkAddress("TREASURY_ADDRESS", opts.treasury);
+  const baseUri = await checkBaseUri(opts.baseUri, opts);
+
+  const nft = await (await ethers.getContractFactory("SDOGECollectibles")).deploy(owner, baseUri, treasury);
   await nft.waitForDeployment();
+  console.log(`\nSDOGECollectibles: ${await nft.getAddress()}`);
+  await c.recordDeployment("SDOGECollectibles", nft, [owner, baseUri, treasury]);
+  console.log("\nNo designs exist yet. Next: npx hardhat run scripts/setup-designs.js --network arc");
+  return { collectibles: nft };
+}
 
-  console.log("SDOGECollectibles deployed to:", await nft.getAddress());
-  console.log("  owner:", ownerAddress);
-  console.log("  baseURI:", baseURI);
-  console.log(
-    "\nNo designs exist yet - call createDesign(name, maxSupply, priceWei) once per design " +
-      "(see nft/metadata/ for the 6 designs currently defined) before anyone can mint."
+if (require.main === module) {
+  c.cli(() =>
+    run({
+      owner: c.requireEnv("COLLECTIBLES_OWNER_ADDRESS", "the team's Safe on Arc"),
+      treasury: c.requireEnv("TREASURY_ADDRESS", "where mint revenue goes"),
+      baseUri: c.envOr("COLLECTIBLES_BASE_URI"),
+      skipFetch: c.flag("SKIP_METADATA_CHECK"),
+      allowEoa: c.flag("ALLOW_EOA_OWNER"),
+      allowLowThreshold: c.flag("ALLOW_LOW_THRESHOLD"),
+    })
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+module.exports = { run, checkBaseUri };

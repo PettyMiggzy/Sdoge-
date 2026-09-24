@@ -2,38 +2,43 @@
 pragma solidity ^0.8.24;
 
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface ISDOGECommunityMint {
-    function mint(string calldata uri, uint256 maxBurnAmount) external returns (uint256);
+interface IStudioForMinter {
+    function mintCommunity(string calldata uri) external returns (uint256);
 }
 
-/// @notice Attempts to re-enter mint() from the ERC-721 receive hook, to
-///         confirm SDOGECommunityMint's nonReentrant guard actually blocks
-///         it rather than trusting the modifier untested. Holds and
-///         approves its own SDOGE balance so it - not a test EOA - is the
-///         msg.sender the mint contract sees.
+interface ICollectionForMinter {
+    function publicMint(uint256 quantity) external payable returns (uint256);
+}
+
+/// @notice Test-only: re-enters a mint from its ERC-721 receive hook, to prove the guards hold.
+///         Mode 1 re-enters SDOGEStudio.mintCommunity; mode 2 re-enters a collection's
+///         publicMint. It is the minter itself, so it spends its own credits.
 contract ReentrantMinter is IERC721Receiver {
-    ISDOGECommunityMint public target;
+    address public target;
+    uint8 public mode;
     bool public attacking;
 
-    function setTarget(address _target) external {
-        target = ISDOGECommunityMint(_target);
+    function setTarget(address target_, uint8 mode_) external {
+        target = target_;
+        mode = mode_;
     }
 
-    function approveToken(address token, address spender) external {
-        IERC20(token).approve(spender, type(uint256).max);
-    }
-
-    function attackMint(string calldata uri) external {
+    function attackCommunity(string calldata uri) external {
         attacking = true;
-        target.mint(uri, type(uint256).max);
+        IStudioForMinter(target).mintCommunity(uri);
+    }
+
+    function attackDrop(uint256 quantity) external payable {
+        attacking = true;
+        ICollectionForMinter(target).publicMint{value: msg.value}(quantity);
     }
 
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         if (attacking) {
             attacking = false;
-            target.mint("reentrant-attempt", type(uint256).max);
+            if (mode == 1) IStudioForMinter(target).mintCommunity("ipfs://reentrant-attempt");
+            else ICollectionForMinter(target).publicMint(1);
         }
         return this.onERC721Received.selector;
     }

@@ -1,5 +1,6 @@
 const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
+const { deployStudio, newCollection } = require("./helpers/studio");
 
 const E = (n) => ethers.parseEther(String(n));
 const ERC721 = 0;
@@ -9,10 +10,7 @@ async function deployFixture() {
   const [owner, alice, bob, carol, treasury, stranger] = await ethers.getSigners();
 
   const sdoge = await (await ethers.getContractFactory("MockERC20")).deploy("Stable Doge", "SDOGE");
-  const communityMint = await (await ethers.getContractFactory("SDOGECommunityMint")).deploy(
-    await sdoge.getAddress(),
-    owner.address
-  );
+  const { studio, community: communityMint } = await deployStudio(owner, sdoge, treasury);
   const collectibles = await (await ethers.getContractFactory("SDOGECollectibles")).deploy(
     owner.address,
     "https://example.test/metadata/",
@@ -20,7 +18,7 @@ async function deployFixture() {
   );
   const marketplace = await (await ethers.getContractFactory("SDOGENFTMarketplace")).deploy(
     owner.address,
-    await communityMint.getAddress(),
+    await studio.getAddress(),
     await collectibles.getAddress(),
     treasury.address
   );
@@ -29,10 +27,9 @@ async function deployFixture() {
     owner.address
   );
 
-  // Alice mints community NFT #1 (ERC-721 side).
-  await sdoge.mint(alice.address, E("10000000"));
-  await sdoge.connect(alice).approve(await communityMint.getAddress(), ethers.MaxUint256);
-  await communityMint.connect(alice).mint("ipfs://alice-art.json", ethers.MaxUint256);
+  // Alice mints Community Art #1 (ERC-721 side) with a credit.
+  await studio.connect(owner).grantCredits(alice.address, 1);
+  await studio.connect(alice).mintCommunity("ipfs://alice-art.json");
 
   // Bob mints 5 copies of design 1 (ERC-1155 side).
   await collectibles.connect(owner).createDesign(1, "Test Doge", 100, E("1"), 10);
@@ -42,7 +39,18 @@ async function deployFixture() {
   const mp = await marketplace.getAddress();
   const cm = await communityMint.getAddress();
   const col = await collectibles.getAddress();
-  return { owner, alice, bob, carol, treasury, stranger, sdoge, communityMint, collectibles, marketplace, staking, mp, cm, col };
+  return { owner, alice, bob, carol, treasury, stranger, sdoge, studio, communityMint, collectibles, marketplace, staking, mp, cm, col };
+}
+
+// Carol's own collection (5% royalty to Carol); she mints token 1 to Alice, who lists it.
+async function listCreator(f, price = E("10"), royaltyTo = null) {
+  const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART", royaltyBps: 500 });
+  if (royaltyTo) await art.connect(f.carol).setRoyalty(royaltyTo, 500);
+  await f.studio.connect(f.owner).grantCredits(f.carol.address, 10);
+  await art.connect(f.carol).mintBatch(f.alice.address, 1);
+  await art.connect(f.alice).approve(f.mp, 1);
+  await f.marketplace.connect(f.alice).listERC721(await art.getAddress(), 1, price);
+  return art;
 }
 
 async function listAlice721(f, price = E("10")) {
@@ -59,23 +67,24 @@ const bal = (a) => ethers.provider.getBalance(a);
 
 describe("SDOGENFTMarketplace", function () {
   describe("deployment", function () {
-    it("binds the two SDOGE collections and sane defaults", async function () {
+    it("binds the Studio registry, the Collectibles and sane defaults", async function () {
       const f = await deployFixture();
       expect(await f.marketplace.owner()).to.equal(f.owner.address);
-      expect(await f.marketplace.communityMint()).to.equal(f.cm);
+      expect(await f.marketplace.studio()).to.equal(await f.studio.getAddress());
       expect(await f.marketplace.collectibles()).to.equal(f.col);
       expect(await f.marketplace.feeRecipient()).to.equal(f.treasury.address);
       expect(await f.marketplace.feeBps()).to.equal(200);
       expect(await f.marketplace.rewardsPool()).to.equal(ethers.ZeroAddress);
     });
 
-    it("rejects zero addresses", async function () {
+    it("rejects codeless or zero addresses", async function () {
       const f = await deployFixture();
       const M = await ethers.getContractFactory("SDOGENFTMarketplace");
-      await expect(M.deploy(f.owner.address, ethers.ZeroAddress, f.col, f.treasury.address)).to.be.revertedWith(
-        "collection is zero address"
-      );
-      await expect(M.deploy(f.owner.address, f.cm, f.col, ethers.ZeroAddress)).to.be.revertedWith(
+      const st = await f.studio.getAddress();
+      const noCode = "collection registry or collectibles has no code";
+      await expect(M.deploy(f.owner.address, ethers.ZeroAddress, f.col, f.treasury.address)).to.be.revertedWith(noCode);
+      await expect(M.deploy(f.owner.address, st, f.stranger.address, f.treasury.address)).to.be.revertedWith(noCode);
+      await expect(M.deploy(f.owner.address, st, f.col, ethers.ZeroAddress)).to.be.revertedWith(
         "fee recipient is zero address"
       );
     });
@@ -87,7 +96,7 @@ describe("SDOGENFTMarketplace", function () {
       await f.communityMint.connect(f.alice).approve(f.mp, 1);
       await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10")))
         .to.emit(f.marketplace, "Listed")
-        .withArgs(1, f.alice.address, f.cm, ERC721, 1, 1, E("10"), 200);
+        .withArgs(1, f.alice.address, f.cm, ERC721, 1, 1, E("10"), 200, 0);
       expect(await f.communityMint.ownerOf(1)).to.equal(f.mp);
       const l = await f.marketplace.getListing(1);
       expect(l.seller).to.equal(f.alice.address);
@@ -122,7 +131,7 @@ describe("SDOGENFTMarketplace", function () {
       );
     });
 
-    it("only accepts the two SDOGE collections", async function () {
+    it("only accepts SDOGE collections: the Collectibles and Studio collections", async function () {
       const f = await deployFixture();
       const Fake = await ethers.getContractFactory("MockERC20");
       const fake = await Fake.deploy("Fake", "FAKE");
@@ -133,8 +142,13 @@ describe("SDOGENFTMarketplace", function () {
         "only SDOGE Collectibles"
       );
       await expect(f.marketplace.connect(f.alice).listERC721(f.col, 1, E("1"))).to.be.revertedWith(
-        "only SDOGE Community Art"
+        "only SDOGE Studio collections"
       );
+      await expect(f.marketplace.connect(f.alice).listERC721(await fake.getAddress(), 1, E("1"))).to.be.revertedWith(
+        "only SDOGE Studio collections"
+      );
+      const art = await listCreator(f); // any creator's own Studio collection is fine
+      expect(await art.ownerOf(1)).to.equal(f.mp);
     });
 
     it("rejects prices below 0.01 USDC or in 6-decimal units", async function () {
@@ -193,7 +207,7 @@ describe("SDOGENFTMarketplace", function () {
       const [a0, t0] = [await bal(f.alice.address), await bal(f.treasury.address)];
       await expect(f.marketplace.connect(f.carol).buy(1, 1, { value: E("10") }))
         .to.emit(f.marketplace, "Sold")
-        .withArgs(1, f.carol.address, 1, E("10"), E("0.2"));
+        .withArgs(1, f.carol.address, 1, E("10"), E("0.2"), 0);
       expect(await f.communityMint.ownerOf(1)).to.equal(f.carol.address);
       expect((await bal(f.alice.address)) - a0).to.equal(E("9.8"));
       expect((await bal(f.treasury.address)) - t0).to.equal(E("0.2"));
@@ -276,6 +290,58 @@ describe("SDOGENFTMarketplace", function () {
     });
   });
 
+  describe("creator royalties", function () {
+    it("pay the collection's royalty receiver out of the price", async function () {
+      const f = await deployFixture();
+      await listCreator(f, E("10"));
+      const [a0, c0, t0] = [await bal(f.alice.address), await bal(f.carol.address), await bal(f.treasury.address)];
+      await expect(f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") }))
+        .to.emit(f.marketplace, "RoyaltyPaid")
+        .withArgs(1, f.carol.address, E("0.5"))
+        .and.to.emit(f.marketplace, "Sold")
+        .withArgs(1, f.bob.address, 1, E("10"), E("0.2"), E("0.5"));
+      expect((await bal(f.alice.address)) - a0).to.equal(E("9.3"));
+      expect((await bal(f.carol.address)) - c0).to.equal(E("0.5"));
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("0.2"));
+      expect(await bal(f.mp)).to.equal(0);
+    });
+
+    it("never pay more than the rate when listed, but a later cut applies", async function () {
+      const f = await deployFixture();
+      const art = await listCreator(f, E("10"));
+      expect((await f.marketplace.getListing(1)).royaltyBps).to.equal(500);
+      await art.connect(f.carol).setRoyalty(f.carol.address, 1000);
+      const c0 = await bal(f.carol.address);
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      expect((await bal(f.carol.address)) - c0).to.equal(E("0.5"), "raise ignored");
+
+      await art.connect(f.bob).approve(f.mp, 1);
+      await f.marketplace.connect(f.bob).listERC721(await art.getAddress(), 1, E("10")); // listed at 10%
+      expect((await f.marketplace.getListing(2)).royaltyBps).to.equal(1000);
+      await art.connect(f.carol).setRoyalty(f.carol.address, 100);
+      const c1 = await bal(f.carol.address);
+      await f.marketplace.connect(f.alice).buy(2, 1, { value: E("10") });
+      expect((await bal(f.carol.address)) - c1).to.equal(E("0.1"), "cut applied");
+    });
+
+    it("a receiver that refuses USDC gets it as withdrawable proceeds; the sale goes through", async function () {
+      const f = await deployFixture();
+      const refuser = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
+      await listCreator(f, E("10"), await refuser.getAddress());
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      expect(await f.marketplace.proceeds(await refuser.getAddress())).to.equal(E("0.5"));
+      expect(await f.marketplace.totalProceeds()).to.equal(E("0.5"));
+    });
+
+    it("Community Art and the Collectibles carry no royalty", async function () {
+      const f = await deployFixture();
+      await listAlice721(f);
+      await listBob1155(f, 1, E("1"));
+      expect((await f.marketplace.getListing(1)).royaltyBps).to.equal(0);
+      expect((await f.marketplace.getListing(2)).royaltyBps).to.equal(0);
+    });
+  });
+
   describe("sellers that can't receive USDC", function () {
     it("the sale still goes through and the proceeds wait for withdrawal", async function () {
       const f = await deployFixture();
@@ -306,11 +372,10 @@ describe("SDOGENFTMarketplace", function () {
       const Attacker = await ethers.getContractFactory("ReentrantSeller");
       const attacker = await Attacker.deploy();
       const aAddr = await attacker.getAddress();
-      await attacker.setTargets(f.cm, f.mp);
-      await f.sdoge.mint(aAddr, E("10000000"));
-      await attacker.approveToken(await f.sdoge.getAddress(), f.cm);
-      await attacker.mintAndList("ipfs://attacker-1.json", f.cm, E("10")); // listing 1, token 2
-      await attacker.mintAndList("ipfs://attacker-2.json", f.cm, E("1")); // listing 2, token 3
+      await attacker.setTargets(await f.studio.getAddress(), f.mp);
+      await f.studio.connect(f.owner).grantCredits(aAddr, 2);
+      await attacker.mintAndList("ipfs://attacker-1.json", E("10")); // listing 1, token 2
+      await attacker.mintAndList("ipfs://attacker-2.json", E("1")); // listing 2, token 3
       await attacker.armReentry(2, E("1"));
 
       const before = await bal(aAddr);

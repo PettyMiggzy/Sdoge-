@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+interface IStudioForReader {
+    function mintCommunity(string calldata uri) external returns (uint256);
+}
 
-interface ICommunityMintForReader {
-    function mint(string calldata uri, uint256 maxBurnAmount) external returns (uint256);
+interface ICollectionForReader {
     function tokenURI(uint256 tokenId) external view returns (string memory);
 }
 
@@ -13,13 +14,12 @@ interface ICommunityMintForReader {
 contract UriReadingReceiver {
     string public seenUri;
 
-    function mintVia(address nft, address token, string calldata uri) external {
-        IERC20(token).approve(nft, type(uint256).max);
-        ICommunityMintForReader(nft).mint(uri, type(uint256).max);
+    function mintVia(address studio, string calldata uri) external {
+        IStudioForReader(studio).mintCommunity(uri);
     }
 
     function onERC721Received(address, address, uint256 tokenId, bytes calldata) external returns (bytes4) {
-        seenUri = ICommunityMintForReader(msg.sender).tokenURI(tokenId);
+        seenUri = ICollectionForReader(msg.sender).tokenURI(tokenId);
         return this.onERC721Received.selector;
     }
 }

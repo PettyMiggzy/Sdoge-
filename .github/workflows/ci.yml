@@ -1,0 +1,74 @@
+name: CI
+
+# Runs every test suite on each push and pull request:
+# - contracts: staking, NFT collection, SDOGE Studio, marketplace, the deploy scripts, and the
+#   site's own assets/js run against those contracts (Hardhat)
+# - launchpad: the Uniswap v4 launchpad and meme vault (Foundry)
+# - tgpad: the Telegram launchpad bot
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Contracts + front end (Hardhat)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - name: Install
+        working-directory: contracts
+        run: npm ci
+      - name: Test
+        working-directory: contracts
+        run: npx hardhat test
+
+  launchpad:
+    name: Launchpad (Foundry)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.5.1
+      - name: Build
+        working-directory: launchpad
+        run: forge build
+      - name: Test
+        working-directory: launchpad
+        run: forge test
+
+  tgpad:
+    name: Telegram bot (tgpad)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tgpad/package-lock.json
+      - name: Install
+        working-directory: tgpad
+        run: npm ci
+      - name: Test
+        working-directory: tgpad
+        run: npm test

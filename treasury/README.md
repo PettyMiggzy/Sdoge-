@@ -1,6 +1,21 @@
 # $SDOGE Staking Keeper
 
-**Status: not the current plan, kept as reference infrastructure.**
+**Status: disabled (no schedule), kept only as reference.** The audit found it can't work as
+configured and must not be re-enabled as is:
+- The configured tax wallet is a contract (a fee-splitter clone), so no private key exists
+  for it.
+- Run 1 would treat the wallet's whole existing balance as new revenue.
+- State lives in a git-committed file, so a failed push re-sends on the next run.
+- The notifier key sits in CI next to npm-installed code and a write token.
+
+Staking is funded by the team's Safe from NFT profits instead:
+- Studio.withdraw() and marketplace fees go to the staking contract's `contributeUSDC`.
+- The owner (or notifyUnallocated) streams that USDC out.
+
+If automation comes back, use a dedicated funding wallet with explicit amounts, idempotent
+runs keyed on chain state, SHA-pinned actions, and `persist-credentials: false`.
+
+**Earlier status note: not the current plan, kept as reference infrastructure.**
 Staking's primary funding source is now the contract's own early-withdrawal
 penalty (self-funded by stakers, zero tax/Treasury involvement) — see
 `../contracts/README.md`. The tax-revenue split this script implements

@@ -1,21 +1,39 @@
-# $SDOGE Staking
+# $SDOGE contracts (Hardhat)
 
-This directory also holds three other contracts, documented in
-`../nft/README.md` rather than here: `SDOGECollectibles.sol` (the curated
-NFT collection), `SDOGECommunityMint.sol` (permissionless user-upload NFTs,
-burn $SDOGE to mint), and `SDOGENFTMarketplace.sol` (peer-to-peer resale for
-both of those, with a fee that routes into this contract's own
-`contributeUSDC()` - see "How a penalty becomes a reward" below and
-`../nft/README.md`'s marketplace section). Everything else below is about
-staking specifically.
+Everything here targets Arc mainnet (chain 5042), where the native currency is USDC with
+18 decimals. The same balance also shows up as a 6-decimal ERC-20 at `0x3600…0000`. Nothing
+is deployed yet.
 
-Stake $SDOGE into one of 5 fixed lock tiers, earn native USDC. Longer
-locks earn faster, not just longer. The primary funding source costs the
-project and Treasury nothing: an **early-withdrawal penalty** where
-leaving before your tier matures forfeits your principal penalty AND all
-of that stake's accrued reward - impatient stakers fund patient ones.
+| Contract | What it does |
+|---|---|
+| `SDOGEStaking.sol` | Stake $SDOGE in 5 lock tiers and earn native USDC. |
+| `SDOGECollectibles.sol` | The 12 named Doge designs (ERC-1155), sold for USDC. See `../nft/README.md`. |
+| `SDOGEStudio.sol` + `SDOGEStudioCollection.sol` | Mint your own NFTs. Credits come in packages (1 mint = 5 USDC, 1,000 = 100 USDC). Buyers use them for Community Art 1-of-1s, or for their own collections with drops and royalties. See `../nft/README.md`. |
+| `SDOGENFTMarketplace.sol` | Escrowed resale of all of the above. The fee goes to staking and royalties go to creators. |
 
-| Tier | Lock | Reward multiplier |
+Every contract uses two-step ownership, can't be renounced, and is meant to be owned by the
+team's Safe. The deploy scripts refuse a plain wallet as owner.
+
+## Where the money goes
+
+```
+Studio credit sales (USDC) ──withdraw()──> poolShareBps ──> staking.contributeUSDC()
+                                            └─ the rest ──> treasury
+Marketplace fee (2%) ──────────────────────> staking.contributeUSDC()  (feeRecipient until set)
+Creator royalty (≤10%) ─────────────────────> the collection's royalty receiver
+Collectibles mint revenue ──withdraw()─────> treasury
+Studio SDOGE payments ──────────────────────> burned (0x…dEaD)
+Staking early-exit penalties (SDOGE) ──sweepTokens()──> tokenSink (treasury)
+```
+
+`contributeUSDC()` adds to staking's `unallocatedUsdc`. The owner (or the notifier) turns it
+into a reward period with `notifyRewardAmount()`. Once a period has been over for 7 days,
+anyone can do the same with `notifyUnallocated()`, so rewards never depend on the owner being
+around.
+
+## SDOGEStaking
+
+| Tier | Lock | Multiplier |
 |---|---|---|
 | 0 | 7 days | 1.0x |
 | 1 | 30 days | 1.2x |
@@ -23,227 +41,98 @@ of that stake's accrued reward - impatient stakers fund patient ones.
 | 3 | 180 days | 2.0x |
 | 4 | 365 days | 3.0x |
 
-Both columns are owner-tunable (`setTierDuration`, `setTierMultiplier`)
-without affecting stakes already open - proposed starting numbers, not
-fixed forever.
+- **Each stake is its own position**, and its terms are fixed when it opens: lock length,
+  multiplier, penalty rate, and the time it matures. Admin changes only apply to new stakes.
+- **Terms are checked when you stake.** `stake(tier, amount, expectedDuration,
+  expectedMultiplierBps)` reverts if the tier changed in the meantime.
+- **Maturity is at 80% of the lock** by default, so a 30-day stake is penalty-free after
+  24 days. From then on you can exit, or claim rewards and keep the stake running. A stake keeps
+  earning at its multiplier after it matures, for as long as it stays open.
+- **Leaving early** costs 15% of the principal you take out (capped at 30%) and forfeits
+  all of that stake's unclaimed reward. Your other stakes are unaffected.
+  - `exitStake(id, false)` reverts instead of exiting early, so an early exit always has to be
+    asked for.
+  - The forfeited USDC goes back into the pool. The SDOGE penalty is swept to `tokenSink`.
+- **Rewards are native USDC.**
+  - If a payout fails (a contract wallet or blocklisted address), it waits in
+    `deferredRewards` for `claimDeferredRewards(to)`. It never blocks principal.
+  - The contract tracks every USDC it owes (`rewardsOutstanding + unallocatedUsdc`) and never
+    schedules more than it holds.
+  - Rewards that stream while nobody is staked return to the pool.
+  - USDC or SDOGE forced in outside the normal paths is picked up by `absorbSurplus()`.
+- **`withdraw(id, amount, recipients, splitAmounts)`** pays principal to 1-4 wallets.
+  `splitAmounts` must add up to the exact payout, which also guards against an unexpected
+  early exit.
+- **Roles.**
+  - The owner (the Safe) has every admin setting.
+  - The optional `notifier` can only call `notifyRewardAmount()` and `sweepTokens()`.
+  - `sweepTokens()` can only send to `tokenSink`, which the owner sets.
+  - `recoverERC20` can never touch SDOGE or the `0x3600` USDC view.
 
-## The early-withdrawal penalty - read this before deploying
-
-Withdraw from a stake before its tier matures and two things happen at
-once:
-
-1. `earlyWithdrawPenaltyBps` (default 15%, capped at 30%) of the principal
-   you're withdrawing is kept instead of paid out.
-2. **All** of that stake's currently-accrued, unclaimed reward is
-   forfeited - not a pro-rated slice of it. Touching a locked stake at all
-   forfeits its reward; a partial early withdrawal can't be used to
-   cherry-pick around that.
-
-This was specified exactly this way, not derived by us - worth flagging
-plainly rather than softening quietly: combining full reward forfeiture
-with a principal penalty is harsher than most staking contracts do either
-individually. That's a deliberate deterrent for a reason (it's what makes
-the whole reward pool self-funded, with no tax revenue or Treasury money
-involved), softened by the 80% threshold below rather than removed. Both
-knobs (`earlyWithdrawPenaltyBps` via `setEarlyWithdrawPenalty`, and the
-tier durations themselves) stay tunable later if real usage says this is
-still too harsh - nothing here locks the numbers in permanently.
-
-### The 80% early-unlock threshold
-
-Reaching `earlyUnlockThresholdBps` (default 80%) of a stake's committed
-lock counts as fully unlocked - no principal penalty, no reward
-forfeiture - even though the "advertised" lock length hasn't technically
-finished. A 30-day stake is penalty-free after 24 days, not 30. This
-rewards the commitment itself rather than demanding a staker sit out the
-last, least-informative slice of a long lock to avoid losing months of
-accrued reward over a few final days. `effectiveUnlockTime(stakeId)` is
-the exact timestamp this resolves to for a given stake; `withdraw()`,
-`exitStake()`, and `claimReward()` all check against it instead of the
-stake's full `unlockTime`. Owner-tunable via `setEarlyUnlockThreshold`,
-bounded to (0%, 100%].
-
-Forfeited principal and forfeited reward both stay in the contract
-(`unallocatedTokens` and `unallocatedUsdc` respectively) to fund
-everyone else's rewards - see "How a penalty becomes a reward" below.
-
-## Why not tax revenue or Treasury yield
-
-Two other funding paths were considered and set aside - worth recording
-why, so this doesn't get re-litigated from scratch later:
-
-- **A slice of the existing 1% trade tax** (e.g. Treasury 50% / Buyback
-  30% / Staking 20%) was built and then reverted. It technically works,
-  but it's still the project's money - just moved from one bucket to
-  another - not the "don't use our own money" outcome that was actually
-  asked for.
-- **Treasury yield** (depositing tax-USDC into Aave or Morpho on Arc) was
-  checked directly against live data the week Arc launched (mainnet went
-  live 2026-09-16): Aave's Arc market held ~$76-125M in supplied USDC with
-  **0.00% supply APY** because almost nothing was being borrowed yet, and
-  Morpho's Arc-native Steakhouse Prime USDC vault (allocating into
-  cirBTC-collateralized borrowing) showed **0.00% net APY** with well under
-  $100k deposited. Circle's USYC was also checked and ruled out separately:
-  $100k minimum investment, non-U.S.-persons only, institutional KYC/
-  allow-listing required - not realistically usable here. In short: on a
-  one-week-old chain, these markets haven't bootstrapped real borrowing
-  demand yet, so "real yield" would currently mean real numbers close to
-  zero. Worth rechecking as Arc matures, but it isn't funding anything
-  today.
-
-## Why native USDC, not an ERC-20 reward
-
-Arc's native currency **is** USDC (like ETH on mainnet) - not an ERC-20.
-That's the one detail that shapes everything here: $SDOGE (the staked
-asset) is a normal ERC-20, but rewards are paid as native value
-(`payable` / `call{value:}`), not `IERC20.transfer()`. Mixing those up is
-the easiest way to ship a staking contract that silently can't pay out.
-
-## How the reward math works
-
-One global accumulator tracks reward per **weighted share**
-(`amount * tierMultiplierBps / 10000`) instead of per raw token - the
-standard Synthetix `StakingRewards` shape (per-second `rewardRate`, an
-accumulator, O(1) per action regardless of staker count), extended so a
-higher-tier token counts for more without needing a separate pool per
-tier. A 365-day stake earns 3x faster, per token, than a 7-day stake -
-not just for 52x longer.
-
-Each stake is tracked as its own numbered position (`stakeId`), not
-merged into one balance per user - a user can hold several simultaneous
-stakes, even multiple in the same tier started at different times, each
-with its own unlock time and reward checkpoint.
-
-## How a penalty becomes a reward
-
-1. Forfeited principal accumulates in `unallocatedTokens` (SDOGE),
-   forfeited reward in `unallocatedUsdc` (native USDC) - both bounded so
-   neither can ever reach into a staker's actual principal or another
-   stake's legitimate reward (covered by an accounting-invariant test).
-2. Anyone can also add to either pool directly: `contributeUSDC()`
-   (payable) or `contributeTokens(amount)` - permissionless by design, so
-   the community (or the project) can top up rewards without needing
-   owner access. These are intentionally **not** wired into
-   `notifyRewardAmount()`'s own access control - letting anyone reset the
-   reward rate/period on demand would let a griefer manipulate payout
-   timing by spamming tiny contributions. This is also the real funding
-   path for "NFT profits fund the USDC side of staking": once
-   `SDOGENFTMarketplace.setRewardsPool()` points at this contract's
-   address, every resale's fee lands here via `contributeUSDC()`
-   automatically - no manual step, no swap needed (unlike the SDOGE-side
-   sweep in step 3, marketplace fees are already native USDC).
-3. `sweepTokens(address to)` (owner or notifier) moves accumulated
-   `unallocatedTokens` out to be swapped for USDC - manual for now, same
-   reasoning as before: volume will be small and unpredictable at first,
-   not worth automating before there's a sense of how often it's worth
-   running.
-4. `notifyRewardAmount()` automatically folds in `unallocatedUsdc`
-   alongside whatever new `msg.value` is sent - forfeited rewards don't
-   need a separate step to become future rewards.
-
-## Withdrawing into up to 4 wallets
-
-`withdraw(stakeId, amount, recipients, splitAmounts)` pays the SDOGE
-principal (net of any early-withdrawal penalty) split across 1-4
-recipient addresses in caller-chosen proportions (`splitAmounts` must sum
-exactly to the actual payout, so the caller needs to know that payout in
-advance). Any accrued native-USDC reward on that stake is always paid to
-`msg.sender` directly, never split - only the fungible SDOGE principal
-supports multi-wallet payout.
-
-`exitStake(stakeId)` is the single-wallet convenience version: full exit
-to `msg.sender`, same penalty/forfeiture rules, no need to pre-compute the
-payout yourself.
-
-`claimReward(stakeId)` collects a **matured** stake's reward without
-touching principal, so a staker can keep compounding past maturity and
-collect periodically. It reverts on a still-locked stake, on purpose -
-see the penalty section above for why reward stays "at risk" until
-maturity or a deliberate early exit.
-
-## NFT staking - not built yet
-
-The original vision includes staking an NFT alongside $SDOGE for a
-reward boost, funded partly by NFT sale proceeds. None of that is in this
-contract: the collection itself doesn't exist yet (no art, no ERC-721,
-no defined boost mechanic), and guessing at that design now would very
-likely mean rebuilding it once the collection is actually designed. What
-*is* true: this contract's shape (a weighted-share accumulator, per-stake
-positions) doesn't block adding a second reward stream or a boost
-multiplier later - it just isn't attempted here. See `../nft/README.md`
-for the current state of that idea.
-
-### The `notifier` role
-
-`notifyRewardAmount()` and `sweepTokens()` are things you'd want to call
-routinely, ideally without needing the same key that controls
-`setRewardsDuration`, `setEarlyWithdrawPenalty`, `setTierMultiplier`,
-`setTierDuration`, `recoverERC20`, and reassigning ownership itself -
-that key should stay a cold multisig.
-
-So there are two separate keys:
-
-- **`owner`** - the Treasury/multisig. Full admin control. Set once at
-  deploy time via `STAKING_OWNER_ADDRESS`, changeable later via
-  OpenZeppelin `Ownable`'s normal `transferOwnership`.
-- **`notifier`** - set by the owner via `setNotifier(address)`, allowed to
-  call `notifyRewardAmount()` and `sweepTokens()` and nothing else.
-  Defaults to `address(0)` (disabled) until the owner explicitly sets it.
-
-If the notifier key ever leaks, the worst it can do is call
-`notifyRewardAmount()` (spend whatever native value is sent alongside the
-call - the attacker's own funds, not stakers'), sweep already-forfeited/
-donated tokens to an address of its choosing, or grief future reward
-rates by calling `notifyRewardAmount()` with a tiny amount. It cannot
-reassign itself as owner, touch `recoverERC20`, or change any tier/
-penalty/duration setting.
-
-## What this is not (yet)
-
-- **Not deployed.** No `STAKING_CONTRACT_ADDRESS` exists yet. The site's
-  Roadmap section reflects this ("Phase 2: Treasury Online").
-- **Not audited.** This has solid test coverage (per-tier accrual math,
-  the early-withdrawal penalty and its reward-forfeiture, multi-wallet
-  withdrawal, permissionless contributions, the accounting invariant that
-  a sweep can never reach stakers' principal, a live reentrancy-attack
-  test, access control including the notifier role) but test coverage and
-  an audit are different things - especially given how much bigger this
-  contract is than a plain single-pool staking contract. Get a real audit
-  - or at minimum multiple independent experienced eyes - before real
-  value flows through this on mainnet.
-- **Penalty sweep-and-swap is manual for now.** See "How a penalty becomes
-  a reward" above.
-- **NFT staking isn't built.** See that section above.
-- **Owner is a real privilege.** Deploy with a multisig as the owner, not
-  a single EOA - the deploy script refuses to run without an explicit
-  `STAKING_OWNER_ADDRESS` for exactly this reason.
+The pool is not self-funding. Without treasury, Studio or marketplace USDC, rewards are close to
+zero. Say so wherever staking is promoted.
 
 ## Development
 
 ```bash
 npm install
-npx hardhat test        # 102 tests total: 42 staking (tiers, penalty + forfeiture, the 80% threshold,
-                         # multi-wallet withdrawal, exitStake, contributions, admin, notifier, reentrancy)
-                         # + 21 collectibles (design creation, minting, supply caps, admin, ERC-1155 behavior)
-                         # + 12 community mint (burn-to-mint, tuning, reentrancy)
-                         # + 27 marketplace (ERC-721 + ERC-1155 listings, partial fills, fee routing
-                         #   into this contract's contributeUSDC(), stale listings, reentrancy)
-npx hardhat compile
+npx hardhat test   # 172 tests:
+                   #  41 staking         (tiers, terms guard, penalty + forfeiture, maturity,
+                   #                      splits, deferred payouts, exact USDC accounting fuzz)
+                   #  19 collectibles    (closed-by-default designs, expected ids, reserve,
+                   #                      supply lock, metadata freeze, airdrop skip)
+                   #  28 studio          (packages, USDC + SDOGE-burn credits, Community Art,
+                   #                      collection factory, revenue split)
+                   #  20 studio collection (batch/URI/airdrop mints, drops, cap, royalties)
+                   #  31 marketplace     (escrow, Studio collections, royalties, fees, pause)
+                   #  10 deploy scripts  (run for real on the local chain with a mock Safe)
+                   #  23 front end       (the site's real assets/js files against these contracts)
 ```
 
-## Deployment
+`test/helpers/fe-harness.js` loads the site's scripts the way a browser page does, with an
+injected wallet wired to Hardhat's chain. The front-end tests exercise the same code visitors
+run.
+
+## Deployment runbook
+
+Every script refuses to run on anything but chain 5042, and requires the owner to be a Safe on
+Arc with at least 2 signers (`ALLOW_EOA_OWNER=1` / `ALLOW_LOW_THRESHOLD=1` override). Every
+address goes into `deployments/arc.json`. Owner-only follow-ups are never sent by the
+deployer; they're written as Safe Transaction Builder batches in `deployments/`.
 
 ```bash
-STAKING_OWNER_ADDRESS=0x... ARC_RPC_URL=https://rpc.mainnet.arc.io \
-DEPLOYER_PRIVATE_KEY=0x... \
-npx hardhat run scripts/deploy.js --network arc
+export ARC_RPC_URL=https://rpc.mainnet.arc.io DEPLOYER_PRIVATE_KEY=0x...   # gas only, owns nothing
+SAFE=0x...        # the team's Safe on Arc
+TREASURY=0x...    # where USDC revenue goes (can be the Safe)
+
+# 1. Staking
+STAKING_OWNER_ADDRESS=$SAFE npx hardhat run scripts/deploy-staking.js --network arc
+
+# 2. The 12 designs. Pin the art and metadata first: the script fetches all 12 files from the
+#    base URI and checks them against nft/designs.json.
+COLLECTIBLES_OWNER_ADDRESS=$SAFE TREASURY_ADDRESS=$TREASURY COLLECTIBLES_BASE_URI=ipfs://<CID>/ \
+  npx hardhat run scripts/deploy-collectibles.js --network arc
+npx hardhat run scripts/setup-designs.js --network arc          # batch: createDesign x12 (closed)
+#    ...execute that batch in the Safe, then re-run: it checks every design against the manifest
+OPEN=1 npx hardhat run scripts/setup-designs.js --network arc   # batch: open them for sale
+
+# 3. SDOGE Studio (packages from nft/studio.json); writes the batch that routes poolShareBps
+#    of revenue to staking
+STUDIO_OWNER_ADDRESS=$SAFE TREASURY_ADDRESS=$TREASURY npx hardhat run scripts/deploy-studio.js --network arc
+
+# 4. Marketplace (bound to the Studio and the Collectibles); writes the batch that sends fees to staking
+MARKETPLACE_OWNER_ADDRESS=$SAFE FEE_RECIPIENT_ADDRESS=$TREASURY \
+  npx hardhat run scripts/deploy-marketplace.js --network arc
+
+# 5. Execute the *.safe.json batches in the Safe, then point the site at the contracts
+node scripts/sync-frontend.js     # writes the addresses into assets/js/arc.js (SDOGE_CONTRACTS)
+
+# 6. Verify the source on explorer.arc.io (Blockscout)
+npx hardhat verify --network arc <address> <constructor args...>
 ```
 
-`STAKING_OWNER_ADDRESS` should be the Treasury/multisig, never a throwaway
-key - see "What this is not" above.
-
-After deploying, the owner still needs to call `setNotifier(address)` once
-(from the multisig) before anything but the owner itself can call
-`notifyRewardAmount()` or `sweepTokens()` - `deploy.js` does this for you
-if `STAKING_NOTIFIER_ADDRESS` is set, or it can be done later as a
-separate transaction.
+Before launch:
+- Replace the `ipfs://REPLACE_ME` images in `nft/metadata`.
+- Settle the design prices in `nft/designs.json` (placeholders today).
+- Check the packages and `poolShareBps` in `nft/studio.json`.
+- Get an independent audit before real money flows through these contracts.

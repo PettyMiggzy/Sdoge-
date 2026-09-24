@@ -1,20 +1,21 @@
 // $SDOGE Staking UI.
 //
 // Two modes, automatically:
-// - STAKING_CONTRACT_ADDRESS unset (today): the tier picker shows the contract's documented
+// - SDOGE_CONTRACTS.staking unset (today): the tier picker shows the contract's documented
 //   defaults so the page is browsable, and wallet actions are disabled ("not live yet").
-// - STAKING_CONTRACT_ADDRESS set (after deploy): everything reads the live contract on Arc and
-//   every action writes to it.
+// - Set (after deploy, by contracts/scripts/sync-frontend.js): everything reads the live
+//   contract on Arc and every action writes to it.
 //
 // Safety rules this file follows (from the audit):
-// - Reads go to Arc's RPC (arc.js); every write first checks the wallet is on Arc.
+// - Reads go to Arc's RPC (arc.js); every write first checks the wallet is on Arc and is pinned
+//   to chain 5042.
 // - Lock status uses chain time, never the browser clock.
 // - Tier terms are re-read right before staking and passed to stake(), which refuses to open a
 //   stake on terms that changed in the meantime.
 // - Leaving early always shows the exact penalty and forfeited reward and needs a confirm.
 // - Approvals are for the exact amount being staked.
-const STAKING_CONTRACT_ADDRESS = ''; // e.g. '0x...'
-const SDOGE_TOKEN_ADDRESS = '0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405';
+const STAKING_CONTRACT_ADDRESS = SDOGE_CONTRACTS.staking;
+const SDOGE_TOKEN_ADDRESS = SDOGE_CONTRACTS.token;
 
 const DEFAULT_TIER_DAYS = [7, 30, 90, 180, 365];
 const DEFAULT_TIER_MULT_BPS = [10000, 12000, 15000, 20000, 30000];
@@ -45,7 +46,7 @@ const ERC20_ABI = [
   'function approve(address,uint256) returns (bool)',
 ];
 
-const isDeployed = () => STAKING_CONTRACT_ADDRESS && STAKING_CONTRACT_ADDRESS.length === 42;
+const isDeployed = () => isAddressSet(STAKING_CONTRACT_ADDRESS);
 
 let provider, signer, userAddress;
 let stakingWrite, sdogeWrite;
@@ -147,11 +148,18 @@ async function connectWallet() {
     alert('No wallet found. Install MetaMask or another injected wallet to continue.');
     return false;
   }
-  if (!(await ensureArcNetwork())) return false;
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  signer = await provider.getSigner();
-  userAddress = await signer.getAddress();
+  try {
+    if (!(await ensureArcNetwork())) return false;
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send('eth_requestAccounts', []);
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+  } catch (err) {
+    console.error(err);
+    if (!userRejected(err)) alert(`Could not connect: ${reason(err)}`);
+    return false;
+  }
+  arcTrackSigner(userAddress);
 
   sdogeWrite = new ethers.Contract(SDOGE_TOKEN_ADDRESS, ERC20_ABI, signer);
   if (isDeployed()) stakingWrite = new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, signer);
@@ -265,14 +273,14 @@ async function doStake() {
       return alert('This tier\'s terms just changed. Check the new lock length and multiplier, then stake again.');
     }
     const allowance = await sdogeRead.allowance(userAddress, STAKING_CONTRACT_ADDRESS);
-    if (allowance < amountWei) await (await sdogeWrite.approve(STAKING_CONTRACT_ADDRESS, amountWei)).wait();
-    await (await stakingWrite.stake(selectedTier, amountWei, live.duration, live.multiplierBps)).wait();
+    if (allowance < amountWei) await (await sdogeWrite.approve(STAKING_CONTRACT_ADDRESS, amountWei, arcTx())).wait();
+    await (await stakingWrite.stake(selectedTier, amountWei, live.duration, live.multiplierBps, arcTx())).wait();
     document.getElementById('stakeAmount').value = '';
     await refreshBalance();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert(`Stake failed: ${reason(err)}`);
+    if (!userRejected(err)) alert(`Stake failed: ${reason(err)}`);
   }
 }
 
@@ -281,7 +289,7 @@ async function exitStake(stakeId) {
   try {
     const p = await stakingRead.previewExit(stakeId);
     if (!p.early) {
-      await (await stakingWrite.exitStake(stakeId, false)).wait();
+      await (await stakingWrite.exitStake(stakeId, false, arcTx())).wait();
     } else {
       const ok = confirm(
         `This stake hasn't matured yet.\n\n` +
@@ -289,35 +297,35 @@ async function exitStake(stakeId) {
           `You would get back ${sdogeAmt(p.payout)}.\n\nExit early anyway?`
       );
       if (!ok) return;
-      await (await stakingWrite.exitStake(stakeId, true)).wait();
+      await (await stakingWrite.exitStake(stakeId, true, arcTx())).wait();
     }
     await refreshBalance();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert(`Exit failed: ${reason(err)}`);
+    if (!userRejected(err)) alert(`Exit failed: ${reason(err)}`);
   }
 }
 
 async function claimOne(stakeId) {
   if (!(await ready())) return;
   try {
-    await (await stakingWrite.claimReward(stakeId)).wait();
+    await (await stakingWrite.claimReward(stakeId, arcTx())).wait();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert(`Claim failed: ${reason(err)}`);
+    if (!userRejected(err)) alert(`Claim failed: ${reason(err)}`);
   }
 }
 
 async function collectDeferred() {
   if (!(await ready())) return;
   try {
-    await (await stakingWrite.claimDeferredRewards(userAddress)).wait();
+    await (await stakingWrite.claimDeferredRewards(userAddress, arcTx())).wait();
     await refreshOverview();
   } catch (err) {
     console.error(err);
-    alert(`Collect failed: ${reason(err)}`);
+    if (!userRejected(err)) alert(`Collect failed: ${reason(err)}`);
   }
 }
 
@@ -330,9 +338,10 @@ async function claimAll() {
   const failed = [];
   for (const r of rows) {
     try {
-      await (await stakingWrite.claimReward(r.id)).wait();
+      await (await stakingWrite.claimReward(r.id, arcTx())).wait();
     } catch (err) {
       console.error(err);
+      if (userRejected(err)) break; // the user cancelled: stop asking for the rest
       failed.push(`#${r.id}: ${reason(err)}`);
     }
   }

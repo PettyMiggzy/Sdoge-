@@ -1,0 +1,125 @@
+{
+  "_comment": "The 12 SDOGECollectibles designs, in creation order (design id = position). Prices and supplies are the placeholders from nft/README.md 'Open questions' until the team decides. scripts/setup-designs.js turns this into the createDesign batch; assets/js/nft.js ROSTER must match it (checked by the front-end tests).",
+  "designs": [
+    {
+      "id": 1,
+      "name": "SWAT Doge",
+      "file": "nft/reference/swat-doge.jpg",
+      "video": "nft/reference/animated/swat-doge.mp4",
+      "tier": "epic",
+      "priceUsdc": "40",
+      "maxSupply": 300,
+      "reserved": 0
+    },
+    {
+      "id": 2,
+      "name": "Space Doge",
+      "file": "nft/reference/astronaut-doge.jpg",
+      "video": "nft/reference/animated/astronaut-doge.mp4",
+      "tier": "legendary",
+      "priceUsdc": "50",
+      "maxSupply": 200,
+      "reserved": 0
+    },
+    {
+      "id": 3,
+      "name": "Bucket Hat Doge",
+      "file": "nft/reference/bucket-hat-doge.jpg",
+      "video": "nft/reference/animated/bucket-hat-doge.mp4",
+      "tier": "rare",
+      "priceUsdc": "30",
+      "maxSupply": 400,
+      "reserved": 0
+    },
+    {
+      "id": 4,
+      "name": "Rich Doge",
+      "file": "nft/reference/rich-doge.jpg",
+      "video": "nft/reference/animated/rich-doge.mp4",
+      "tier": "epic",
+      "priceUsdc": "40",
+      "maxSupply": 300,
+      "reserved": 0
+    },
+    {
+      "id": 5,
+      "name": "Hoodie Doge",
+      "file": "nft/reference/hoodie-doge.jpg",
+      "video": "nft/reference/animated/hoodie-doge.mp4",
+      "tier": "rare",
+      "priceUsdc": "30",
+      "maxSupply": 400,
+      "reserved": 0
+    },
+    {
+      "id": 6,
+      "name": "Cap Doge",
+      "file": "nft/reference/cap-doge.jpg",
+      "video": "nft/reference/animated/cap-doge.mp4",
+      "tier": "og",
+      "priceUsdc": "20",
+      "maxSupply": 500,
+      "reserved": 0
+    },
+    {
+      "id": 7,
+      "name": "Blazed Doge",
+      "file": "nft/reference/blazed-doge.jpg",
+      "video": "nft/reference/animated/blazed-doge.mp4",
+      "tier": "og",
+      "priceUsdc": "20",
+      "maxSupply": 500,
+      "reserved": 0
+    },
+    {
+      "id": 8,
+      "name": "Degen Doge",
+      "file": "nft/reference/degen-doge.jpg",
+      "video": "nft/reference/animated/degen-doge.mp4",
+      "tier": "rare",
+      "priceUsdc": "30",
+      "maxSupply": 400,
+      "reserved": 0
+    },
+    {
+      "id": 9,
+      "name": "Samurai Doge",
+      "file": "nft/reference/samurai-doge.png",
+      "video": null,
+      "tier": "epic",
+      "priceUsdc": "40",
+      "maxSupply": 300,
+      "reserved": 0
+    },
+    {
+      "id": 10,
+      "name": "Viking Doge",
+      "file": "nft/reference/viking-doge.png",
+      "video": null,
+      "tier": "legendary",
+      "priceUsdc": "50",
+      "maxSupply": 200,
+      "reserved": 0
+    },
+    {
+      "id": 11,
+      "name": "Cyberpunk Doge",
+      "file": "nft/reference/cyberpunk-doge.png",
+      "video": null,
+      "tier": "epic",
+      "priceUsdc": "40",
+      "maxSupply": 300,
+      "reserved": 0
+    },
+    {
+      "id": 12,
+      "name": "Champion Doge",
+      "file": "nft/reference/champion-doge.png",
+      "video": null,
+      "tier": "legendary",
+      "priceUsdc": "50",
+      "maxSupply": 200,
+      "reserved": 0
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 name: SDOGE Staking Keeper
 
+# DISABLED: no schedule. This keeper was built for a tax-wallet funding plan that isn't used
+# (the tax wallet is a contract with no private key, and the audit found the git-committed
+# state can double-send). Staking is funded by the Safe from NFT profits; see
+# contracts/README.md. Kept only as reference; don't re-enable it without the fixes listed in
+# treasury/README.md.
 on:
-  schedule:
-    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

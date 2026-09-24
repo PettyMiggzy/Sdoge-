@@ -21,4 +21,17 @@ module.exports = {
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
     },
   },
+  // Source verification on Arc's explorer (Blockscout, which needs no real API key):
+  //   npx hardhat verify --network arc <address> <constructor args...>
+  etherscan: {
+    apiKey: { arc: "blockscout" },
+    customChains: [
+      {
+        network: "arc",
+        chainId: 5042,
+        urls: { apiURL: "https://explorer.arc.io/api", browserURL: "https://explorer.arc.io" },
+      },
+    ],
+  },
+  sourcify: { enabled: false },
 };

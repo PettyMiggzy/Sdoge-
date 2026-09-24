@@ -15,3 +15,7 @@ nft/assets/
 
 # tgpad runtime state: Telegram user ids, bans, launch records (no keys, but not public)
 tgpad/data/
+
+# Local deploy rehearsals (the real record is deployments/arc.json)
+contracts/deployments/hardhat*
+contracts/deployments/localhost*

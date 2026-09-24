@@ -32,6 +32,7 @@
       <a href="index.html#tokenomics">Tokenomics</a>
       <a href="staking.html">Staking</a>
       <a href="nft.html" style="color: var(--text-primary);">NFT</a>
+      <a href="studio.html">Studio</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
       <button class="btn btn--primary btn--small js-connect-wallet">Connect Wallet</button>
@@ -91,8 +92,8 @@
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 7H4a1 1 0 0 0-1 1v3a5 5 0 0 0 5 5h1a5 5 0 0 0 5-5V8a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 16v3m-4 2h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
-          <h3>Real Utility</h3>
-          <p>Holders get a staking reward boost once the two contracts are linked.</p>
+          <h3>Feeds Stakers</h3>
+          <p>Marketplace fees and a share of Studio mint sales go to $SDOGE stakers' USDC rewards.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 14l4-4 4 4 8-8M20 6h-4v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -125,14 +126,13 @@
       </div>
 
       <p class="fine-print">
-        Prices and tiers shown are illustrative placeholders (the
-        $20/$30/$40/$50 spread discussed early on), not a final decision —
-        see "Open questions" in <code>nft/README.md</code>. Supply shown
-        as minted/cap rather than a fake "#001" edition number, since
-        every copy of a design is interchangeable on this ERC-1155
-        contract, not a numbered 1-of-1. Not deployed yet — Mint buttons
-        go live the moment a real contract address replaces the
-        placeholder in <code>assets/js/nft.js</code>.
+        Until the contract is live, prices and tiers shown are placeholders
+        (the $20/$30/$40/$50 spread discussed early on), not a final
+        decision. Once it's live, every price, supply and sale state is read
+        straight from the contract, and a design can only be minted when its
+        on-chain name matches the art shown. Supply is shown as minted/cap
+        rather than a fake "#001" edition number, since every copy of a
+        design is interchangeable on this ERC-1155 contract.
       </p>
     </div>
   </section>
@@ -143,11 +143,11 @@
       <div class="eyebrow">Resale</div>
       <h2 class="section__title">Marketplace: list your NFTs for sale.</h2>
       <p class="section__lead">
-        Already minted one? List it here instead of (or alongside) OpenSea
-        &mdash; a 2% fee on every sale feeds straight into $SDOGE stakers'
-        USDC reward pool, so resale volume actually does something for the
-        community instead of just leaving. Non-escrow: you keep your NFT
-        right up until the moment it sells.
+        Buy and sell SDOGE Collectibles, Community Art and creators' own
+        SDOGE Studio collections. A 2% fee on each sale goes to $SDOGE
+        stakers' USDC rewards, and creators get their royalty. Listing moves
+        your NFT into the marketplace contract (escrow) until it sells or
+        you cancel, so every listing you see can really be bought.
       </p>
 
       <div class="app-grid">
@@ -157,8 +157,10 @@
             <span class="panel__title">Active Listings</span>
             <div class="tabs" id="marketFilterTabs">
               <button class="tab is-active" data-market-filter="all">All</button>
-              <button class="tab" data-market-filter="community">Community Art</button>
               <button class="tab" data-market-filter="collectibles">Collectibles</button>
+              <button class="tab" data-market-filter="community">Community Art</button>
+              <button class="tab" data-market-filter="creators">Creators</button>
+              <button class="tab" data-market-filter="mine">Mine</button>
             </div>
           </div>
           <div class="stakes-list" id="marketListings">
@@ -175,7 +177,13 @@
             <select id="marketCollection" class="chip-btn" style="width: 100%; padding: 12px; text-align: left;">
               <option value="community">SDOGE Community Art (ERC-721)</option>
               <option value="collectibles">SDOGE Collectibles (ERC-1155)</option>
+              <option value="creator">A SDOGE Studio collection (ERC-721)</option>
             </select>
+          </div>
+
+          <div class="input-field" id="marketCollectionAddressField" style="display:none;">
+            <div class="input-field__top"><span>Collection address</span></div>
+            <input class="studio-input" id="marketCollectionAddress" placeholder="0x..." />
           </div>
 
           <div class="input-field">
@@ -199,13 +207,35 @@
             </div>
           </div>
 
-          <button class="btn btn--primary btn--wide" id="marketListBtn">Connect Wallet</button>
-          <p class="fine-print" style="margin-top:16px;">
-            Not deployed yet &mdash; this panel is a fully working preview.
-            Approve + List will work for real once
-            <code>MARKETPLACE_CONTRACT_ADDRESS</code> is set in
-            <code>assets/js/marketplace.js</code>.
+          <button class="btn btn--primary btn--wide" id="marketListBtn" disabled>Listing not live yet</button>
+          <p class="fine-print" style="margin-top:16px;" id="marketStatus"></p>
+          <p class="fine-print" style="margin-top:8px;">
+            Listing asks your wallet to let the marketplace move that NFT
+            (for Collectibles it's one approval for the whole collection,
+            since ERC-1155 has no per-token approval), then lists it. The
+            marketplace only ever moves an NFT when its owner lists it.
+            Cancel any time from the Mine tab; it comes straight back.
           </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STUDIO CTA ===== -->
+  <section class="section">
+    <div class="container">
+      <div class="perks-cta">
+        <div>
+          <p class="hero__sticky-note" style="margin: 0 0 8px;">Got art?</p>
+          <h2 class="perks-cta__title">Mint your own.</h2>
+          <p class="section__lead">
+            SDOGE Studio: 1 mint for 5 USDC, or 1,000 mints for 100 USDC.
+            Launch a whole collection with its own contract, drops and
+            royalties.
+          </p>
+          <div class="hero__cta" style="margin-top: 24px;">
+            <a href="studio.html" class="btn btn--primary">Open SDOGE Studio</a>
+          </div>
         </div>
       </div>
     </div>
@@ -262,6 +292,7 @@
       <a href="index.html">Home</a>
       <a href="staking.html">Staking</a>
       <a href="nft.html">NFT</a>
+      <a href="studio.html">Studio</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
       <a href="index.html#faq">FAQ</a>
@@ -290,8 +321,10 @@
   </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
 <script src="assets/js/main.js"></script>
+<script src="assets/js/arc.js"></script>
+<script src="assets/js/wallet.js"></script>
 <script src="assets/js/nft.js"></script>
 <script src="assets/js/marketplace.js"></script>
 </body>

@@ -1,99 +1,129 @@
-# $SDOGE NFT Collection
+# $SDOGE NFTs
 
-A small roster of named/themed Doge characters, each with its own limited
-mintable supply, minted with native USDC. Contract and metadata are built;
-all 12 designs now have finished art (the original target was 10 - the
-4 AI-generated additions all turned out well, so all 4 were kept rather
-than trimmed back down). Not deployed yet.
+Three things, all on Arc and all priced in native USDC (18 decimals):
 
-## Contract: `contracts/contracts/SDOGECollectibles.sol`
+1. **The Collection** (`SDOGECollectibles.sol`): 12 named Doge designs, each with its own
+   capped supply.
+2. **SDOGE Studio** (`SDOGEStudio.sol` + `SDOGEStudioCollection.sol`): mint your own NFTs.
+   Individuals mint 1-of-1s; projects launch whole collections.
+3. **The Marketplace** (`SDOGENFTMarketplace.sol`): escrowed resale of all of the above.
+   Its fee goes to $SDOGE stakers and royalties go to creators.
 
-**ERC-1155**, not ERC-721 - each design (SWAT Doge, Space Doge, etc.) is
-one token ID that can be minted many times up to its own cap, not a
-one-of-a-kind piece. This is the right fit for a small named roster;
-ERC-721 would be if every mint were meant to be unique.
+The pages are `nft.html` (collection + marketplace) and `studio.html`. Neither is linked from
+the home page yet. The contracts, deploy runbook and test counts are in
+`../contracts/README.md`.
 
-- `createDesign(name, maxSupply, priceWei)` (owner) - registers a design
-  with a fixed cap. **Supply can only be raised later, never lowered** - a
-  cap that could shrink after the fact isn't a trustworthy cap.
-- `mint(designId, amount)` (payable, anyone) - mints at the design's set
-  price in native USDC (Arc's gas token, same as the staking contract's
-  reward asset).
-- `ownerMint(designId, to, amount)` - free team/giveaway mints, still
-  bounded by the cap.
-- `increaseSupply`, `setPrice`, `setURI`, `withdraw` - owner admin.
-- `uri(id)` resolves to `<baseURI><id>.json` (e.g. `.../metadata/3.json`)
-  - a plain decimal-ID scheme rather than EIP-1155's `{id}` hex-padding
-    convention, simpler for a small hand-curated set like this one.
+## The Collection: SDOGECollectibles
 
-18 tests cover design creation, minting (payment validation, supply caps,
-owner-mint), supply/price management, URI resolution, withdrawals, and
-standard ERC-1155 transfer/interface behavior.
+ERC-1155: each design is one token id that can be minted many times, up to its cap.
 
-**Deploying this required a real toolchain fix**, not just NFT-specific
-code: OpenZeppelin 5.x's `ERC1155` pulls in `Arrays.sol`, which uses the
-`MCOPY` opcode (introduced in the Cancun hardfork) - this simply didn't
-compile against `hardhat.config.js`'s previous implicit "paris" target.
-Fixed by setting `evmVersion: "cancun"` explicitly, after confirming (not
-assuming) that Arc's actual baseline is Osaka - newer than Cancun, and
-Arc's own docs say pinning to paris is an obsolete workaround. This also
-means `SDOGEStaking.sol` has compiled against Cancun since this change,
-though nothing in it needed the newer opcodes.
+- **Setup.**
+  - `createDesign(expectedId, name, maxSupply, priceWei, reserved)` must be called in id order,
+    so a stray or repeated call can't shift the roster.
+  - Every design starts **closed**; `setPublicMint(id, true)` opens it after it's been checked.
+  - `scripts/setup-designs.js` builds both Safe batches from `nft/designs.json` and checks
+    every on-chain design against it before writing the "open" batch.
+- **Minting.**
+  - `mint(id, amount)` takes exactly price x amount. A price-0 design can never be minted
+    publicly, and prices must be at least 0.01 USDC, in whole micro-USDC.
+  - `reserved` copies are for team and giveaway mints (`ownerMint`, `ownerMintBatch`, which
+    skips recipients that can't take the NFT instead of failing). The reserve can only be
+    released to the public, never grown.
+- **Supply and metadata.**
+  - A cap can be raised until `lockSupply(id)`. New designs can be added until
+    `lockCollection()`.
+  - `setURI` emits ERC-4906 so marketplaces refresh; `freezeMetadata()` makes it permanent.
+- **Revenue.** `withdraw()` (anyone can call it) sends revenue to `treasury`.
 
-## User-uploaded NFTs: burn $SDOGE to mint your own
+## SDOGE Studio: mint your own
 
-`contracts/contracts/SDOGECommunityMint.sol` - a second, separate contract
-from the curated collection above. Anyone can mint their *own* 1-of-1
-NFT from art they host themselves, paid for by burning $SDOGE instead of
-USDC:
+**Credits.** One credit mints one NFT. Credits are sold in packages. These are the launch
+defaults in `nft/studio.json`; the owner can add or change packages at any time:
 
-- **ERC-721, not ERC-1155** - every mint is a unique token pointing at a
-  caller-supplied `tokenURI`, not a copy of a shared design.
-- **`mint(uri)` is fully permissionless** - no admin approval step, no
-  automated content filter, no design roster to register against first.
-  This was an explicit choice between three options (open, an owner
-  approval queue, or an automated moderation filter) - **open was chosen
-  deliberately**, not the default by omission. Worth knowing plainly: a
-  smart contract can't inspect what a URI actually points to, so nothing
-  on-chain stops someone from minting something illegal, infringing, or
-  offensive under this collection's name. If that turns out to matter in
-  practice, the fix is upstream of this contract (whatever mints the
-  metadata/uploads it), not a rewrite of `mint()` itself.
-- **Costs `burnAmount` (default 1,000,000) $SDOGE**, owner-tunable via
-  `setBurnAmount` if the token's price moves enough to matter. Sent to
-  the standard dead address (`0x000...dEaD`), not some token-specific
-  burn call - checked the deployed $SDOGE token's actual bytecode first
-  (it's an EIP-1167 minimal-proxy clone; checked the real implementation
-  contract, not the proxy stub) and confirmed it exposes only standard
-  ERC-20 functions, no `burn`/`burnFrom`/`redeem` of any kind. The dead-
-  address transfer is the correct fallback for a token with no native
-  burn - not a guess.
-- Callers need to `approve()` this contract for `burnAmount` first, same
-  pattern as any ERC-20 spend.
+| Package | Mints | USDC | Per mint | Or burn SDOGE |
+|---|---|---|---|---|
+| Single | 1 | 5 | 5.00 | 1,000,000 |
+| Starter | 10 | 20 | 2.00 | - |
+| Creator | 100 | 50 | 0.50 | - |
+| Project | 1,000 | 100 | 0.10 | - |
 
-12 tests cover minting/burning accounting, sequential token IDs across
-different minters, insufficient-allowance/balance reverts, tuning
-`burnAmount` (and that already-minted NFTs aren't affected by a later
-change), and a live reentrancy-attack scenario proving the guard actually
-blocks a reentrant `mint()` from an ERC-721 receive hook, not just
-trusting the modifier untested.
+- **Buying.**
+  - `buyCredits(id, expectedMints, to)` takes exactly the USDC price.
+  - `buyCreditsWithSdoge(id, expectedMints, maxSdoge, to)` burns the SDOGE price to 0x…dEaD.
+  - `expectedMints` and `maxSdoge` mean a package change landing first can't shortchange you.
+  - Credits can be bought for any wallet. They can't be transferred or refunded; they only mint.
+  - The owner can `grantCredits` (giveaways, partner projects).
+- **Revenue.** `withdraw()` (anyone can call it) sends `poolShareBps` of the USDC to the
+  staking reward pool (`contributeUSDC`) and the rest to the treasury. The launch config is 50%.
 
-Deploy with `COMMUNITY_MINT_OWNER_ADDRESS=0x... npx hardhat run
-scripts/deploy-community-mint.js --network arc` - live immediately, no
-setup step needed afterward (unlike the curated collection, there's no
-design to register first).
+**Community Art (individuals).** `mintCommunity(uri)` spends one credit and mints a 1-of-1 into
+the shared SDOGE Community Art collection.
+- This replaces the old SDOGECommunityMint: its 1,000,000 SDOGE burn per mint lives on as the
+  Single package's SDOGE price.
+- Minting is fully open, with no review, filter or takedown.
+- A token's URI is set once and never changes, and nobody (the team included) can move or
+  change it.
+- `studio.html` builds the metadata (name, description, image link) into an on-chain `data:`
+  URI, so creators only have to host the image.
 
-## Deploying and setting up designs
+**Creator collections (projects).** `createCollection(name, symbol, maxSupply, royaltyReceiver,
+royaltyBps, contractURI)` deploys the project's own ERC-721 (a minimal clone), owned by its
+creator. Every token minted costs the owner one credit:
 
-```bash
-COLLECTIBLES_OWNER_ADDRESS=0x... COLLECTIBLES_BASE_URI=https://.../metadata/ \
-ARC_RPC_URL=https://rpc.mainnet.arc.io DEPLOYER_PRIVATE_KEY=0x... \
-npx hardhat run scripts/deploy-collectibles.js --network arc
-```
+- **Owner mints.**
+  - `mintBatch(to, n)`: up to 200 per call, using the base URI.
+  - `mintWithURIs(to, uris)`: up to 100 per call, each token with its own permanent URI.
+  - `airdrop(addresses)`: up to 200 per call.
+  - Owner mints skip the receiver check, so one bad address can't block an airdrop.
+- **Public drop.**
+  - `setDrop(price, perWallet, start, end)`, then `setDropOpen(true)`. It needs a base URI.
+  - Collectors call `publicMint(1-20)` and pay exactly the drop price, which goes to the
+    creator's `payout` via `withdraw()`.
+  - Each mint also uses one of the owner's credits, so a drop pauses when the creator runs out.
+  - The creator keeps 100% of the sale.
+- **Holder protections.**
+  - The supply cap can be set once and then only lowered.
+  - The base URI can change until `freezeMetadata()`.
+  - Royalties are capped at 10% (ERC-2981, paid by the SDOGE marketplace).
+- **Ownership** is two-step. After the new owner accepts, their credits pay for mints.
+- **Verified badge.** The owner can mark real projects Verified (`setVerified`). The site labels
+  everything else "unverified creator collection" and escapes the names, since anyone can create
+  a collection called anything.
 
-Then, once deployed, the owner calls `createDesign()` once per finished
-design (see `nft/metadata/` below for all 12) - nothing is mintable
-until that's done.
+Gas on Arc: creating a collection costs about 450k gas, `mintBatch(200)` about 5.1M,
+`mintWithURIs(100)` about 13.6M (of a 30M block) and `publicMint(20)` about 0.6M.
+
+## The Marketplace
+
+- **Escrow.** Listing moves the NFT into the marketplace, cancelling moves it back, and buying
+  moves it to the buyer. A listing can never go stale, be duplicated, or promise copies the
+  seller no longer has.
+- **Accepted collections.**
+  - ERC-1155: only SDOGECollectibles.
+  - ERC-721: only collections the Studio's registry says it created (Community Art and every
+    creator collection).
+  - All of those are clones of one contract, so a listed NFT always really transfers.
+- **Money.**
+  - The fee is 2% (never more than the rate when listed; capped at 10%) and goes to the staking
+    pool once `setRewardsPool` points there.
+  - The creator royalty is also never more than the rate when listed.
+  - Seller and royalty payments that fail wait in `proceeds` for withdrawal; a sale can't be
+    blocked.
+- **Pause** stops listing and buying; cancelling and withdrawing always work.
+- **The page:**
+  - Shows only SDOGE collections, and every row shows the seller and contract.
+  - Re-reads a listing's price before buying.
+  - Lets sellers cancel or reprice from the Mine tab.
+  - Shows waiting proceeds with a Withdraw button.
+
+## How it connects to staking
+
+- **NFT profits fund the USDC side of staking: built.**
+  - Marketplace fees and the Studio's `poolShareBps` go straight to `SDOGEStaking.contributeUSDC()`.
+  - Collectibles revenue goes to the treasury, and the team can add it with `contributeUSDC()`.
+- **Holding an NFT boosts staking rewards: not built,** and no longer claimed on the site. If
+  it's ever built, it should only count NFTs escrowed in the staking contract, not a
+  `balanceOf` snapshot, which one NFT passed between wallets could game.
 
 ## Reference art and metadata
 
@@ -166,75 +196,11 @@ detail), a Circle USDC "($)" logo worked into the outfit as a
 patch/badge/print. Alternates between the orange/tan shiba base and the
 grey/silver husky base.
 
-## Resale: `SDOGENFTMarketplace.sol`
-
-A third contract, separate from both mint paths above: peer-to-peer resale
-for whatever's already been minted, since holders reselling on OpenSea
-doesn't feed anything back into this project. One marketplace handles both
-NFT contracts:
-
-- **`listERC721(nftContract, tokenId, pricePerUnit)`** - list a single
-  `SDOGECommunityMint` token (a unique upload). Always exactly 1 unit,
-  all-or-nothing. Requires `approve(marketplace, tokenId)` first.
-- **`listERC1155(nftContract, tokenId, amount, pricePerUnit)`** - list
-  `amount` copies of an `SDOGECollectibles` design ("list supply for
-  sale" - a holder of 5 copies can list 3 and keep 2). Supports partial
-  fills: a buyer can buy any amount up to what's left, and the listing
-  just shrinks rather than closing. Requires
-  `setApprovalForAll(marketplace, true)` first (ERC-1155 has no per-token
-  approve).
-- **`buy(listingId, amount)`** (payable) - pay exactly
-  `amount * pricePerUnit` native USDC. Non-escrow: the seller keeps
-  custody until the moment of sale, so a listing can go stale if the
-  seller sells/transfers/de-approves elsewhere first - `buy()` simply
-  reverts in that case (the payment reverts with it, so the buyer loses
-  nothing).
-- **`cancelListing`** / **`updatePrice`** - seller-only.
-- A **2% fee** (`feeBps`, owner-tunable up to a 10% cap - same 2% rate as
-  the launchpad hook, for a consistent house cut across every SDOGE
-  trading surface) comes off each sale and routes to `rewardsPool` via its
-  `contributeUSDC()` - see the next section. Falls back to paying the
-  owner directly if `rewardsPool` isn't set.
-
-27 tests cover both listing types, partial ERC-1155 fills, stale listings
-(seller transfers away / revokes approval after listing), fee routing both
-with and without a `rewardsPool` set, admin controls, and a live
-reentrancy-attack test (a malicious seller contract tries to re-enter
-`buy()` on a second listing from the `receive()` hook that pays it out).
-
-Deploy with `MARKETPLACE_OWNER_ADDRESS=0x... [STAKING_REWARDS_POOL_ADDRESS=0x...]
-npx hardhat run scripts/deploy-marketplace.js --network arc` - live
-immediately for both NFT contracts, no setup step needed beyond sellers
-approving it.
-
-## How it connects to staking
-
-Two separate ideas from the original plan, one now built and one not:
-
-- **"NFT sale profits fund the USDC side of staking"** - **built**, via
-  `SDOGENFTMarketplace` above. Point `setRewardsPool()` at
-  `SDOGEStaking`'s address and every resale fee lands in stakers' reward
-  pool automatically through `contributeUSDC()` - no manual step. Primary
-  mint proceeds (`SDOGECollectibles.mint()`'s USDC, `SDOGECommunityMint`'s
-  burned $SDOGE) aren't wired into this automatically - the owner can
-  still route them in by hand (`withdraw()` the USDC and call
-  `contributeUSDC()`, or `contributeTokens()` the $SDOGE side) - see
-  `../contracts/README.md`'s "How a penalty becomes a reward".
-- **Holding an NFT amplifies a staker's reward (a multiplier)** - **not
-  built**. `SDOGEStaking.sol`'s design predates this collection and
-  doesn't reference it yet. A clean integration point would be a boost
-  multiplier in its weighted-share calculation, keyed on
-  `SDOGECollectibles.balanceOf(staker, designId) > 0` - not attempted here
-  since the mechanic (which designs boost, by how much) isn't decided.
-
 ## Open questions
 
-- Mint price per design - `priceWei` defaults to whatever `createDesign`
-  is called with; no numbers decided yet.
-- Whether all 12 designs get the same max supply or different ones per
-  design (e.g. rarer designs capped lower).
-- The NFT-boosts-staking mechanic mentioned above.
-- Where metadata/images actually get hosted (IPFS vs. the site itself).
+- Final mint price and supply per design (`nft/designs.json` holds the $20-$50 placeholders).
+- Where the art and metadata get pinned (IPFS is assumed by the deploy script's checks).
+- The Studio's SDOGE prices beyond the Single package, and the final `poolShareBps`.
 
 ## Bulk-generated assets
 

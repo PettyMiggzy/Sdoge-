@@ -1,26 +1,33 @@
-// $SDOGE NFT collection UI.
+// $SDOGE NFT collection UI: the 12 SDOGECollectibles designs. Needs arc.js and wallet.js.
 //
-// Same two-mode pattern as staking.js: works fully as a browsable preview
-// today (roster/images/prices render, Mint is disabled), and switches to
-// live contract reads/writes the moment a real address is set below.
-const COLLECTIBLES_CONTRACT_ADDRESS = ''; // e.g. '0x...'
+// Two modes, automatically:
+// - SDOGE_CONTRACTS.collectibles unset (today): the roster renders as a preview with the
+//   placeholder prices below, and Mint only explains that it isn't live yet.
+// - Set (after deploy): every card's price, supply and sale state come from the contract on Arc,
+//   and Mint writes to it.
+//
+// Safety rules this file follows (from the audit):
+// - Reads go to Arc's RPC; every write first checks the wallet is on Arc and is pinned to 5042.
+// - A design is only mintable if its on-chain name matches the roster's name for that id, so a
+//   misnumbered deploy can't sell one design's art under another's terms.
+// - Once the contract is live nothing falls back to the placeholders: a failed read shows
+//   "Unavailable" and disables Mint.
+// - The price is re-read right before minting and paid exactly, as a BigInt.
+const COLLECTIBLES_CONTRACT_ADDRESS = SDOGE_CONTRACTS.collectibles;
 
 const COLLECTIBLES_ABI = [
   'function mint(uint256 designId, uint256 amount) payable',
-  'function designs(uint256) view returns (string name, uint256 maxSupply, uint256 minted, uint256 priceWei, bool exists)',
+  'function designs(uint256) view returns (string name, uint256 maxSupply, uint256 minted, uint256 priceWei, uint256 reserved, uint256 ownerMinted, bool exists, bool publicMintOpen, bool supplyLocked)',
 ];
 
-const isDeployed = () => COLLECTIBLES_CONTRACT_ADDRESS && COLLECTIBLES_CONTRACT_ADDRESS.length === 42;
+const collectiblesDeployed = () => isAddressSet(COLLECTIBLES_CONTRACT_ADDRESS);
 
-// designId matches the creation order documented in nft/README.md /
-// nft/metadata/{id}.json. priceUsdc/maxSupply/tier are illustrative
-// placeholders (the $20/$30/$40/$50 spread floated early on) pending a
-// real decision - see "Open questions" in nft/README.md. Once deployed,
-// price and supply are re-read live from designs(id) and these values are
-// only used as the pre-connect display.
+// Must match nft/designs.json (the deploy manifest) and nft/metadata/{id}.json; the front-end
+// tests check both. priceUsdc/maxSupply/tier are the preview placeholders ("Open questions" in
+// nft/README.md); once deployed, price and supply come from the contract.
 const ROSTER = [
   { designId: 1, name: 'SWAT Doge', file: 'nft/reference/swat-doge.jpg', video: 'nft/reference/animated/swat-doge.mp4', tier: 'epic', priceUsdc: 40, maxSupply: 300 },
-  { designId: 2, name: 'Astronaut Doge', file: 'nft/reference/astronaut-doge.jpg', video: 'nft/reference/animated/astronaut-doge.mp4', tier: 'legendary', priceUsdc: 50, maxSupply: 200 },
+  { designId: 2, name: 'Space Doge', file: 'nft/reference/astronaut-doge.jpg', video: 'nft/reference/animated/astronaut-doge.mp4', tier: 'legendary', priceUsdc: 50, maxSupply: 200 },
   { designId: 3, name: 'Bucket Hat Doge', file: 'nft/reference/bucket-hat-doge.jpg', video: 'nft/reference/animated/bucket-hat-doge.mp4', tier: 'rare', priceUsdc: 30, maxSupply: 400 },
   { designId: 4, name: 'Rich Doge', file: 'nft/reference/rich-doge.jpg', video: 'nft/reference/animated/rich-doge.mp4', tier: 'epic', priceUsdc: 40, maxSupply: 300 },
   { designId: 5, name: 'Hoodie Doge', file: 'nft/reference/hoodie-doge.jpg', video: 'nft/reference/animated/hoodie-doge.mp4', tier: 'rare', priceUsdc: 30, maxSupply: 400 },
@@ -33,18 +40,52 @@ const ROSTER = [
   { designId: 12, name: 'Champion Doge', file: 'nft/reference/champion-doge.png', video: null, tier: 'legendary', priceUsdc: 50, maxSupply: 200 },
 ];
 
-let provider, signer, userAddress, collectibles;
-let activeFilter = 'all';
-let liveDesignData = {}; // designId -> { minted, maxSupply, priceUsdc }
+const MINT_LABEL = {
+  preview: 'Preview',
+  loading: 'Loading...',
+  unavailable: 'Unavailable',
+  closed: 'Not open yet',
+  soldout: 'Sold Out',
+  open: 'Mint',
+};
 
-const fmt = (n) => Number(n).toLocaleString('en-US');
+const collectiblesRead = collectiblesDeployed()
+  ? new ethers.Contract(COLLECTIBLES_CONTRACT_ADDRESS, COLLECTIBLES_ABI, arcReadProvider)
+  : null;
+let collectiblesWrite;
+let activeFilter = 'all';
+let collectiblesUnavailable = false;
+const designState = {}; // designId -> { status, minted, maxSupply, priceWei, left }
+
+// On-chain design -> what the card shows.
+function designStatus(item, d) {
+  if (!d.exists || d.name !== item.name) return { status: 'unavailable' };
+  const left = d.maxSupply - d.minted - (d.reserved - d.ownerMinted);
+  const status = !d.publicMintOpen || d.priceWei === 0n ? 'closed' : left <= 0n ? 'soldout' : 'open';
+  return { status, minted: d.minted, maxSupply: d.maxSupply, priceWei: d.priceWei, left };
+}
+
+function statusOf(item) {
+  if (!collectiblesDeployed()) return { status: 'preview' };
+  return designState[item.designId] || { status: collectiblesUnavailable ? 'unavailable' : 'loading' };
+}
 
 function cardHtml(item) {
-  const live = liveDesignData[item.designId];
-  const minted = live ? live.minted : 0;
-  const maxSupply = live ? live.maxSupply : item.maxSupply;
-  const priceUsdc = live ? live.priceUsdc : item.priceUsdc;
-  const soldOut = minted >= maxSupply;
+  const s = statusOf(item);
+  const live = s.maxSupply !== undefined;
+  const supply = live
+    ? `${fmt(s.minted)} / ${fmt(s.maxSupply)} minted`
+    : s.status === 'preview'
+      ? `0 / ${fmt(item.maxSupply)} minted`
+      : '&nbsp;';
+  const price = live
+    ? s.priceWei > 0n
+      ? `$${usdcText(s.priceWei)} USDC`
+      : 'Giveaway only'
+    : s.status === 'preview'
+      ? `$${item.priceUsdc} USDC`
+      : '&mdash;';
+  const clickable = s.status === 'preview' || s.status === 'open';
 
   // webm (VP9) listed first: some browsers/webviews lack H.264 decode
   // support (confirmed in testing - the mp4 alone left the card blank
@@ -65,12 +106,10 @@ function cardHtml(item) {
       </div>
       <div class="nft-card__body">
         <div class="nft-card__name">${item.name}</div>
-        <div class="nft-card__supply">${fmt(minted)} / ${fmt(maxSupply)} minted</div>
+        <div class="nft-card__supply">${supply}</div>
         <div class="nft-card__foot">
-          <span class="nft-card__price">$${priceUsdc} USDC</span>
-          <button class="nft-card__mint" data-design="${item.designId}" data-price="${priceUsdc}" ${soldOut ? 'disabled' : ''}>
-            ${soldOut ? 'Sold Out' : isDeployed() ? 'Mint' : 'Preview'}
-          </button>
+          <span class="nft-card__price">${price}</span>
+          <button class="nft-card__mint" data-design="${item.designId}" ${clickable ? '' : 'disabled'}>${MINT_LABEL[s.status]}</button>
         </div>
       </div>
     </div>`;
@@ -80,69 +119,75 @@ function renderGrid() {
   const grid = document.getElementById('nftGrid');
   const items = activeFilter === 'all' ? ROSTER : ROSTER.filter((i) => i.tier === activeFilter);
   grid.innerHTML = items.map(cardHtml).join('');
-
   grid.querySelectorAll('.nft-card__mint').forEach((btn) => {
-    btn.addEventListener('click', () => mint(Number(btn.dataset.design), Number(btn.dataset.price)));
+    btn.addEventListener('click', () => mint(Number(btn.dataset.design)));
   });
 }
 
 async function loadLiveDesignData() {
-  if (!isDeployed()) return;
-  try {
-    const ro = provider || new ethers.BrowserProvider(window.ethereum);
-    const ro_contract = new ethers.Contract(COLLECTIBLES_CONTRACT_ADDRESS, COLLECTIBLES_ABI, ro);
-    for (const item of ROSTER) {
-      const d = await ro_contract.designs(item.designId);
-      if (!d.exists) continue;
-      liveDesignData[item.designId] = {
-        minted: Number(d.minted),
-        maxSupply: Number(d.maxSupply),
-        priceUsdc: Number(ethers.formatEther(d.priceWei)),
-      };
-    }
+  if (!collectiblesDeployed()) return;
+  if (!(await hasCodeOnArc(COLLECTIBLES_CONTRACT_ADDRESS))) {
+    collectiblesUnavailable = true;
+    console.error(`No collectibles contract at ${COLLECTIBLES_CONTRACT_ADDRESS} on Arc.`);
     renderGrid();
-  } catch (err) {
-    console.error('Could not load live design data, showing placeholders:', err);
-  }
-}
-
-async function connectWallet() {
-  if (!window.ethereum) {
-    alert('No wallet found. Install MetaMask or another injected wallet to continue.');
     return;
   }
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  signer = await provider.getSigner();
-  userAddress = await signer.getAddress();
-  if (isDeployed()) collectibles = new ethers.Contract(COLLECTIBLES_CONTRACT_ADDRESS, COLLECTIBLES_ABI, signer);
-
-  document.querySelectorAll('.js-connect-wallet').forEach((btn) => {
-    btn.textContent = `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+  const results = await Promise.allSettled(ROSTER.map((item) => collectiblesRead.designs(item.designId)));
+  results.forEach((r, i) => {
+    const item = ROSTER[i];
+    if (r.status === 'fulfilled') {
+      designState[item.designId] = designStatus(item, r.value);
+      if (designState[item.designId].status === 'unavailable') {
+        console.error(`Design ${item.designId} on-chain ("${r.value.name}") doesn't match the roster ("${item.name}").`);
+      }
+    } else {
+      designState[item.designId] = { status: 'unavailable' };
+      console.error(`Could not read design ${item.designId}:`, r.reason);
+    }
   });
+  renderGrid();
 }
 
-async function mint(designId, priceUsdc) {
-  if (!isDeployed()) return alert('Not deployed yet - this is a preview. Connect Wallet just confirms your address for now.');
-  if (!userAddress) {
-    await connectWallet();
-    if (!userAddress) return;
+async function mint(designId) {
+  const item = ROSTER.find((i) => i.designId === designId);
+  if (!collectiblesDeployed()) {
+    alert('Not live yet: this is a preview of the collection. Minting opens once the contract is deployed.');
+    return;
   }
+  if (!(await walletReady())) return;
+  let fresh;
   try {
-    const tx = await collectibles.mint(designId, 1, { value: ethers.parseEther(String(priceUsdc)) });
-    await tx.wait();
-    await loadLiveDesignData();
+    fresh = designStatus(item, await collectiblesRead.designs(designId));
   } catch (err) {
     console.error(err);
-    alert('Mint failed - see console for details.');
+    alert(`Could not read ${item.name} from the contract: ${reason(err)}`);
+    return;
   }
+  const shown = designState[designId];
+  designState[designId] = fresh;
+  if (fresh.status !== 'open') {
+    renderGrid();
+    alert(`${item.name} can't be minted right now (${MINT_LABEL[fresh.status].toLowerCase()}).`);
+    return;
+  }
+  if (!shown || shown.priceWei !== fresh.priceWei) {
+    renderGrid();
+    alert(`${item.name}'s price just changed to ${usdcText(fresh.priceWei)} USDC. Check it, then mint again.`);
+    return;
+  }
+  if (!collectiblesWrite) collectiblesWrite = new ethers.Contract(COLLECTIBLES_CONTRACT_ADDRESS, COLLECTIBLES_ABI, signer);
+  try {
+    await (await collectiblesWrite.mint(designId, 1, arcTx({ value: fresh.priceWei }))).wait();
+  } catch (err) {
+    console.error(err);
+    if (!userRejected(err)) alert(`Mint failed: ${reason(err)}`);
+  }
+  await loadLiveDesignData();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   renderGrid();
   loadLiveDesignData();
-
-  document.querySelectorAll('.js-connect-wallet').forEach((btn) => btn.addEventListener('click', connectWallet));
 
   document.querySelectorAll('.filter-tab').forEach((tab) => {
     tab.addEventListener('click', () => {

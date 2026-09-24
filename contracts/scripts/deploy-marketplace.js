@@ -1,47 +1,54 @@
+// Deploys SDOGENFTMarketplace on Arc, bound to the Studio's collections and SDOGECollectibles
+// (both read from deployments, so run deploy-studio.js and deploy-collectibles.js first).
+//
+//   MARKETPLACE_OWNER_ADDRESS=<team Safe> FEE_RECIPIENT_ADDRESS=<treasury> \
+//   npx hardhat run scripts/deploy-marketplace.js --network arc
+//
+// Fees go to the fee recipient until the owner points them at staking; if SDOGEStaking is in
+// deployments, the Safe batch for setRewardsPool(staking) is written too.
 const { ethers } = require("hardhat");
+const c = require("./lib/common");
 
-async function main() {
-  const ownerAddress = process.env.MARKETPLACE_OWNER_ADDRESS;
-  if (!ownerAddress) {
-    throw new Error(
-      "Set MARKETPLACE_OWNER_ADDRESS to the Treasury/multisig that should control feeBps/rewardsPool - " +
-        "do not deploy with a throwaway EOA as owner."
-    );
-  }
-  // Optional: SDOGEStaking's address, if it's already deployed - resale fees
-  // route to it via contributeUSDC() so marketplace volume feeds stakers'
-  // USDC rewards. Leave unset and call setRewardsPool() later if staking
-  // isn't live yet; fees just go to the owner in the meantime.
-  const rewardsPool = process.env.STAKING_REWARDS_POOL_ADDRESS;
+async function run(opts) {
+  const { expectedChainId = c.ARC_CHAIN_ID } = opts;
+  await c.preflight(expectedChainId);
+  const owner = await c.checkOwner("MARKETPLACE_OWNER_ADDRESS", opts.owner, opts);
+  const feeRecipient = c.checkAddress("FEE_RECIPIENT_ADDRESS", opts.feeRecipient);
+  const studioAddress = opts.studio || c.deployedAddress("SDOGEStudio");
+  const collectiblesAddress = opts.collectibles || c.deployedAddress("SDOGECollectibles");
+  if (!studioAddress || !collectiblesAddress) throw new Error("Deploy the Studio and the Collectibles first.");
+  const studio = await ethers.getContractAt("SDOGEStudio", await c.requireCode("SDOGEStudio", studioAddress));
+  const collectibles = await ethers.getContractAt("SDOGECollectibles", await c.requireCode("SDOGECollectibles", collectiblesAddress));
+  await studio.communityCollection(); // both must really be what they claim
+  await collectibles.nextDesignId();
 
-  const Marketplace = await ethers.getContractFactory("SDOGENFTMarketplace");
-  const marketplace = await Marketplace.deploy(ownerAddress);
-  await marketplace.waitForDeployment();
-  const marketplaceAddress = await marketplace.getAddress();
+  const args = [owner, studio.target, collectibles.target, feeRecipient];
+  const market = await (await ethers.getContractFactory("SDOGENFTMarketplace")).deploy(...args);
+  await market.waitForDeployment();
+  console.log(`\nSDOGENFTMarketplace: ${await market.getAddress()} (fee ${await market.feeBps()} bps)`);
+  await c.recordDeployment("SDOGENFTMarketplace", market, args);
 
-  console.log("SDOGENFTMarketplace deployed to:", marketplaceAddress);
-  console.log("  owner:", ownerAddress);
-  console.log("  feeBps:", await marketplace.feeBps(), "(2%)");
-
-  if (rewardsPool) {
-    const tx = await marketplace.setRewardsPool(rewardsPool);
-    await tx.wait();
-    console.log("  rewardsPool set to:", rewardsPool);
+  const staking = opts.staking || c.deployedAddress("SDOGEStaking");
+  if (staking) {
+    const pool = await c.requireCode("SDOGEStaking", staking);
+    await c.writeSafeBatch("marketplace-setup", owner, "send marketplace fees to staking", [
+      c.call(market, `setRewardsPool(${pool})`, "setRewardsPool", [pool]),
+    ]);
   } else {
-    console.log(
-      "  rewardsPool: not set - resale fees go straight to the owner until " +
-        "setRewardsPool(stakingAddress) is called."
-    );
+    console.log(`\nFees go to ${feeRecipient} until the owner calls setRewardsPool(staking).`);
   }
+  return { marketplace: market };
+}
 
-  console.log(
-    "\nLive immediately for both NFT contracts - sellers just need to approve() " +
-      "(SDOGECommunityMint, ERC-721) or setApprovalForAll() (SDOGECollectibles, ERC-1155) " +
-      `this contract (${marketplaceAddress}) before calling listERC721()/listERC1155().`
+if (require.main === module) {
+  c.cli(() =>
+    run({
+      owner: c.requireEnv("MARKETPLACE_OWNER_ADDRESS", "the team's Safe on Arc"),
+      feeRecipient: c.requireEnv("FEE_RECIPIENT_ADDRESS", "where fees go until staking is connected"),
+      allowEoa: c.flag("ALLOW_EOA_OWNER"),
+      allowLowThreshold: c.flag("ALLOW_LOW_THRESHOLD"),
+    })
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+module.exports = { run };
