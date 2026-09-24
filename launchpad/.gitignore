@@ -1,0 +1,6 @@
+# Foundry build/dep artifacts - this is a separate Foundry project from contracts/ (Hardhat),
+# so it keeps its own self-contained gitignore rather than relying on the root one.
+lib/
+out/
+cache/
+broadcast/

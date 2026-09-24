@@ -1,0 +1,16 @@
+[profile.default]
+src = "src"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc = "0.8.26"
+evm_version = "cancun" # matches contracts/hardhat.config.js's reasoning: Arc's baseline is Osaka, newer than Cancun
+via_ir = true      # v4-core's libraries hit "stack too deep" without it - same reason v4-core itself builds with via_ir
+optimizer_runs = 800
+
+remappings = [
+  "v4-core/=lib/v4-core/",
+  "v4-periphery/=lib/v4-periphery/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
