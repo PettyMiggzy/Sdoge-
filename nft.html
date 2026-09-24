@@ -137,6 +137,80 @@
     </div>
   </section>
 
+  <!-- ===== MARKETPLACE ===== -->
+  <section class="section section--alt" id="marketplace">
+    <div class="container">
+      <div class="eyebrow">Resale</div>
+      <h2 class="section__title">Marketplace: list your NFTs for sale.</h2>
+      <p class="section__lead">
+        Already minted one? List it here instead of (or alongside) OpenSea
+        &mdash; a 2% fee on every sale feeds straight into $SDOGE stakers'
+        USDC reward pool, so resale volume actually does something for the
+        community instead of just leaving. Non-escrow: you keep your NFT
+        right up until the moment it sells.
+      </p>
+
+      <div class="app-grid">
+        <!-- Active listings -->
+        <div class="panel">
+          <div class="panel__head">
+            <span class="panel__title">Active Listings</span>
+            <div class="tabs" id="marketFilterTabs">
+              <button class="tab is-active" data-market-filter="all">All</button>
+              <button class="tab" data-market-filter="community">Community Art</button>
+              <button class="tab" data-market-filter="collectibles">Collectibles</button>
+            </div>
+          </div>
+          <div class="stakes-list" id="marketListings">
+            <p class="empty-state">Not deployed yet &mdash; the marketplace contract isn't live, so there's nothing to list here yet.</p>
+          </div>
+        </div>
+
+        <!-- List your own -->
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">List an NFT</span></div>
+
+          <div class="input-field">
+            <div class="input-field__top"><span>Collection</span></div>
+            <select id="marketCollection" class="chip-btn" style="width: 100%; padding: 12px; text-align: left;">
+              <option value="community">SDOGE Community Art (ERC-721)</option>
+              <option value="collectibles">SDOGE Collectibles (ERC-1155)</option>
+            </select>
+          </div>
+
+          <div class="input-field">
+            <div class="input-field__top"><span>Token ID</span></div>
+            <div class="input-field__row">
+              <input type="number" min="0" placeholder="e.g. 1" id="marketTokenId" />
+            </div>
+          </div>
+
+          <div class="input-field" id="marketAmountField" style="display:none;">
+            <div class="input-field__top"><span>Amount to list</span></div>
+            <div class="input-field__row">
+              <input type="number" min="1" placeholder="1" id="marketAmount" />
+            </div>
+          </div>
+
+          <div class="input-field">
+            <div class="input-field__top"><span>Price per unit (USDC)</span></div>
+            <div class="input-field__row">
+              <input type="number" min="0" step="0.01" placeholder="0.00" id="marketPrice" />
+            </div>
+          </div>
+
+          <button class="btn btn--primary btn--wide" id="marketListBtn">Connect Wallet</button>
+          <p class="fine-print" style="margin-top:16px;">
+            Not deployed yet &mdash; this panel is a fully working preview.
+            Approve + List will work for real once
+            <code>MARKETPLACE_CONTRACT_ADDRESS</code> is set in
+            <code>assets/js/marketplace.js</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== PERKS CTA ===== -->
   <section class="section section--alt">
     <div class="container">
@@ -219,5 +293,6 @@
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
 <script src="assets/js/main.js"></script>
 <script src="assets/js/nft.js"></script>
+<script src="assets/js/marketplace.js"></script>
 </body>
 </html>

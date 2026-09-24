@@ -166,17 +166,66 @@ detail), a Circle USDC "($)" logo worked into the outfit as a
 patch/badge/print. Alternates between the orange/tan shiba base and the
 grey/silver husky base.
 
-## How it'd connect to staking
+## Resale: `SDOGENFTMarketplace.sol`
 
-From the original idea: holding an NFT would amplify a staker's rewards
-(some kind of multiplier), and some portion of NFT sale proceeds would
-feed into the staking reward pool alongside the early-withdrawal-penalty
-mechanism already built (see `../contracts/README.md`). Not built - the
-staking contract's design predates this collection's contract and doesn't
-reference it yet. A clean integration point would be a boost multiplier
-in `SDOGEStaking.sol`'s weighted-share calculation, keyed on
-`SDOGECollectibles.balanceOf(staker, designId) > 0` - not attempted here
-since the mechanic (which designs boost, by how much) isn't decided.
+A third contract, separate from both mint paths above: peer-to-peer resale
+for whatever's already been minted, since holders reselling on OpenSea
+doesn't feed anything back into this project. One marketplace handles both
+NFT contracts:
+
+- **`listERC721(nftContract, tokenId, pricePerUnit)`** - list a single
+  `SDOGECommunityMint` token (a unique upload). Always exactly 1 unit,
+  all-or-nothing. Requires `approve(marketplace, tokenId)` first.
+- **`listERC1155(nftContract, tokenId, amount, pricePerUnit)`** - list
+  `amount` copies of an `SDOGECollectibles` design ("list supply for
+  sale" - a holder of 5 copies can list 3 and keep 2). Supports partial
+  fills: a buyer can buy any amount up to what's left, and the listing
+  just shrinks rather than closing. Requires
+  `setApprovalForAll(marketplace, true)` first (ERC-1155 has no per-token
+  approve).
+- **`buy(listingId, amount)`** (payable) - pay exactly
+  `amount * pricePerUnit` native USDC. Non-escrow: the seller keeps
+  custody until the moment of sale, so a listing can go stale if the
+  seller sells/transfers/de-approves elsewhere first - `buy()` simply
+  reverts in that case (the payment reverts with it, so the buyer loses
+  nothing).
+- **`cancelListing`** / **`updatePrice`** - seller-only.
+- A **2% fee** (`feeBps`, owner-tunable up to a 10% cap - same 2% rate as
+  the launchpad hook, for a consistent house cut across every SDOGE
+  trading surface) comes off each sale and routes to `rewardsPool` via its
+  `contributeUSDC()` - see the next section. Falls back to paying the
+  owner directly if `rewardsPool` isn't set.
+
+27 tests cover both listing types, partial ERC-1155 fills, stale listings
+(seller transfers away / revokes approval after listing), fee routing both
+with and without a `rewardsPool` set, admin controls, and a live
+reentrancy-attack test (a malicious seller contract tries to re-enter
+`buy()` on a second listing from the `receive()` hook that pays it out).
+
+Deploy with `MARKETPLACE_OWNER_ADDRESS=0x... [STAKING_REWARDS_POOL_ADDRESS=0x...]
+npx hardhat run scripts/deploy-marketplace.js --network arc` - live
+immediately for both NFT contracts, no setup step needed beyond sellers
+approving it.
+
+## How it connects to staking
+
+Two separate ideas from the original plan, one now built and one not:
+
+- **"NFT sale profits fund the USDC side of staking"** - **built**, via
+  `SDOGENFTMarketplace` above. Point `setRewardsPool()` at
+  `SDOGEStaking`'s address and every resale fee lands in stakers' reward
+  pool automatically through `contributeUSDC()` - no manual step. Primary
+  mint proceeds (`SDOGECollectibles.mint()`'s USDC, `SDOGECommunityMint`'s
+  burned $SDOGE) aren't wired into this automatically - the owner can
+  still route them in by hand (`withdraw()` the USDC and call
+  `contributeUSDC()`, or `contributeTokens()` the $SDOGE side) - see
+  `../contracts/README.md`'s "How a penalty becomes a reward".
+- **Holding an NFT amplifies a staker's reward (a multiplier)** - **not
+  built**. `SDOGEStaking.sol`'s design predates this collection and
+  doesn't reference it yet. A clean integration point would be a boost
+  multiplier in its weighted-share calculation, keyed on
+  `SDOGECollectibles.balanceOf(staker, designId) > 0` - not attempted here
+  since the mechanic (which designs boost, by how much) isn't decided.
 
 ## Open questions
 

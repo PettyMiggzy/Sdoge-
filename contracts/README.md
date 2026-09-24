@@ -1,9 +1,13 @@
 # $SDOGE Staking
 
-This directory also holds two other contracts, documented in `../nft/README.md`
-rather than here: `SDOGECollectibles.sol` (the curated NFT collection) and
-`SDOGECommunityMint.sol` (permissionless user-upload NFTs, burn $SDOGE to
-mint). Everything below is about staking specifically.
+This directory also holds three other contracts, documented in
+`../nft/README.md` rather than here: `SDOGECollectibles.sol` (the curated
+NFT collection), `SDOGECommunityMint.sol` (permissionless user-upload NFTs,
+burn $SDOGE to mint), and `SDOGENFTMarketplace.sol` (peer-to-peer resale for
+both of those, with a fee that routes into this contract's own
+`contributeUSDC()` - see "How a penalty becomes a reward" below and
+`../nft/README.md`'s marketplace section). Everything else below is about
+staking specifically.
 
 Stake $SDOGE into one of 5 fixed lock tiers, earn native USDC. Longer
 locks earn faster, not just longer. The primary funding source costs the
@@ -122,7 +126,12 @@ with its own unlock time and reward checkpoint.
    owner access. These are intentionally **not** wired into
    `notifyRewardAmount()`'s own access control - letting anyone reset the
    reward rate/period on demand would let a griefer manipulate payout
-   timing by spamming tiny contributions.
+   timing by spamming tiny contributions. This is also the real funding
+   path for "NFT profits fund the USDC side of staking": once
+   `SDOGENFTMarketplace.setRewardsPool()` points at this contract's
+   address, every resale's fee lands here via `contributeUSDC()`
+   automatically - no manual step, no swap needed (unlike the SDOGE-side
+   sweep in step 3, marketplace fees are already native USDC).
 3. `sweepTokens(address to)` (owner or notifier) moves accumulated
    `unallocatedTokens` out to be swapped for USDC - manual for now, same
    reasoning as before: volume will be small and unpredictable at first,
@@ -213,9 +222,12 @@ penalty/duration setting.
 
 ```bash
 npm install
-npx hardhat test        # 63 tests total: 42 staking (tiers, penalty + forfeiture, the 80% threshold,
+npx hardhat test        # 102 tests total: 42 staking (tiers, penalty + forfeiture, the 80% threshold,
                          # multi-wallet withdrawal, exitStake, contributions, admin, notifier, reentrancy)
                          # + 21 collectibles (design creation, minting, supply caps, admin, ERC-1155 behavior)
+                         # + 12 community mint (burn-to-mint, tuning, reentrancy)
+                         # + 27 marketplace (ERC-721 + ERC-1155 listings, partial fills, fee routing
+                         #   into this contract's contributeUSDC(), stale listings, reentrancy)
 npx hardhat compile
 ```
 
