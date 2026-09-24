@@ -12,7 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
 </head>
-<body>
+<body class="starfield">
 
 <!-- ===== NAV ===== -->
 <nav class="navbar" id="navbar">
@@ -46,7 +46,7 @@
 
 <!-- ===== HERO ===== -->
 <header class="hero" id="top">
-  <div class="hero__bg" style="background-image:url('assets/img/moon-buggy.jpg')"></div>
+  <div class="hero__bg" style="background-image:url('assets/img/hero-space.jpg')"></div>
   <div class="hero__overlay"></div>
 
   <div class="container hero__inner">
@@ -54,10 +54,11 @@
       <span class="pill__dot"></span> Contract not deployed yet &middot; preview UI
     </div>
 
-    <h1 class="hero__title">
+    <h1 class="hero__title hero__title--gold">
+      <span class="hero__title-brand">SDOGE</span>
       STAKING
-      <span class="hero__title-sub">Same vibes. More SDOGE.</span>
     </h1>
+    <p class="hero__title-tagline">Same vibes. <em>More SDOGE.</em></p>
 
     <p class="hero__subtitle">
       Stake $SDOGE across 5 lock tiers and earn native USDC. Longer locks
@@ -129,7 +130,7 @@
         <!-- Main stake/unstake panel -->
         <div class="panel">
           <div class="panel__head">
-            <span class="panel__title">Stake / Unstake</span>
+            <span class="panel__title">Stake SDOGE</span>
             <div class="tabs">
               <button class="tab is-active" data-tab="stake">Stake</button>
               <button class="tab" data-tab="unstake">Unstake</button>
@@ -189,7 +190,7 @@
 
         <!-- Overview side panel -->
         <div class="panel">
-          <div class="panel__head"><span class="panel__title">Your Overview</span></div>
+          <div class="panel__head"><span class="panel__title">Your Staking Overview</span></div>
 
           <div class="overview-row">
             <span class="overview-row__label">Wallet</span>
@@ -256,6 +257,15 @@
   <!-- ===== FAQ ===== -->
   <section class="section" id="faq">
     <div class="container">
+      <div class="faq-side">
+        <div class="faq-side__art" style="background-image:url('assets/img/moon-buggy.jpg')">
+          <div class="faq-side__art-text">
+            <div class="faq-side__art-title">Stake. Earn. Chill.</div>
+            <p class="faq-side__art-sub">Relax while your $SDOGE works for you on Arc.</p>
+          </div>
+        </div>
+
+        <div>
       <div class="eyebrow">FAQ</div>
       <h2 class="section__title">Staking, explained.</h2>
 
@@ -299,18 +309,7 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- ===== CTA BANNER ===== -->
-  <section class="cta-banner">
-    <div class="cta-banner__bg" style="background-image:url('assets/img/signpost-pool.jpg')"></div>
-    <div class="cta-banner__overlay"></div>
-    <div class="container cta-banner__inner">
-      <h2>Stake. Earn. Chill.</h2>
-      <div class="hero__cta">
-        <a href="#stake" class="btn btn--primary">Stake Now</a>
-        <a href="index.html#buy" class="btn btn--ghost">Buy $SDOGE</a>
+        </div>
       </div>
     </div>
   </section>

@@ -9,7 +9,7 @@ navToggle.addEventListener('click', () => {
   navToggle.setAttribute('aria-expanded', String(isOpen));
 });
 
-navLinks.querySelectorAll('a').forEach((link) => {
+navLinks.querySelectorAll('a, button').forEach((link) => {
   link.addEventListener('click', () => {
     navLinks.classList.remove('is-open');
     navToggle.setAttribute('aria-expanded', 'false');

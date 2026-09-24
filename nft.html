@@ -12,7 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
 </head>
-<body>
+<body class="starfield">
 
 <!-- ===== NAV ===== -->
 <nav class="navbar" id="navbar">
@@ -34,7 +34,7 @@
       <a href="nft.html" style="color: var(--text-primary);">NFT</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
-      <a href="index.html#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+      <button class="btn btn--primary btn--small js-connect-wallet">Connect Wallet</button>
     </div>
 
     <div class="navbar__chain">
@@ -46,7 +46,7 @@
 
 <!-- ===== HERO ===== -->
 <header class="hero" id="top">
-  <div class="hero__bg" style="background-image:url('assets/img/hero-space.jpg')"></div>
+  <div class="hero__bg" style="background-image:url('assets/img/nft-hero.jpg')"></div>
   <div class="hero__overlay"></div>
 
   <div class="container hero__inner">
@@ -54,10 +54,11 @@
       <span class="pill__dot"></span> Contract not deployed yet &middot; preview UI
     </div>
 
-    <h1 class="hero__title">
-      SDOGE NFT
-      <span class="hero__title-sub">Same vibes. More SDOGE.</span>
+    <h1 class="hero__title hero__title--gold">
+      <span class="hero__title-brand">SDOGE</span>
+      NFT
     </h1>
+    <p class="hero__title-tagline">Same vibes. <em>More SDOGE.</em></p>
 
     <p class="hero__subtitle">
       12 hand-styled SDOGE characters on Arc, minted with native USDC.
@@ -67,7 +68,7 @@
 
     <div class="hero__cta">
       <a href="#collection" class="btn btn--primary">View Collection</a>
-      <a href="#" class="btn btn--ghost" id="connectWalletHero">Connect Wallet</a>
+      <button class="btn btn--ghost js-connect-wallet" id="connectWalletHero">Connect Wallet</button>
     </div>
   </div>
 </header>
@@ -112,7 +113,7 @@
         </div>
         <div class="filter-tabs" id="filterTabs">
           <button class="filter-tab is-active" data-filter="all">All</button>
-          <button class="filter-tab" data-filter="common">Common</button>
+          <button class="filter-tab" data-filter="og">OG</button>
           <button class="filter-tab" data-filter="rare">Rare</button>
           <button class="filter-tab" data-filter="epic">Epic</button>
           <button class="filter-tab" data-filter="legendary">Legendary</button>
@@ -143,6 +144,10 @@
         <div>
           <p class="hero__sticky-note" style="margin: 0 0 8px;">Hold. Collect.</p>
           <h2 class="perks-cta__title">Get Rewards.</h2>
+          <div class="hero__cta" style="margin-top: 24px;">
+            <a href="#collection" class="btn btn--primary">View Collection</a>
+            <button class="btn btn--ghost js-connect-wallet">Connect Wallet</button>
+          </div>
         </div>
         <div class="perks-cta__list">
           <div class="perk-item">

@@ -24,8 +24,8 @@ const ROSTER = [
   { designId: 3, name: 'Bucket Hat Doge', file: 'nft/reference/bucket-hat-doge.jpg', video: 'nft/reference/animated/bucket-hat-doge.mp4', tier: 'rare', priceUsdc: 30, maxSupply: 400 },
   { designId: 4, name: 'Rich Doge', file: 'nft/reference/rich-doge.jpg', video: 'nft/reference/animated/rich-doge.mp4', tier: 'epic', priceUsdc: 40, maxSupply: 300 },
   { designId: 5, name: 'Hoodie Doge', file: 'nft/reference/hoodie-doge.jpg', video: 'nft/reference/animated/hoodie-doge.mp4', tier: 'rare', priceUsdc: 30, maxSupply: 400 },
-  { designId: 6, name: 'Cap Doge', file: 'nft/reference/cap-doge.jpg', video: 'nft/reference/animated/cap-doge.mp4', tier: 'common', priceUsdc: 20, maxSupply: 500 },
-  { designId: 7, name: 'Blazed Doge', file: 'nft/reference/blazed-doge.jpg', video: 'nft/reference/animated/blazed-doge.mp4', tier: 'common', priceUsdc: 20, maxSupply: 500 },
+  { designId: 6, name: 'Cap Doge', file: 'nft/reference/cap-doge.jpg', video: 'nft/reference/animated/cap-doge.mp4', tier: 'og', priceUsdc: 20, maxSupply: 500 },
+  { designId: 7, name: 'Blazed Doge', file: 'nft/reference/blazed-doge.jpg', video: 'nft/reference/animated/blazed-doge.mp4', tier: 'og', priceUsdc: 20, maxSupply: 500 },
   { designId: 8, name: 'Degen Doge', file: 'nft/reference/degen-doge.jpg', video: 'nft/reference/animated/degen-doge.mp4', tier: 'rare', priceUsdc: 30, maxSupply: 400 },
   { designId: 9, name: 'Samurai Doge', file: 'nft/reference/samurai-doge.png', video: null, tier: 'epic', priceUsdc: 40, maxSupply: 300 },
   { designId: 10, name: 'Viking Doge', file: 'nft/reference/viking-doge.png', video: null, tier: 'legendary', priceUsdc: 50, maxSupply: 200 },
@@ -117,8 +117,9 @@ async function connectWallet() {
   userAddress = await signer.getAddress();
   if (isDeployed()) collectibles = new ethers.Contract(COLLECTIBLES_CONTRACT_ADDRESS, COLLECTIBLES_ABI, signer);
 
-  const heroBtn = document.getElementById('connectWalletHero');
-  if (heroBtn) heroBtn.textContent = `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+  document.querySelectorAll('.js-connect-wallet').forEach((btn) => {
+    btn.textContent = `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`;
+  });
 }
 
 async function mint(designId, priceUsdc) {
@@ -141,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderGrid();
   loadLiveDesignData();
 
-  document.getElementById('connectWalletHero')?.addEventListener('click', connectWallet);
+  document.querySelectorAll('.js-connect-wallet').forEach((btn) => btn.addEventListener('click', connectWallet));
 
   document.querySelectorAll('.filter-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
