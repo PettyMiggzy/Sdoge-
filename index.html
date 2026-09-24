@@ -347,10 +347,17 @@
       </div>
 
       <div class="chart-panel" id="chart">
-        <div class="chart-panel__placeholder" id="buy">
-          <img src="assets/img/icon-chart.jpg" alt="" class="chart-panel__icon" />
-          <p>Live chart embeds here once $SDOGE is trading on Argus / Uniswap v4.</p>
+        <div id="buy" class="chart-panel__frame-wrap">
+          <iframe
+            class="chart-panel__frame"
+            src="https://dexscreener.com/arc/0xbb2cff1ea59daa260919f3f579c32cc261eebeb69126ec2a5b3ea77018f3e8e2?embed=1&theme=dark&trades=0&info=0"
+            title="$SDOGE / USDC live chart on DexScreener"
+            loading="lazy"
+          ></iframe>
         </div>
+        <p class="chart-panel__credit">
+          Live data from <a href="https://dexscreener.com/arc/0xbb2cff1ea59daa260919f3f579c32cc261eebeb69126ec2a5b3ea77018f3e8e2" target="_blank" rel="noopener">DexScreener</a> — the same $SDOGE/USDC pool tracked by the buy bot.
+        </p>
       </div>
     </div>
   </section>
