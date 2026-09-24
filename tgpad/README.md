@@ -5,13 +5,12 @@ A no-UI meme-token launchpad that lives entirely in Telegram. People DM the bot,
 - launch a token (name, ticker, photo) in one tap;
 - buy and sell it;
 - claim their creator fees;
-- redeem tokens against the token's **meme vault**, a pool of real USDC fed by 0.5% of every buy that acts as a redeemable price floor.
+- redeem tokens against the token's **meme vault**: real USDC, fed by 0.5% of every buy, shared equally by every token. That gives each token a floor price that only goes up.
 
 The on-chain side lives in `../launchpad/` (Uniswap v4 hook, factory, `MemeVault`).
 
-**Status: the bot is built and tested (`npm test`); the contracts are not deployed yet.**
-- The launchpad contracts are being fixed and re-audited (see `../launchpad/README.md`).
-- The swap router that `/buy` and `/sell` call is part of that fix round.
+**Status: the bot is built and tested (`npm test`); the contracts are rebuilt and tested but not deployed yet.**
+- The launchpad contracts, including the swap router behind `/buy` and `/sell`, were rebuilt after the audit and are waiting on a re-audit (see `../launchpad/README.md`).
 - Until `FACTORY_ADDRESS`, `HOOK_ADDRESS` and `ROUTER_ADDRESS` are set, the bot still runs. It shows a clear "opens once the contracts are live" message for launching and trading, while wallets, deposits and withdrawals already work.
 
 ## What users can do
@@ -22,8 +21,8 @@ The on-chain side lives in `../launchpad/` (Uniswap v4 hook, factory, `MemeVault
 | `/buy $TICKER 10` | Quote, then confirm, then buy with max slippage (default 5%, `/slippage` to change). Deep links from the channel (`Buy in bot`) land here too. |
 | `/sell $TICKER 50%` | An amount, a percentage, or `all`. |
 | `/claim` | Creator fees: 0.5% of every buy of tokens you launched. |
-| `/vault $TICKER` | The vault's USDC backing, the circulating supply, the floor price and the market price. |
-| `/redeem $TICKER 25%` | Burn tokens for their share of the vault. Warns you if selling would pay more. |
+| `/vault $TICKER` | The vault's USDC backing, the floor price and the market price. |
+| `/redeem $TICKER 25%` | Burn tokens for their share of the vault. The previewed payout is the on-chain minimum, and it warns you if selling would pay more. |
 | `/wallet` `/deposit` `/withdraw 10 0x…` `/export` | Your wallet. `/export` sends your key as a spoiler that can't be forwarded and deletes itself after 60 seconds. |
 | `/token` `/trending` `/mylaunches` `/report $TICKER reason` | Info and reporting. |
 
@@ -38,7 +37,7 @@ Each Telegram user's key is `HMAC-SHA256(WALLET_MASTER_SECRET, "sdoge-tgpad/wall
 
 - **No per-user keys are stored anywhere.** A lost or corrupted `data/store.json` never loses anyone's funds.
 - **The master secret is everything.** Whoever has it controls every user's wallet, and losing it loses access to all of them. Back it up offline, in two places. A test pins the derivation, because changing it would silently move every user to an empty new wallet.
-- **Approvals are exact.** Buys, sells and redeems approve exactly the amount being traded, never an unlimited allowance.
+- **Approvals are exact.** Buys are paid with native USDC and need no approval. Sells and redeems approve exactly the amount being traded, never an unlimited allowance.
 - **Transactions are queued per wallet.** One wallet's transactions go out one at a time, so double-taps can't race for a nonce.
 
 ## Keeping Telegram happy (moderation and anti-abuse)

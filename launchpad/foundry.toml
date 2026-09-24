@@ -1,16 +1,40 @@
 [profile.default]
 src = "src"
 script = "script"
+test = "test"
 out = "out"
 libs = ["lib"]
 solc = "0.8.26"
-evm_version = "cancun" # matches contracts/hardhat.config.js's reasoning: Arc's baseline is Osaka, newer than Cancun
-via_ir = true      # v4-core's libraries hit "stack too deep" without it - same reason v4-core itself builds with via_ir
+evm_version = "cancun" # transient storage (TSTORE) is needed by v4 and ReentrancyGuardTransient; Arc runs Osaka, a superset
+via_ir = true          # v4-core's libraries hit "stack too deep" without it (v4-core itself builds with via_ir)
+optimizer = true
 optimizer_runs = 800
 
+# Tests deploy a real v4-core PoolManager from its artifact (test/utils/PoolManagerArtifact.sol).
+# It only compiles with v4-core's own optimizer settings ("stack too deep" otherwise), so that one
+# file is built under a second profile; everything else, tests included, uses the settings above.
+additional_compiler_profiles = [{ name = "v4core", via_ir = true, optimizer_runs = 44444444 }]
+compilation_restrictions = [{ paths = "lib/v4-core/src/PoolManager.sol", min_optimizer_runs = 44444444 }]
+fs_permissions = [{ access = "read", path = "./out" }]
+
+# Every dependency is a git submodule pinned by the repo (.gitmodules + the commit recorded in git):
+#   v4-core      59d3ecf (the exact commit v4-periphery 3779387 pins)
+#   v4-periphery 3779387 (the last commit that still ships utils/BaseHook.sol and utils/HookMiner.sol)
+#   OpenZeppelin v5.7.0, forge-std ba4733c
+# v4-periphery imports "@uniswap/v4-core/...", so that prefix MUST resolve to the same tree as
+# "v4-core/". Two copies would make PoolKey and friends distinct types and nothing would compile.
 remappings = [
   "v4-core/=lib/v4-core/",
+  "@uniswap/v4-core/=lib/v4-core/",
   "v4-periphery/=lib/v4-periphery/",
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "forge-std/=lib/forge-std/src/",
 ]
+
+[lint]
+# Style-only notes. The public getter names (poolManager, factory, hook...) are the ABI the
+# Telegram bot and the site call, so immutables keep camelCase.
+exclude_lints = ["screaming-snake-case-immutable", "named-struct-fields", "asm-keccak256"]
+
+[fuzz]
+runs = 256

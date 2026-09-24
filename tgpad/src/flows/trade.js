@@ -1,6 +1,5 @@
 import { getAddress, isAddress } from 'ethers';
 import { bpsToPct, esc, fmtTokens, fmtUsdc6, fmtUsdcWei, short, txLink } from '../format.js';
-import { redeemValue6 } from '../market.js';
 import { parseAmount, parsePercentBps } from '../util.js';
 
 const uidOf = (m) => String(m.from.id);
@@ -198,15 +197,14 @@ export async function redeem(bot, m, user, args) {
   const amt = await resolveTokenAmount(bot, uid, l, args[1]);
   if (amt.error) return bot.reply(uid, amt.error);
 
-  const vault = await bot.chain.vaultState(l.vault);
-  const payout6 = redeemValue6(amt.amount, vault);
+  const payout6 = await bot.chain.quoteRedeem(l.vault, amt.amount);
   if (payout6 === 0n) return bot.reply(uid, 'The vault is empty for now, so redeeming would pay nothing.');
 
   const lines = [
     `🏦 <b>Redeem $${esc(l.symbol)}</b>`,
     '',
     `Burn: <b>${fmtTokens(amt.amount)}</b> $${esc(l.symbol)} (permanently)`,
-    `Get: ~<b>${fmtUsdc6(payout6)} USDC</b> from the vault`,
+    `Get: at least <b>${fmtUsdc6(payout6)} USDC</b> from the vault`,
   ];
   if (bot.chain.canTrade) {
     const sellQuote = await bot.chain.quoteSell(l.token, amt.amount).catch(() => null);
@@ -214,14 +212,14 @@ export async function redeem(bot, m, user, args) {
       lines.push('', `⚠️ Selling would get ~${fmtUsdc6(sellQuote)} USDC, more than redeeming. /sell may be better.`);
     }
   }
-  const id = bot.createPending(uid, 'redeem', { key: l.key, amount: amt.amount });
+  const id = bot.createPending(uid, 'redeem', { key: l.key, amount: amt.amount, minOut: payout6 });
   return bot.reply(uid, lines.join('\n'), { buttons: bot.confirmButtons(id, '🔥 Burn & redeem') });
 }
 
 export async function executeRedeem(bot, uid, p) {
   const l = bot.store.launchByKey(p.key);
   if (!l) return { text: 'Token not found.' };
-  const res = await bot.chain.redeem(bot.wallets.get(uid), l, p.amount);
+  const res = await bot.chain.redeem(bot.wallets.get(uid), l, p.amount, p.minOut);
   return { text: `✅ Burned ${fmtTokens(p.amount)} $${esc(l.symbol)} for <b>${fmtUsdc6(res.received6)} USDC</b> · ${txLink(bot.cfg.explorerUrl, res.txHash)}` };
 }
 

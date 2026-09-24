@@ -57,10 +57,11 @@ test('24h volume uses hourly buckets and prunes old ones', () => {
   assert.equal(l.stats.sells, 1);
 });
 
-test('redeem value is pro-rata of vault backing incl. unclaimed fee share', () => {
-  const v = { usdc6: 900n, owed6: 100n, circulating: 1000n * 10n ** 18n };
+test('redeem value is pro-rata of the vault backing over the supply, rounded down', () => {
+  const v = { backing6: 1000n, supply: 1000n * 10n ** 18n };
   assert.equal(redeemValue6(100n * 10n ** 18n, v), 100n);
-  assert.equal(redeemValue6(1n, { usdc6: 0n, owed6: 0n, circulating: 0n }), 0n);
+  assert.equal(redeemValue6(10n ** 18n - 1n, v), 0n, 'rounds down like the contract');
+  assert.equal(redeemValue6(1n, { backing6: 0n, supply: 0n }), 0n);
 });
 
 test('KeyedSerializer runs one key strictly in order, even after a failure', async () => {

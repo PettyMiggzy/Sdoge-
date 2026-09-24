@@ -29,7 +29,8 @@ export function recordSwap(launch, { usdc6, isBuy, sqrtPriceX96, at }) {
   stats.lastSwapAt = at;
 }
 
-// Redeeming `amount` tokens pays amount * backing / circulating (MemeVault).
-export function redeemValue6(amount, { usdc6, owed6, circulating }) {
-  return circulating > 0n ? (amount * (usdc6 + owed6)) / circulating : 0n;
+// Redeeming `amount` tokens pays amount * backing / supply, rounded down
+// (MemeVault.quoteRedeem).
+export function redeemValue6(amount, { backing6, supply }) {
+  return supply > 0n ? (amount * backing6) / supply : 0n;
 }

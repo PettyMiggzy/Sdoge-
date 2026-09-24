@@ -106,9 +106,10 @@ export class Chain {
   quoteBuy(token, usdcIn) { return this.router.quoteBuy.staticCall(token, usdcIn); }
   quoteSell(token, tokensIn) { return this.router.quoteSell.staticCall(token, tokensIn); }
 
+  // Paid with native USDC (18 decimals, same balance as the 6-decimal ERC-20
+  // view): one transaction, no approval to leave behind.
   async buy(signer, token, usdcIn, minOut, deadline) {
-    await this.#ensureAllowance(signer, this.cfg.usdc, this.cfg.router, usdcIn);
-    const tx = await this.router.connect(signer).buy(token, usdcIn, minOut, signer.address, deadline);
+    const tx = await this.router.connect(signer).buyWithNative(token, minOut, signer.address, deadline, { value: usdcIn * 10n ** 12n });
     const receipt = await this.#mined(tx);
     return { txHash: tx.hash, received: received(receipt, token, signer.address) };
   }
@@ -128,24 +129,21 @@ export class Chain {
     return { txHash: tx.hash, received6: received(receipt, this.cfg.usdc, signer.address) };
   }
 
+  // backing6: USDC behind the token; supply: tokens sharing it; floor18: USDC
+  // per whole token with 18 decimals (floorPrice()).
   async vaultState(vault) {
     const v = new Contract(vault, VAULT_ABI, this.provider);
-    const [usdc6, owed6, circulating] = await Promise.all([
-      this.usdc.balanceOf(vault),
-      this.hook ? this.hook.owed(vault) : 0n,
-      v.circulating(),
-    ]);
-    return { usdc6, owed6, circulating };
+    const [backing6, supply, floor18] = await Promise.all([v.backing(), v.effectiveSupply(), v.floorPrice()]);
+    return { backing6, supply, floor18 };
   }
 
-  async redeem(signer, { token, vault }, amount) {
-    // Push the vault's accrued fee share in first so the redeemer is paid
-    // against the full backing, not just what someone happened to claim.
-    if (this.hook && (await this.hook.owed(vault)) > 0n) {
-      await this.#mined(await this.hook.connect(signer).claim(vault));
-    }
+  quoteRedeem(vault, amount) { return new Contract(vault, VAULT_ABI, this.provider).quoteRedeem(amount); }
+
+  // minOut is the previewed payout: the floor never drops, so the real payout
+  // can only be equal or higher unless something is badly wrong.
+  async redeem(signer, { token, vault }, amount, minOut) {
     await this.#ensureAllowance(signer, token, vault, amount);
-    const tx = await new Contract(vault, VAULT_ABI, signer).redeem(amount);
+    const tx = await new Contract(vault, VAULT_ABI, signer).redeem(amount, minOut, signer.address);
     const receipt = await this.#mined(tx);
     return { txHash: tx.hash, received6: received(receipt, this.cfg.usdc, signer.address) };
   }

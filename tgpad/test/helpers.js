@@ -107,7 +107,7 @@ export class FakeChain {
     this.balances = new Map();
     this.tokenBalances = new Map();
     this.owedByAddr = new Map();
-    this.vault = { usdc6: 0n, owed6: 0n, circulating: 0n };
+    this.vault = { backing6: 0n, supply: 10n ** 27n, floor18: 0n };
     this.calls = [];
     this.launches = 0;
     this.failNext = null;
@@ -132,6 +132,7 @@ export class FakeChain {
   async isContract() { return false; }
   async owed(a) { return this.owedByAddr.get(a) ?? 0n; }
   async vaultState() { return this.vault; }
+  async quoteRedeem(vault, amount) { return this.vault.supply > 0n ? (amount * this.vault.backing6) / this.vault.supply : 0n; }
   async blockNumber() { return 1000; }
   async getLogs() { return []; }
 
@@ -170,8 +171,8 @@ export class FakeChain {
     return { txHash: '0x' + 'd'.repeat(64), received6: this.owedByAddr.get(signer.address) ?? 0n };
   }
 
-  async redeem(signer, l, amount) {
-    this.calls.push({ fn: 'redeem', from: signer.address, token: l.token, amount });
+  async redeem(signer, l, amount, minOut) {
+    this.calls.push({ fn: 'redeem', from: signer.address, token: l.token, amount, minOut });
     return { txHash: '0x' + 'e'.repeat(64), received6: 123n };
   }
 

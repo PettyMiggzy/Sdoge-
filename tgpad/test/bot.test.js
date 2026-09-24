@@ -330,15 +330,17 @@ test('redeem previews the vault payout and warns when selling pays more', async 
   await ready(bot, chain);
   const l = addLaunch(bot);
   chain.setTokenBalance(l.token, bot.wallets.address(U), 100n * E18);
-  chain.vault = { usdc6: 1_000_000n, owed6: 0n, circulating: 10_000n * E18 };
+  chain.vault = { backing6: 1_000_000n, supply: 10_000n * E18, floor18: 10n ** 14n };
   await send(bot, msg(U, '/redeem CAPD all'));
   const text = tg.lastText(U);
-  assert.match(text, /Get: ~<b>0\.01 USDC<\/b>/);
+  assert.match(text, /Get: at least <b>0\.01 USDC<\/b>/);
   assert.match(text, /Selling would get/);
   await send(bot, tap(U, button(tg, U)));
-  assert.equal(chain.calls.find((c) => c.fn === 'redeem').amount, 100n * E18);
+  const call = chain.calls.find((c) => c.fn === 'redeem');
+  assert.equal(call.amount, 100n * E18);
+  assert.equal(call.minOut, 10_000n, 'the previewed payout is the on-chain minimum');
 
-  chain.vault = { usdc6: 0n, owed6: 0n, circulating: 10_000n * E18 };
+  chain.vault = { backing6: 0n, supply: 10_000n * E18, floor18: 0n };
   await send(bot, msg(U, '/redeem CAPD all'));
   assert.match(tg.lastText(U), /vault is empty/);
 });

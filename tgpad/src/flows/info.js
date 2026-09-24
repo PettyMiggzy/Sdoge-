@@ -114,9 +114,9 @@ async function marketSnapshot(bot, l) {
     bot.chain.vaultState(l.vault).catch(() => null),
   ]);
   const price = sqrt ? usdPerToken(sqrt) : 0;
-  const backing6 = vs ? vs.usdc6 + vs.owed6 : 0n;
-  const floor = vs && vs.circulating > 0n ? Number(backing6) / 1e6 / (Number(vs.circulating) / 1e18) : 0;
-  return { price, mcap: price * TOTAL_SUPPLY, backing6, circulating: vs?.circulating ?? 0n, floor };
+  const backing6 = vs?.backing6 ?? 0n;
+  const floor = vs ? Number(vs.floor18) / 1e18 : 0;
+  return { price, mcap: price * TOTAL_SUPPLY, backing6, supply: vs?.supply ?? 0n, floor };
 }
 
 export async function token(bot, m, user, args, rest, { byKey = false } = {}) {
@@ -157,10 +157,11 @@ export async function vault(bot, m, user, args) {
     `🏦 <b>$${esc(l.symbol)} meme vault</b>`,
     '',
     `Backing: <b>${fmtUsdc6(s.backing6)} USDC</b> (0.5% of every buy)`,
-    `Circulating: ${fmtTokens(s.circulating)} $${esc(l.symbol)}`,
+    `Shared by: ${fmtTokens(s.supply)} $${esc(l.symbol)} (every token, even the ones still in the pool)`,
     `Floor: <b>${fmtPrice(s.floor)}</b> per token`,
     `Market: ${fmtPrice(s.price)}${premium === null ? '' : ` (${premium >= 0 ? '+' : ''}${premium.toFixed(1)}% vs floor)`}`,
     '',
+    'The floor only goes up: buys add USDC, and redeeming or burning tokens never lowers it.',
     'Redeeming burns your tokens and pays their share of the vault in USDC. It only makes sense when the market price is below the floor.',
     `/redeem $${esc(l.symbol)} 25%`,
   ].join('\n'));
