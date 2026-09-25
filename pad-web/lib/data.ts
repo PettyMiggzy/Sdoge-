@@ -1,4 +1,4 @@
-import { createPublicClient, http, type Address } from 'viem';
+import { createPublicClient, decodeEventLog, http, parseAbiItem, type Address } from 'viem';
 import { arc } from './chain';
 import { CONFIG } from './config';
 import { poolManagerAbi, erc20Abi } from './abi';
@@ -110,12 +110,60 @@ export async function fetchSpot(token: Address, range?: { tickLower: number; tic
 // renders that as "—" or an empty-state line, not a zero.
 // ---------------------------------------------------------------------------
 
-export async function getStats(token: Address, launch?: Launch | null): Promise<TokenStats> {
+/** `liquidity: true` also values the pool from chain (the token page); lists skip that read. */
+export async function getStats(token: Address, launch?: Launch | null, opts: { liquidity?: boolean } = {}): Promise<TokenStats> {
   const indexed = await indexerGet<TokenStats>(`/stats/${token}`);
   if (indexed) return indexed;
 
   const { priceUsd, marketCapUsd } = await fetchSpot(token, rangeOf(launch)).catch(() => ({ priceUsd: 0, marketCapUsd: 0 }));
-  return { priceUsd, marketCapUsd };
+  const liquidityUsd = opts.liquidity && launch && priceUsd > 0 ? await poolLiquidityUsd(launch, priceUsd).catch(() => undefined) : undefined;
+  return { priceUsd, marketCapUsd, liquidityUsd };
+}
+
+// The launch position's liquidity (L) never changes after the launch: the
+// locker can't add or remove any. So it's read once, from the Seeded event in
+// the launch transaction.
+const SEEDED = parseAbiItem('event Seeded(uint128 liquidity, uint256 amount0, uint256 amount1)');
+const seededLiquidity = new Map<string, Promise<bigint | undefined>>();
+
+function positionLiquidity(l: Launch): Promise<bigint | undefined> {
+  const k = l.token.toLowerCase();
+  let p = seededLiquidity.get(k);
+  if (!p) {
+    p = publicClient.getTransactionReceipt({ hash: l.txHash }).then((rc) => {
+      for (const log of rc.logs) {
+        if (log.address.toLowerCase() !== l.locker.toLowerCase()) continue;
+        try { return decodeEventLog({ abi: [SEEDED], data: log.data, topics: log.topics }).args.liquidity; } catch { /* a different event */ }
+      }
+      return undefined;
+    });
+    p.catch(() => seededLiquidity.delete(k));
+    seededLiquidity.set(k, p);
+  }
+  return p;
+}
+
+/**
+ * What the launch's pool holds, valued at the current price: the tokens
+ * still in the position plus the USDC buyers have paid in. It's the figure
+ * DexScreener shows as liquidity. At launch it equals the starting market
+ * cap, because the whole supply starts in the pool.
+ */
+async function poolLiquidityUsd(l: Launch, priceUsd: number): Promise<number | undefined> {
+  if (l.tickLower === undefined || l.tickUpper === undefined || l.tokenIsToken0 === undefined) return undefined;
+  const L = await positionLiquidity(l);
+  if (L === undefined) return undefined;
+  const word = await publicClient.readContract({ address: CONFIG.poolManager, abi: poolManagerAbi, functionName: 'extsload', args: [slot0Slot(poolId(poolKeyFor(l.token).key))] });
+  const { sqrtPriceX96 } = decodeSlot0(word);
+  // Standard concentrated-liquidity amounts, in floating point (display only).
+  const sa = Math.pow(1.0001, l.tickLower / 2);
+  const sb = Math.pow(1.0001, l.tickUpper / 2);
+  const sp = Math.min(Math.max(Number(sqrtPriceX96) / 2 ** 96, sa), sb);
+  const liq = Number(L);
+  const amount0 = (liq * (sb - sp)) / (sp * sb);
+  const amount1 = liq * (sp - sa);
+  const [tokenRaw, usdcRaw] = l.tokenIsToken0 ? [amount0, amount1] : [amount1, amount0];
+  return (tokenRaw / 1e18) * priceUsd + usdcRaw / 10 ** CONFIG.quoteDecimals;
 }
 
 export async function getTrades(token: Address, n = 30): Promise<Trade[]> {

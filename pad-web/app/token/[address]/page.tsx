@@ -44,7 +44,7 @@ export default function TokenPage({ params }: { params: { address: string } }) {
   const range = launch.data && launch.data.tickLower !== undefined && launch.data.tickUpper !== undefined
     ? { tickLower: launch.data.tickLower, tickUpper: launch.data.tickUpper } : undefined;
   const spot = useQuery({ queryKey: ['spot', token, range?.tickLower, range?.tickUpper], enabled: valid && launch.isFetched, queryFn: () => fetchSpot(token, range), refetchInterval: 12_000 });
-  const stats = useQuery({ queryKey: ['stats', token, !!launch.data], enabled: valid && launch.isFetched, queryFn: () => getStats(token, launch.data), refetchInterval: 20_000 });
+  const stats = useQuery({ queryKey: ['stats', token, !!launch.data], enabled: valid && launch.isFetched, queryFn: () => getStats(token, launch.data, { liquidity: true }), refetchInterval: 20_000 });
   const trades = useQuery({ queryKey: ['trades', token], enabled: valid, queryFn: () => getTrades(token), refetchInterval: 20_000 });
   const holders = useQuery({ queryKey: ['holders', token], enabled: valid && launch.isFetched, queryFn: () => getHolders(token, launch.data) });
   const candles = useQuery({ queryKey: ['candles', token, tf[0]], enabled: valid, queryFn: () => getCandles(token, tf[2], tf[1]), refetchInterval: 60_000 });
