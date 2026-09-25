@@ -43,7 +43,7 @@ export const ARC_MAINNET: PadConfig = {
   poolFee: 10_000,
   tickSpacing: 200,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  portalGenesisBlock: 0n,
+  portalGenesisBlock: 22_720_736n,
   explorerUrl: 'https://explorer.arc.io',
 };
 

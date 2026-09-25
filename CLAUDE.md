@@ -60,21 +60,19 @@ creator-set tax 0–10% per side.
   with Venice (`pad-web/design/generate-art.py`). Keep numbers on the site real:
   where the mockup shows sample data, the site shows chain/DexScreener/indexer
   data or "—". "Staking" in its nav shows "soon" until the owner opens staking.
-- **Deploying on Arc mainnet** (addresses fixed in advance by the deploy wallet's
-  first transactions and the build): treasury
-  `0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa`, hook
+- **Deployed 2026-09-25 on Arc mainnet** (source verified on Sourcify, exact
+  match): treasury `0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa`, hook
   `0x10dE365Cc583bA953a9e6C36658A138082d9e8cc`, portal
-  `0x7F80b1198e6DAa56b0019Cb45020382358E385Fd`. Record:
-  `pad/deployments/arc-mainnet.json`. After the deploy: verify on Sourcify,
-  record the blocks, and set the portal's deploy block in the site, indexer
-  and SDK (`portalGenesisBlock`).
-- **Switch-on:** after the deploy, `0x5899…5914` calls `bootstrapMainPortal(portal)` on the
-  hook (the site's unlinked `/admin` page, the explorer's Write tab, or `cast send`).
+  `0x7F80b1198e6DAa56b0019Cb45020382358E385Fd` (block 22720736, which is also the
+  site's, the indexer's and the SDK's `portalGenesisBlock`). Record:
+  `pad/deployments/arc-mainnet.json`.
+- **Switch-on:** waiting on `0x5899…5914`, which calls `bootstrapMainPortal(portal)` on
+  the hook (the site's unlinked `/admin` page, the explorer's Write tab, or `cast send`).
 - **Deploy wallet:** the owner was driving, so an agent-made throwaway wallet
   `0xfA8CaC2eDb8d25508F65C7bF2e81674be210aE40` (funded by the owner; key only in that
-  session's scratchpad) runs `DeploySdogePad.s.sol` with `TREASURY_OWNER` =
+  session's scratchpad) ran `DeploySdogePad.s.sol` with `TREASURY_OWNER` =
   `PAD_ADMIN` = `0x5899…5914`. It keeps no power; leftover gas USDC goes back to
-  `0x5899…5914`.
+  `0x5899…5914` once the test token is out.
 - **Test token:** "Stable Doge", ticker `TEST` (owner's request, 2026-09-25), so the
   community can see the pad being tested. Launch it right after the switch-on, hand
   the creator role to `0x5899…5914` (`transferCreator`, then `acceptCreator` from
@@ -92,9 +90,9 @@ creator-set tax 0–10% per side.
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** the deploy (waiting on gas USDC), the switch-on, the Vercel
-  project and its Blob store, a WalletConnect project ID, publishing `pad-sdk` to
-  npm (needs the owner's account). Optional: host `pad-indexer`.
+- **Still needed:** the switch-on, the test token, a WalletConnect project ID,
+  publishing `pad-sdk` to npm (needs the owner's account), the `pad.` DNS record
+  (below). Optional: host `pad-indexer`.
 - **Domain:** `stabledoge.site` is on Vercel with GoDaddy DNS. A `pad.` subdomain
   needs the owner to add a CNAME `pad` → `cname.vercel-dns.com` at GoDaddy; then
   change `PAD_URL` in `assets/js/pad-ticker.js` and `NEXT_PUBLIC_SITE_URL`.

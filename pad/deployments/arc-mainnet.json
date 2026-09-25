@@ -1,21 +1,28 @@
 {
   "network": "Arc mainnet",
   "chainId": 5042,
-  "status": "pending: the deploy transactions have not been sent yet",
+  "status": "deployed 2026-09-25 (switched off until the pad admin sends one transaction; see switchOn)",
   "deployer": "0xfA8CaC2eDb8d25508F65C7bF2e81674be210aE40",
   "treasuryOwner": "0x5899a0576A94327a6316E01190f951edf7645914",
   "padAdmin": "0x5899a0576A94327a6316E01190f951edf7645914",
   "whiteLabelSlot": "open (only the pad admin can fill or renounce it)",
   "build": "solc 0.8.26, cancun, via_ir, optimizer 200 runs, bytecode_hash ipfs (see foundry.toml)",
+  "sourceVerified": "Sourcify, exact match (creation and runtime bytecode; runtime only for the hook, which CREATE2 deployed)",
   "contracts": {
     "SdogePadTreasury": {
-      "address": "0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa"
+      "address": "0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa",
+      "tx": "0xa6b59bd0f9006a3928d9dcff85fb45dc3eee13254b7964012c109e94ca611206",
+      "block": 22720727
     },
     "SdogePadHook": {
-      "address": "0x10dE365Cc583bA953a9e6C36658A138082d9e8cc"
+      "address": "0x10dE365Cc583bA953a9e6C36658A138082d9e8cc",
+      "tx": "0x7235dc2b45f3e7e9c3a4b35e8a7aaa36ac87cd5e95fae97a6e662b2c48fb5a8f",
+      "block": 22720732
     },
     "SdogePadPortal": {
-      "address": "0x7F80b1198e6DAa56b0019Cb45020382358E385Fd"
+      "address": "0x7F80b1198e6DAa56b0019Cb45020382358E385Fd",
+      "tx": "0x186a962874dde245c6a7729b3ffc89f2ba1ac139a6c1b0add44cc1b3986ab561",
+      "block": 22720736
     }
   },
   "shared": {
@@ -25,7 +32,7 @@
     "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
   },
   "switchOn": {
-    "status": "after deploy: the pad admin sends one transaction",
+    "status": "waiting: the pad admin sends one transaction",
     "to": "0x10dE365Cc583bA953a9e6C36658A138082d9e8cc",
     "function": "bootstrapMainPortal(address)",
     "argument": "0x7F80b1198e6DAa56b0019Cb45020382358E385Fd",

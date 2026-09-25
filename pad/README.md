@@ -4,16 +4,16 @@ The launchpad contracts behind SDOGE Pad: anyone can launch a token on Arc
 that trades against USDC on a real Uniswap v4 pool from its first block.
 There is no bonding curve, no graduation and no migration.
 
-**Status:** deploying on Arc mainnet. The addresses below are already fixed:
-they follow from the deploy wallet's first transactions and this exact build.
-Once deployed, the pad stays switched off until the pad admin sends one
-transaction (step 2 under "Deploy"). Full record: `deployments/arc-mainnet.json`.
+**Status:** deployed on Arc mainnet on 2026-09-25, source verified on
+Sourcify (exact match). The pad stays switched off until the pad admin sends
+one transaction (step 2 under "Deploy"). Full record:
+`deployments/arc-mainnet.json`.
 
 | Contract | Address |
 |---|---|
 | SdogePadTreasury (owner `0x5899…5914`) | `0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa` |
 | SdogePadHook | `0x10dE365Cc583bA953a9e6C36658A138082d9e8cc` |
-| SdogePadPortal (main pad) | `0x7F80b1198e6DAa56b0019Cb45020382358E385Fd` |
+| SdogePadPortal (main pad, block 22720736) | `0x7F80b1198e6DAa56b0019Cb45020382358E385Fd` |
 
 The contracts were audited twice in September 2026; `test/AuditFixes.t.sol`
 covers every fix. Dependencies are pinned to exact commits (`foundry.lock`,
