@@ -178,7 +178,7 @@ router.execute(commands, inputs, deadline)
         <Code>{`portal.createLaunch({
   name: "Much Wow Coin",
   symbol: "WOW",
-  startingMarketCapQuote: 2_500_000000n, // $2,500 in USDC's 6 decimals ($100 at least)
+  startingMarketCapQuote: 10_000_000000n, // $10,000 in USDC's 6 decimals ($100 to $1T; the site offers up to $1M)
   buyTaxBps: 200,  // 2%, up to 1000 (10%)
   sellTaxBps: 400, // 4%
 })

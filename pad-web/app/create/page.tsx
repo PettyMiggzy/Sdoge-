@@ -13,7 +13,13 @@ import { ensureGasFunds, explainTxError, knownErrorsAbi } from '@/lib/txError';
 import { useEnsureArc } from '@/lib/ensureArc';
 import { TokenIcon } from '@/components/TokenIcon';
 
-const PRESETS = [500, 1000, 2500, 5000, 10000];
+// The opening market cap is also the pool's starting liquidity: the whole
+// supply goes into the pool, so what DexScreener shows as liquidity starts at
+// this number. The contract accepts $100 to $1T; this site offers up to $1M.
+const PRESETS = [5_000, 10_000, 50_000, 100_000, 500_000, 1_000_000];
+const MIN_MC_USD = 100;
+const presetLabel = (v: number) => (v >= 1_000_000 ? `$${v / 1_000_000}M` : `$${v / 1_000}K`);
+const MAX_MC_USD = 1_000_000;
 const TOTAL_SUPPLY = 1_000_000_000;
 
 export default function Create() {
@@ -30,7 +36,7 @@ export default function Create() {
   const [description, setDescription] = useState('');
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [mcUsd, setMcUsd] = useState(1000);
+  const [mcUsd, setMcUsd] = useState(10_000);
   const [buyTax, setBuyTax] = useState(3);
   const [sellTax, setSellTax] = useState(3);
   // Off-chain display info only: SdogePadRevenueSplitter is a flat 90/10 and
@@ -48,7 +54,7 @@ export default function Create() {
   const splitTotal = Object.values(split).reduce((a, b) => a + b, 0);
   // The split is an off-chain display preference, never enforced on-chain,
   // so it must not be able to block a real launch.
-  const valid = name.trim().length >= 2 && /^[A-Z0-9]{2,10}$/.test(symbol) && mcUsd >= 100 && buyTax <= 10 && sellTax <= 10;
+  const valid = name.trim().length >= 2 && /^[A-Z0-9]{2,10}$/.test(symbol) && mcUsd >= MIN_MC_USD && mcUsd <= MAX_MC_USD && buyTax <= 10 && sellTax <= 10;
 
   function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -177,14 +183,17 @@ export default function Create() {
             <SectionTitle icon={Rocket} n={2} title="Price and tax" subtitle="Where trading starts and what each side pays. Both are locked in at launch." />
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="label">Starting market cap (USDC)</label>
+                <label className="label">Starting market cap and liquidity (USDC)</label>
                 <div className="flex flex-wrap gap-2">
                   {PRESETS.map((p) => (
-                    <button key={p} className={`tab border border-line2 ${mcUsd === p ? 'tab-active' : ''}`} onClick={() => setMcUsd(p)}>{fmtUsd(p, { compact: true })}</button>
+                    <button key={p} className={`tab border border-line2 ${mcUsd === p ? 'tab-active' : ''}`} onClick={() => setMcUsd(p)}>{presetLabel(p)}</button>
                   ))}
-                  <input className="input w-28" type="number" min={100} value={mcUsd} onChange={(e) => setMcUsd(Math.max(0, Number(e.target.value)))} />
+                  <input className="input w-32" type="number" min={MIN_MC_USD} max={MAX_MC_USD} value={mcUsd} onChange={(e) => setMcUsd(Math.min(MAX_MC_USD, Math.max(0, Number(e.target.value))))} />
                 </div>
-                <p className="mt-1.5 text-xs text-dim">Sets the opening price: about {fmtUsd(openingPrice)} per token.</p>
+                <p className="mt-1.5 text-xs text-dim">
+                  Opens at about {fmtUsd(openingPrice)} per token, with {fmtUsd(mcUsd)} of starting liquidity: the whole
+                  supply goes into the pool, so the liquidity DexScreener shows starts at your market cap. From $100 up to $1M.
+                </p>
               </div>
               <div>
                 <label className="label">Supply</label>
@@ -240,7 +249,7 @@ export default function Create() {
               <Row k="Buy tax" v={`${buyTax}%`} />
               <Row k="Sell tax" v={`${sellTax}%`} />
               <Row k="Your cut" v="90%, set in the contract" />
-              <Row k="Liquidity" v="Full supply, locked for good" />
+              <Row k="Starting liquidity" v={`${fmtUsd(mcUsd)} (full supply, locked)`} />
             </dl>
             {launched && !busy ? (
               <div className="mt-5 grid gap-2">

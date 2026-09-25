@@ -78,7 +78,8 @@ creator-set tax 0–10% per side.
   0.25 USDC buy and sell-back went through on mainnet. A second test, "Stable Doge
   Pad" (`TEST`, `0xB480fADcdf58464951B98EE81F0566135Ab5da8E`), opened at a $1B market
   cap (owner's request): DexScreener showed $1.01B market cap and $1.01B liquidity,
-  and GoPlus flagged nothing on its first scan. For both, the creator role is
+  and GoPlus flagged nothing on its first scan. A third, "SDOGE Pad" (`TEST`,
+  `0x18Dd0394eaf530B4C7D65eD3Bce68E1186e54ED4`), also opened at $1B. For all three, the creator role is
   offered to `0x5899…5914`, which accepts it with the "Accept the creator role"
   button on the token's page.
 - **Liquidity is the starting market cap** (owner asked, 2026-09-25): the whole
@@ -86,6 +87,10 @@ creator-set tax 0–10% per side.
   equals the opening market cap, like pump.fun's virtual reserves. A separate,
   lower liquidity figure would need most of the supply outside the pool (a
   creator bag), which is the rug pattern scanners flag, so the pad doesn't offer it.
+  The create page offers a starting market cap (= starting liquidity) from $100 to
+  $1M (owner, 2026-09-25); the contract itself accepts up to $1T.
+- **No fake volume** (2026-09-25): don't run wash trades to pump a token's volume.
+  Small, disclosed test trades from the deploy wallet are fine.
 - **Hosting:** Vercel project `sdoge-launchpad` (root `pad-web`) deploys from this
   branch. Its only storage is its own private Vercel Blob store (token info,
   images, a snapshot of the launch list); everything is served through the
@@ -116,7 +121,7 @@ creator-set tax 0–10% per side.
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** `0x5899…5914` accepting both TEST creator roles; publishing
+- **Still needed:** `0x5899…5914` accepting the three TEST creator roles; publishing
   `pad-sdk` to npm (needs the owner's account). Optional: host `pad-indexer`
   (volume, holders and candles on token pages show "—" until it runs).
 - **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →
