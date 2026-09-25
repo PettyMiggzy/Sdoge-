@@ -11,6 +11,7 @@ import { saveMeta, readImageFile } from '@/lib/metadata';
 import { arc } from '@/lib/chain';
 import { ensureGasFunds, explainTxError, knownErrorsAbi } from '@/lib/txError';
 import { useEnsureArc } from '@/lib/ensureArc';
+import { askExplorerForSource } from '@/lib/explorerSource';
 import { TokenIcon } from '@/components/TokenIcon';
 
 // The opening market cap is also the pool's starting liquidity: the whole
@@ -128,6 +129,7 @@ export default function Create() {
       }
       if (!token) throw new Error('The launch went through, but its token address is missing from the receipt');
       setLaunched(token);
+      askExplorerForSource(token);
       await saveInfo(token);
     } catch (e: unknown) {
       setErr(explainTxError(e));

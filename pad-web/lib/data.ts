@@ -72,8 +72,14 @@ export async function fetchLaunches(): Promise<Launch[]> {
 
 /** null only when the index confirms the address isn't a launch; throws when the lookup itself fails. */
 export async function fetchLaunch(token: Address): Promise<Launch | null> {
-  const [hit] = await launchApi(`?token=${token}`);
-  return hit ?? null;
+  const res = await fetch(`/api/launches?token=${token}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`The launch lookup failed (${res.status})`);
+  const body = (await res.json()) as { launches: LaunchJson[]; stale?: boolean };
+  if (body.launches[0]) return fromJson(body.launches[0]);
+  // A miss while the site's chain scan is behind proves nothing: throw so the
+  // lookup retries, instead of showing a real token as "not found".
+  if (body.stale) throw new Error('The launch list is catching up');
+  return null;
 }
 
 // ---------------------------------------------------------------------------

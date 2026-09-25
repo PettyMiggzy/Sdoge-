@@ -89,6 +89,13 @@ creator-set tax 0–10% per side.
   creator bag), which is the rug pattern scanners flag, so the pad doesn't offer it.
   The create page offers a starting market cap (= starting liquidity) from $100 to
   $1M (owner, 2026-09-25); the contract itself accepts up to $1T.
+- **Scanners read source from the explorer.** Arc's explorer only shows a contract's
+  verified source after someone asks for it, and Quick Intel flagged a TEST token
+  ("suspicious functions") that it scanned before that. Every launch token has the
+  same code as a Sourcify-verified one, so the site asks the explorer for each new
+  token right after launch and whenever its page opens (`lib/explorerSource.ts`).
+  One splitter and one locker are verified on Sourcify too; other launches' splitters
+  and lockers carry different built-in addresses, so each needs its own verification.
 - **No fake volume** (2026-09-25): don't run wash trades to pump a token's volume.
   Small, disclosed test trades from the deploy wallet are fine.
 - **Hosting:** Vercel project `sdoge-launchpad` (root `pad-web`) deploys from this

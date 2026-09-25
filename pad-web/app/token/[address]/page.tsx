@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { notFound } from 'next/navigation';
 import { useReadContract } from 'wagmi';
@@ -22,6 +22,7 @@ import { StatCards } from '@/components/StatCards';
 import { FeatureStrip } from '@/components/FeatureStrip';
 import { CreatorCard, InfoTab, AddrLink } from '@/components/TokenExtras';
 import { GoPlusPanel } from '@/components/GoPlusPanel';
+import { askExplorerForSource } from '@/lib/explorerSource';
 
 type Tab = 'chart' | 'trades' | 'holders' | 'info';
 const TFS = [['1h', 60, 60], ['4h', 240, 72], ['1d', 900, 96], ['1w', 3600, 168], ['1M', 14400, 180]] as const; // label, interval(s), candle count
@@ -37,6 +38,8 @@ export default function TokenPage({ params }: { params: { address: string } }) {
 
   const launch = useQuery({ queryKey: ['launch', token], enabled: valid, queryFn: () => fetchLaunch(token) });
   const meta = useQuery({ queryKey: ['meta', token], enabled: valid, queryFn: () => loadMeta(token) });
+  // So the explorer (and the scanners that read it) have this token's source.
+  useEffect(() => { if (launch.data) askExplorerForSource(token); }, [launch.data, token]);
   const { key: poolKey, tokenIsToken0 } = useMemo(() => poolKeyFor(token), [token]);
 
   // Price reads wait for the launch record so they can clamp to its liquidity
