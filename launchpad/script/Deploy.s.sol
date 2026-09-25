@@ -41,8 +41,12 @@ contract Deploy is Script {
     );
 
     function run() external returns (LaunchpadFactory factory, LaunchpadRouter router) {
-        address owner = vm.envAddress("LAUNCHPAD_OWNER");
-        address feeRecipient = vm.envAddress("FEE_RECIPIENT");
+        return deploy(vm.envAddress("LAUNCHPAD_OWNER"), vm.envAddress("FEE_RECIPIENT"));
+    }
+
+    /// run(), with the two addresses passed in. Tests call this: forge runs tests in parallel and
+    /// environment variables belong to the whole process, so tests that set them race each other.
+    function deploy(address owner, address feeRecipient) public returns (LaunchpadFactory factory, LaunchpadRouter router) {
         require(owner != address(0) && feeRecipient != address(0), "set LAUNCHPAD_OWNER and FEE_RECIPIENT");
         require(block.chainid == ARC_CHAIN_ID, "not Arc mainnet (chain 5042)");
         require(POOL_MANAGER.code.length > 0, "no PoolManager at POOL_MANAGER on this chain");

@@ -31,18 +31,13 @@ contract DeployScriptTest is Test {
         return address(new SafeLike(threshold, owners));
     }
 
-    function setAdmin(address owner, address recipient) internal {
-        vm.setEnv("LAUNCHPAD_OWNER", vm.toString(owner));
-        vm.setEnv("FEE_RECIPIENT", vm.toString(recipient));
-    }
+    // Only this test sets the process-wide environment variables run() reads; every other test
+    // passes the addresses to deploy() so parallel tests can't read each other's values.
 
     function test_deployScript_endToEnd() public {
         address multisig = safe(2, 3);
         address splitter = address(new NoReceive());
-        vm.setEnv("LAUNCHPAD_OWNER", vm.toString(multisig));
-        vm.setEnv("FEE_RECIPIENT", vm.toString(splitter));
-
-        (LaunchpadFactory factory, LaunchpadRouter router) = script.run();
+        (LaunchpadFactory factory, LaunchpadRouter router) = script.deploy(multisig, splitter);
 
         assertEq(factory.owner(), multisig, "owned by the multisig from the start");
         assertEq(factory.feeRecipient(), splitter);
@@ -66,50 +61,55 @@ contract DeployScriptTest is Test {
     }
 
     function test_deployScript_requiresBothAddresses() public {
-        setAdmin(address(0), makeAddr("r"));
+        vm.setEnv("LAUNCHPAD_OWNER", vm.toString(address(0)));
+        vm.setEnv("FEE_RECIPIENT", vm.toString(makeAddr("r")));
         vm.expectRevert("set LAUNCHPAD_OWNER and FEE_RECIPIENT");
         script.run();
+        address owner = makeAddr("owner");
+        vm.expectRevert("set LAUNCHPAD_OWNER and FEE_RECIPIENT");
+        script.deploy(owner, address(0));
     }
 
     function test_deployScript_onlyOnArc() public {
         vm.chainId(1);
-        setAdmin(safe(2, 3), makeAddr("r"));
+        address multisig = safe(2, 3);
+        address r = makeAddr("r");
         vm.expectRevert("not Arc mainnet (chain 5042)");
-        script.run();
+        script.deploy(multisig, r);
     }
 
     function test_deployScript_ownerMustBeARealSafe() public {
+        // Every owner is built before its expectRevert, which applies to the very next call.
         address r = makeAddr("r");
-        setAdmin(makeAddr("eoa"), r);
+        address eoa = makeAddr("eoa");
         vm.expectRevert("LAUNCHPAD_OWNER has no code here: deploy the Safe on this chain first");
-        script.run();
+        script.deploy(eoa, r);
 
         address delegated = makeAddr("delegated");
         vm.etch(delegated, abi.encodePacked(hex"ef0100", address(new NoReceive())));
-        setAdmin(delegated, r);
         vm.expectRevert("LAUNCHPAD_OWNER is an EIP-7702-delegated EOA, not a Safe");
-        script.run();
+        script.deploy(delegated, r);
 
-        setAdmin(address(new NoReceive()), r);
+        address plain = address(new NoReceive());
         vm.expectRevert("LAUNCHPAD_OWNER isn't a Safe (no getThreshold)");
-        script.run();
+        script.deploy(plain, r);
 
-        setAdmin(safe(1, 3), r);
+        address oneOfThree = safe(1, 3);
         vm.expectRevert("LAUNCHPAD_OWNER must be a Safe with threshold 2 or more");
-        script.run();
+        script.deploy(oneOfThree, r);
 
-        setAdmin(safe(2, 1), r);
+        address twoOfOne = safe(2, 1);
         vm.expectRevert("LAUNCHPAD_OWNER must be a Safe with threshold 2 or more");
-        script.run();
+        script.deploy(twoOfOne, r);
     }
 
     function test_deployScript_ownerIsNotTheBroadcaster() public {
         // the default broadcaster, given code so only the "is the broadcaster" check can trip
         address broadcaster = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
         vm.etch(broadcaster, address(new NoReceive()).code);
-        setAdmin(broadcaster, makeAddr("r"));
+        address r = makeAddr("r");
         vm.expectRevert("LAUNCHPAD_OWNER is the broadcaster: use the Safe");
-        script.run();
+        script.deploy(broadcaster, r);
     }
 
     function test_deployScript_feeRecipientMustKeepTheFees() public {
@@ -118,9 +118,8 @@ contract DeployScriptTest is Test {
         address[4] memory bad =
             [address(0xdEaD), script.USDC(), script.POOL_MANAGER(), address(0x0000000000000000000000000000000000000004)];
         for (uint256 i = 0; i < bad.length; i++) {
-            setAdmin(multisig, bad[i]);
             vm.expectRevert(bytes(lost));
-            script.run();
+            script.deploy(multisig, bad[i]);
         }
     }
 }
