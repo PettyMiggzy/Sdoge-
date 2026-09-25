@@ -138,8 +138,69 @@
     </div>
   </section>
 
+  <!-- ===== CREATE WITH AI ===== -->
+  <section class="section section--alt" id="ai">
+    <div class="container">
+      <div class="panel__head" style="margin-bottom: 0;">
+        <div>
+          <div class="eyebrow">Create with AI</div>
+          <h2 class="section__title">Describe it. Get the art. Mint it.</h2>
+        </div>
+        <div class="wallet-status">AI credits: <span id="aiCredits">Connect your wallet</span></div>
+      </div>
+      <p class="section__lead">
+        Type what you want and pick a style. Your image is ready in seconds,
+        saved for you, and one click puts it in your 1-of-1 mint below.
+      </p>
+      <p class="studio-note ai-status" id="aiStatus" data-js-managed></p>
+
+      <div class="app-grid">
+        <div class="panel">
+          <label class="studio-field">What should it look like?
+            <textarea class="studio-input ai-prompt" id="aiPrompt" maxlength="1500" rows="4" placeholder="A doge astronaut relaxing on a pile of USDC coins on the moon, glossy 3D cartoon"></textarea>
+          </label>
+          <div class="ai-count"><span id="aiPromptCount">0</span> / 1500</div>
+          <div class="studio-field">Style
+            <div class="ai-models" id="aiModels" role="radiogroup" aria-label="Style"></div>
+          </div>
+          <button class="btn btn--primary btn--wide" id="aiCreateBtn">Create (1 credit)</button>
+
+          <div class="ai-packs__title">Buy AI credits</div>
+          <div class="ai-packs" id="aiPacks"></div>
+          <details class="ai-recover">
+            <summary>Paid on another device?</summary>
+            <div class="ai-recover__row">
+              <input class="studio-input" id="aiTxInput" placeholder="0x... your payment's transaction hash" />
+              <button class="btn btn--ghost btn--small" id="aiTxAdd">Add</button>
+            </div>
+          </details>
+          <p class="fine-print">
+            <span id="aiPriceNote">1 credit makes 1 image (Premium takes 3).</span>
+            You pay in USDC on Arc, straight to the SDOGE team. Credits never
+            expire and can't be refunded; a failed image never costs a credit.
+            Anything goes except sexual images of minors or of real people:
+            those prompts are refused. You're responsible for what you make and
+            mint.
+          </p>
+        </div>
+        <div class="panel">
+          <div class="panel__head"><span class="panel__title">Your image</span></div>
+          <div class="ai-stage">
+            <p class="ai-empty" id="aiEmpty">Your image shows up here.</p>
+            <img class="ai-image" id="aiImage" alt="Your AI image" hidden />
+          </div>
+          <div class="ai-actions" id="aiActions" hidden>
+            <button class="btn btn--primary btn--small" id="aiUseBtn">Use it for my NFT</button>
+            <a class="btn btn--ghost btn--small" id="aiOpen" href="#" target="_blank" rel="noopener">Open full size</a>
+          </div>
+          <div class="ai-history" id="aiHistory"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== COMMUNITY 1-of-1 ===== -->
-  <section class="section section--alt" id="community">
+  <section class="section" id="community">
     <div class="container">
       <div class="eyebrow">Mint a 1-of-1</div>
       <h2 class="section__title">Your art, in SDOGE Community Art.</h2>
@@ -284,5 +345,6 @@
 <script src="assets/js/arc.js"></script>
 <script src="assets/js/wallet.js"></script>
 <script src="assets/js/studio.js"></script>
+<script src="assets/js/studio-ai.js"></script>
 </body>
 </html>

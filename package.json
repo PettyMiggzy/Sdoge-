@@ -1,0 +1,15 @@
+{
+  "name": "stabledoge-site",
+  "private": true,
+  "description": "stabledoge.site: the static pages, plus the Studio AI endpoints in api/ (Vercel functions).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test api/_test/*.test.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "2.8.0",
+    "ethers": "6.13.4"
+  }
+}

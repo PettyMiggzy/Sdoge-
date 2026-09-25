@@ -2,7 +2,8 @@ name: CI
 
 # Runs every test suite on each push and pull request:
 # - contracts: staking, NFT collection, SDOGE Studio, marketplace, the deploy scripts, and the
-#   site's own assets/js run against those contracts (Hardhat)
+#   site's own assets/js run against those contracts (Hardhat), plus the site's Studio AI
+#   endpoints (api/, node --test)
 # - launchpad: the Uniswap v4 launchpad and meme vault (Foundry)
 # - tgpad: the Telegram launchpad bot
 # - pad, pad-web, pad-indexer, pad-sdk: SDOGE Pad's contracts (Foundry), site
@@ -30,7 +31,13 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: contracts/package-lock.json
+          cache-dependency-path: |
+            contracts/package-lock.json
+            package-lock.json
+      - name: Install (site API)
+        run: npm ci
+      - name: Test (site API)
+        run: npm test
       - name: Install
         working-directory: contracts
         run: npm ci

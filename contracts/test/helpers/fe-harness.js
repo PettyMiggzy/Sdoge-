@@ -130,8 +130,9 @@ async function startLimitedRpc(hreProvider, { perSecond = 20 } = {}) {
  * account:    the address the injected wallet exposes
  * search:     location.search (for studio.html?drop=0x...)
  * rpc:        "limited" to read through the page's own provider and a rate-limited relay
+ * globals:    extra browser globals for the page (e.g. fetch, localStorage)
  */
-async function loadPage({ files, contracts = {}, hreProvider, account, search = "", rpc = "direct" }) {
+async function loadPage({ files, contracts = {}, hreProvider, account, search = "", rpc = "direct", globals = {} }) {
   const elements = {};
   const alerts = [];
   const confirms = [];
@@ -190,6 +191,7 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
     // The page's read provider, pointed at the local chain.
     __testReadProvider: new ethersLib.BrowserProvider(hreProvider),
   };
+  Object.assign(sandbox, globals);
   sandbox.window = sandbox;
   sandbox.ethereum = wallet;
   const ctx = vm.createContext(sandbox);
@@ -237,4 +239,4 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
   return page;
 }
 
-module.exports = { loadPage };
+module.exports = { loadPage, startLimitedRpc };

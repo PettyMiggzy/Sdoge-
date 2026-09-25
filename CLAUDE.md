@@ -31,6 +31,12 @@ for decisions to live in the repo so nothing depends on chat memory.
   from NFT profits. Staking is for $SDOGE only.
 - **The early-exit penalty stays in the pool** ("it stays in there"): the 15% and any
   forfeited rewards stream to the stakers who stay. There is no sweep.
+- **Studio AI** ("Create with AI" on `studio.html`, `api/ai/*`, see `api/README.md`): buyers
+  pay USDC on Arc straight to the owner's wallet (0x5899…5914) for credits (0.25 USDC each, 10
+  for 2, 50 for 8); every image costs at least 2.5x what Venice charges ("I need profit off
+  it"). Uncensored except no sexual content with minors and no sexual images of real people.
+  `VENICE_API_KEY` lives only in the `sdoge` Vercel project's env, added by the owner; images go
+  to the public Blob store `sdoge-studio-ai`.
 - **Staking an NFT boosts the stake**, by the Collectible design's tier
   (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%, placeholders until
   the owner decides). The owner can change them until `lockBoosts()`.

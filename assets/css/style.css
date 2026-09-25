@@ -1296,6 +1296,59 @@ textarea.studio-input { min-height: 84px; resize: vertical; font-family: ui-mono
   .stake-row { flex-wrap: wrap; }
 }
 
+/* ===================== Studio: Create with AI ===================== */
+.ai-status:empty { display: none; }
+.ai-status { margin-top: 12px; color: var(--gold-light); }
+textarea.studio-input.ai-prompt { min-height: 110px; font-family: var(--font-body); font-size: 15px; }
+.ai-count { margin: -8px 0 12px; text-align: right; font-size: 12px; color: var(--text-muted); }
+.ai-models { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ai-model {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 9px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  background: var(--navy-900);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.ai-model b { font-size: 14px; }
+.ai-model span { font-size: 12px; color: var(--text-muted); }
+.ai-model:hover { border-color: var(--blue-light); }
+.ai-model.is-selected { border-color: var(--blue-light); background: rgba(39, 117, 202, 0.18); box-shadow: 0 0 0 1px var(--blue-light) inset; }
+.ai-packs__title { margin-top: 22px; font-size: 13px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted); }
+.ai-packs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ai-pack { font-size: 13px; }
+.ai-recover { margin-top: 14px; font-size: 13px; color: var(--text-muted); }
+.ai-recover summary { cursor: pointer; }
+.ai-recover__row { display: flex; gap: 8px; margin-top: 10px; }
+.ai-stage {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: var(--radius-md);
+  background: var(--navy-900);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.ai-empty { color: var(--text-muted); font-size: 14px; }
+.ai-image { width: 100%; height: 100%; object-fit: cover; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ai-history__title { margin-top: 20px; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.ai-history__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+.ai-thumb { padding: 0; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; background: none; aspect-ratio: 1 / 1; }
+.ai-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ai-thumb:hover { border-color: var(--blue-light); }
+[hidden] { display: none !important; }
+@media (max-width: 480px) {
+  .ai-models { grid-template-columns: repeat(2, 1fr); }
+  .ai-history__grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ===================== Market bar (live SDOGE Pad launches) ===================== */
 /* A slim stock-ticker strip pinned above the navbar. assets/js/pad-ticker.js
    fills it from the pad's public API and DexScreener; everything shown is live
