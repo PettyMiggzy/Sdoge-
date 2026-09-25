@@ -96,16 +96,18 @@ creator-set tax 0–10% per side.
   Token pages show GoPlus's free token scan (`/api/goplus`, cached 5 min). GoPlus
   marks every token on an Arc v4 hook pool as a honeypot, $SDOGE included; the
   panel says so. Report that false positive to GoPlus once a launch has real sells.
-- **Phone wallets:** plain phone browsers need a WalletConnect (Reown) project ID
-  in `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (Vercel), with the pad's domains on
-  its allowlist. It must be SDOGE's own project: an ID is public in the site's
-  code, so never reuse another project's. Without it, only the wallet built into
-  the browser (e.g. MetaMask's own browser) can connect.
+- **Phone wallets:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (Vercel only, not in
+  the repo) holds the owner's Reown project ID (owner's choice, 2026-09-25). That
+  turns on RainbowKit's full list (MetaMask, Coinbase, Rainbow, Trust, OKX,
+  WalletConnect) with deep links into phone wallet apps. The project's allowlist
+  in the Reown dashboard must include the pad's domains. Without an ID, only the
+  wallet built into the browser can connect, and phone browsers get an "open in
+  your wallet app" list instead.
 - **Main site:** the nav has a **Pad** link (the word "Pad", not "Launchpad") to
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** the switch-on, the test token, SDOGE's WalletConnect project ID,
+- **Still needed:** the switch-on, the test token,
   publishing `pad-sdk` to npm (needs the owner's account). Optional: host
   `pad-indexer`.
 - **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →
