@@ -1,13 +1,14 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
-import { parseAbi, zeroAddress } from 'viem';
+import { BaseError, encodeFunctionData, getAddress, parseAbi, zeroAddress, type Hex } from 'viem';
 import { CheckCircle2, Power } from 'lucide-react';
 import { CONFIG, explorerTx } from '@/lib/config';
 import { arc } from '@/lib/chain';
 import { explainTxError } from '@/lib/txError';
 import { shortAddr } from '@/lib/format';
+import { browserProvider, browserWalletName, switchWalletToArc, walletErrorText } from '@/lib/browserWallet';
 import { ConnectButton } from './ConnectButton';
 
 const hookAdminAbi = parseAbi([
@@ -18,6 +19,8 @@ const hookAdminAbi = parseAbi([
   'error NotBootstrapper()',
   'error AlreadyBootstrapped()',
 ]);
+
+const NOT_ADMIN = `This wallet isn't the pad admin${CONFIG.padAdmin ? ` (${shortAddr(CONFIG.padAdmin)})` : ''}. Connect the admin wallet and try again.`;
 
 /**
  * The hook's one-time admin switch. Only the pad admin (the hook's
@@ -61,9 +64,7 @@ export function AdminPanel() {
       await status.refetch();
     } catch (e: unknown) {
       const raw = `${(e as Error)?.message ?? e}`;
-      setErr(/NotBootstrapper/.test(raw)
-        ? `This wallet isn't the pad admin${CONFIG.padAdmin ? ` (${shortAddr(CONFIG.padAdmin)})` : ''}. Connect the admin wallet and try again.`
-        : explainTxError(e));
+      setErr(/NotBootstrapper/.test(raw) ? NOT_ADMIN : explainTxError(e));
     } finally {
       setBusy(null);
     }
@@ -104,9 +105,82 @@ export function AdminPanel() {
           )}
           {tx && <a className="block truncate text-xs text-brand-hi" href={explorerTx(tx) || undefined} target="_blank" rel="noreferrer">tx {tx}</a>}
           {err && <div className="rounded-lg border border-down/40 bg-down/10 p-3 text-sm text-down">{err}</div>}
+          <DirectSwitchOn onDone={() => status.refetch()} />
         </div>
       )}
       {status.data?.on && <div className="panel p-6 text-sm text-up">The launchpad is live. Anyone can launch a token.</div>}
+    </div>
+  );
+}
+
+/**
+ * The same switch, sent straight through the wallet built into this browser
+ * (on a phone, the wallet app's own browser) with no Connect Wallet step.
+ * The fallback for when that step won't connect.
+ */
+function DirectSwitchOn({ onDone }: { onDone: () => Promise<unknown> }) {
+  const pc = usePublicClient({ chainId: arc.id });
+  const [walletName, setWalletName] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [tx, setTx] = useState<string | null>(null);
+
+  // After mount only (the server has no wallet), and again for wallets that
+  // inject themselves late.
+  useEffect(() => {
+    const check = () => setWalletName(browserProvider() ? browserWalletName() : null);
+    check();
+    window.addEventListener('ethereum#initialized', check);
+    const t = setTimeout(check, 2000);
+    return () => { window.removeEventListener('ethereum#initialized', check); clearTimeout(t); };
+  }, []);
+
+  if (!walletName) return null;
+
+  async function run() {
+    const p = browserProvider();
+    if (!p || !pc) return;
+    setErr(null); setTx(null);
+    try {
+      setBusy(`Asking ${walletName} for your account…`);
+      const accounts = (await p.request({ method: 'eth_requestAccounts' })) as string[] | undefined;
+      const from = accounts?.[0] ? getAddress(accounts[0]) : undefined;
+      if (!from) throw new Error(`${walletName} didn't share an account.`);
+      if (CONFIG.padAdmin && from.toLowerCase() !== CONFIG.padAdmin.toLowerCase()) {
+        throw new Error(`${walletName} is using ${shortAddr(from)}. Switch it to the pad admin account (${shortAddr(CONFIG.padAdmin)}) and try again.`);
+      }
+      setBusy(`Switching ${walletName} to ${CONFIG.chainName}…`);
+      await switchWalletToArc(p);
+      setBusy('Doing a test run…');
+      const call = { address: CONFIG.hook, abi: hookAdminAbi, functionName: 'bootstrapMainPortal', args: [CONFIG.portal] } as const;
+      await pc.simulateContract({ ...call, account: from });
+      setBusy(`Approve it in ${walletName}…`);
+      const hash = (await p.request({
+        method: 'eth_sendTransaction',
+        params: [{ from, to: CONFIG.hook, data: encodeFunctionData(call) }],
+      })) as Hex;
+      setTx(hash); setBusy(`Waiting for ${CONFIG.chainName}…`);
+      const receipt = await pc.waitForTransactionReceipt({ hash });
+      if (receipt.status !== 'success') throw new Error('The transaction failed on-chain');
+      await onDone();
+    } catch (e: unknown) {
+      const raw = `${(e as Error)?.message ?? e}`;
+      setErr(/NotBootstrapper/.test(raw) ? NOT_ADMIN : e instanceof BaseError ? explainTxError(e) : walletErrorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-line pt-4">
+      <p className="text-sm text-muted">
+        Connect Wallet not working on your phone? Send the switch straight from {walletName} instead.
+      </p>
+      <button className="btn-ghost px-5 py-2.5" disabled={!!busy} onClick={run}>
+        <Power className="h-4 w-4" />{busy ?? `Switch on with ${walletName}`}
+      </button>
+      {tx && <a className="block truncate text-xs text-brand-hi" href={explorerTx(tx) || undefined} target="_blank" rel="noreferrer">tx {tx}</a>}
+      {err && <div className="rounded-lg border border-down/40 bg-down/10 p-3 text-sm text-down">{err}</div>}
     </div>
   );
 }
