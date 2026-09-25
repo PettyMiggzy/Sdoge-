@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { clsx } from 'clsx';
@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { fetchLaunches, getStats, publicClient, type Launch, type TokenStats } from '@/lib/data';
 import { hookAbi } from '@/lib/abi';
 import { CONFIG } from '@/lib/config';
+import { askExplorerForSources } from '@/lib/explorerSource';
 import { Ticker } from '@/components/Ticker';
 import { MilestoneBar } from '@/components/MilestoneBar';
 import { TokenCard } from '@/components/TokenCard';
@@ -18,6 +19,8 @@ export default function Explore() {
   const [q, setQ] = useState('');
 
   const launches = useQuery({ queryKey: ['launches'], queryFn: () => fetchLaunches(), refetchInterval: 20_000 });
+  // Once per visit (see lib/explorerSource.ts).
+  useEffect(() => { askExplorerForSources((launches.data ?? []).slice(0, 60).map((l) => l.token)); }, [launches.data]);
 
   const stats = useQuery({
     queryKey: ['stats', launches.data?.map((l) => l.token)],

@@ -92,8 +92,12 @@ creator-set tax 0–10% per side.
 - **Scanners read source from the explorer.** Arc's explorer only shows a contract's
   verified source after someone asks for it, and Quick Intel flagged a TEST token
   ("suspicious functions") that it scanned before that. Every launch token has the
-  same code as a Sourcify-verified one, so the site asks the explorer for each new
-  token right after launch and whenever its page opens (`lib/explorerSource.ts`).
+  same code as a Sourcify-verified one, so visitors' browsers ask the explorer for
+  each token the sites show, once per visit: right after a launch, on token pages,
+  on the pad's home and explore lists, and in stabledoge.site's market bar
+  (`pad-web/lib/explorerSource.ts`, `assets/js/pad-ticker.js`). The explorer's API
+  turns servers away (Cloudflare), and faking a browser to get past that is off
+  limits, so it can't run from the pad's server.
   One splitter and one locker are verified on Sourcify too; other launches' splitters
   and lockers carry different built-in addresses, so each needs its own verification.
 - **No fake volume** (2026-09-25): don't run wash trades to pump a token's volume.

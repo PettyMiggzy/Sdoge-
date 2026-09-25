@@ -82,8 +82,27 @@
     } catch { return null; }
   }
 
+  // Arc's explorer only shows a contract's verified source once someone asks
+  // it for that contract, and token scanners read the source from there.
+  // Every pad token has code that's already verified, so each visitor's
+  // browser asks once per visit for the tokens in the bar. That's how new
+  // launches get verified on their own.
+  function askExplorer(addresses) {
+    let seen = [];
+    try { seen = JSON.parse(sessionStorage.getItem('explorer-asked') || '[]'); } catch (e) { /* private mode */ }
+    const done = new Set(seen);
+    for (const a of addresses) {
+      const k = String(a).toLowerCase();
+      if (done.has(k)) continue;
+      done.add(k);
+      fetch(`https://explorer.arc.io/api/v2/smart-contracts/${k}`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+    }
+    try { sessionStorage.setItem('explorer-asked', JSON.stringify([...done].slice(-500))); } catch (e) { /* private mode */ }
+  }
+
   async function render() {
     const [pad, sdoge] = await Promise.all([loadPad(), loadSdoge()]);
+    askExplorer((pad?.tokens || []).map((t) => t.address));
     const live = pad?.live !== false && !!pad;
     bar.classList.toggle('market-bar--soon', !live);
 

@@ -6,13 +6,28 @@ import { CONFIG } from './config';
 // shared verified-code database (Sourcify's). Token scanners such as Quick
 // Intel read the source from the explorer, and flag a token whose source it
 // doesn't have yet. Every launch token has the same code as one already
-// verified, so a single request is enough; the site sends it as soon as a
-// token exists (right after the launch, and whenever its page opens).
+// verified, so one request per token is enough. Visitors' browsers send it
+// for every token the site shows (the launch itself, token pages, the home
+// and explore lists), once per visit, so new launches get verified on their
+// own. (The explorer's API turns servers away, so this can't run from ours.)
+const STORAGE_KEY = 'explorer-asked';
 const asked = new Set<string>();
 
-export function askExplorerForSource(address: string) {
-  const a = address.toLowerCase();
-  if (!CONFIG.explorerUrl || asked.has(a)) return;
-  asked.add(a);
-  fetch(`${CONFIG.explorerUrl}/api/v2/smart-contracts/${a}`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+function remembered(): string[] {
+  try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]') as string[]; } catch { return []; }
 }
+
+export function askExplorerForSources(addresses: string[]) {
+  if (!CONFIG.explorerUrl || typeof window === 'undefined') return;
+  const done = new Set([...remembered(), ...asked]);
+  for (const address of addresses) {
+    const a = address.toLowerCase();
+    if (done.has(a)) continue;
+    done.add(a);
+    asked.add(a);
+    fetch(`${CONFIG.explorerUrl}/api/v2/smart-contracts/${a}`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+  }
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...done].slice(-500))); } catch { /* private mode */ }
+}
+
+export const askExplorerForSource = (address: string) => askExplorerForSources([address]);

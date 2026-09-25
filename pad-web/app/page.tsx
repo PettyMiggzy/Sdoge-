@@ -1,4 +1,5 @@
 'use client';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchLaunches, getStats, type Launch, type TokenStats } from '@/lib/data';
 import { priceFromTick } from '@/lib/pool';
@@ -7,6 +8,7 @@ import { fmtUsd } from '@/lib/format';
 import { Hero, StatsBar, STAT_ICONS, LaunchPromo, WhyPanel, HowItWorks, CtaBanner, type Stat } from '@/components/HomeSections';
 import { FeaturedLaunches } from '@/components/FeaturedLaunches';
 import { DevWallet } from '@/components/DevWallet';
+import { askExplorerForSources } from '@/lib/explorerSource';
 
 const DAY = 86_400;
 
@@ -22,6 +24,8 @@ export default function Home() {
   const launches = useQuery({ queryKey: ['launches'], queryFn: () => fetchLaunches(), refetchInterval: 20_000 });
   const all = launches.data ?? [];
   const tokens = all.map((l) => l.token);
+  // Newest first; once per visit (see lib/explorerSource.ts).
+  useEffect(() => { askExplorerForSources(tokens.slice(0, 30)); }, [tokens.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats = useQuery({
     queryKey: ['stats', tokens],
