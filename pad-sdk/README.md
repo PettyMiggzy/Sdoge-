@@ -20,8 +20,10 @@ block of every launch is open to anyone.
   90% goes to the creator, 10% to the platform.
 - **USDC is also Arc's gas token.** A buy keeps $0.10 back for gas by default
   (`gasReserveUsdc`).
-- Swaps go through Arc's Universal Router with Permit2. The SDK sets up both
-  approvals the first time and reuses them after that.
+- Swaps go through Arc's Universal Router with Permit2. By default each
+  trade approves exactly what it spends, and the router's allowance expires
+  after a day. A bot that trades often can pass `approvals: 'unlimited'` to
+  approve once and skip two transactions per trade.
 
 ## Install
 
@@ -72,7 +74,7 @@ pad.watchLaunches(async (launch) => {
 Runnable versions: `examples/watch-launches.mjs`, `examples/buy-new-launches.mjs`
 (a small sniper) and `examples/market-api.mjs`.
 
-## `createPadClient({ publicClient, walletClient?, config?, gasReserveUsdc? })`
+## `createPadClient({ publicClient, walletClient?, config?, gasReserveUsdc?, approvals? })`
 
 Amounts are raw units: USDC has 6 decimals, launch tokens 18.
 

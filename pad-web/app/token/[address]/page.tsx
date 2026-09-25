@@ -21,6 +21,7 @@ import { TokenIcon } from '@/components/TokenIcon';
 import { StatCards } from '@/components/StatCards';
 import { FeatureStrip } from '@/components/FeatureStrip';
 import { CreatorCard, InfoTab, AddrLink } from '@/components/TokenExtras';
+import { GoPlusPanel } from '@/components/GoPlusPanel';
 
 type Tab = 'chart' | 'trades' | 'holders' | 'info';
 const TFS = [['1h', 60, 60], ['4h', 240, 72], ['1d', 900, 96], ['1w', 3600, 168], ['1M', 14400, 180]] as const; // label, interval(s), candle count
@@ -191,6 +192,7 @@ export default function TokenPage({ params }: { params: { address: string } }) {
             lpFeeBps={LP_FEE_BPS} buyTaxBps={buyTaxBps} sellTaxBps={sellTaxBps}
           />
           {launch.data && <CreatorCard launch={launch.data} />}
+          {launch.data && <GoPlusPanel token={token} />}
         </aside>
       </div>
 

@@ -144,11 +144,13 @@ GET ${indexerBase}/candles/:token?n=96&interval=900   # OHLCV; interval in secon
           A trade is one v4 exact-input swap on the launch&apos;s pool, sent through Uniswap&apos;s UniversalRouter.
           Whatever you spend (USDC on a buy, the token on a sell) needs two approvals first: the ERC-20 approves
           Permit2, then Permit2 approves the router. Each one lasts until it is used up, expires or is revoked.
+          This site approves exactly the amount of each trade, never an unlimited amount, and the router&apos;s
+          allowance expires after a day.
         </p>
-        <Code>{`// Step 1, once per token: let Permit2 move it
+        <Code>{`// Step 1: let Permit2 move the amount you're spending
 erc20.approve(PERMIT2, amount)
 
-// Step 2, per token: let the router spend through Permit2 (this site sets a 30-day expiry)
+// Step 2: let the router spend it through Permit2 (this site sets a 1-day expiry)
 permit2.approve(token, ROUTER, amount, expiration)
 
 // Step 3: the swap

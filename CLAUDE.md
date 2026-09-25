@@ -86,11 +86,22 @@ creator-set tax 0–10% per side.
   buy, no cooldowns, ever. The public JSON API (`/api/v1/*`, CORS open, no key)
   and the TypeScript SDK (`pad-sdk/`) exist for bots; keep both working and
   documented on the site's Docs page.
+- **Wallet warnings** (owner, 2026-09-25): trades approve the exact amount they
+  spend, never unlimited, and the router's Permit2 allowance expires after a day
+  (the SDK does the same by default; `approvals: 'unlimited'` is opt-in for bots).
+  Token pages show GoPlus's free token scan (`/api/goplus`, cached 5 min). GoPlus
+  marks every token on an Arc v4 hook pool as a honeypot, $SDOGE included; the
+  panel says so. Report that false positive to GoPlus once a launch has real sells.
+- **Phone wallets:** plain phone browsers need a WalletConnect (Reown) project ID
+  in `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (Vercel), with the pad's domains on
+  its allowlist. It must be SDOGE's own project: an ID is public in the site's
+  code, so never reuse another project's. Without it, only the wallet built into
+  the browser (e.g. MetaMask's own browser) can connect.
 - **Main site:** the nav has a **Pad** link (the word "Pad", not "Launchpad") to
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** the switch-on, the test token, a WalletConnect project ID,
+- **Still needed:** the switch-on, the test token, SDOGE's WalletConnect project ID,
   publishing `pad-sdk` to npm (needs the owner's account). Optional: host
   `pad-indexer`.
 - **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →

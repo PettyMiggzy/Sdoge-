@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
-import { formatUnits, maxUint256, type Address, type Hash } from 'viem';
+import { formatUnits, type Address, type Hash } from 'viem';
 import { clsx } from 'clsx';
 import { erc20Abi, permit2Abi, universalRouterAbi } from '@/lib/abi';
 import { CONFIG, explorerTx } from '@/lib/config';
@@ -17,8 +17,11 @@ type Props = {
   lpFeeBps: number; buyTaxBps?: number; sellTaxBps?: number;
 };
 
-const MAX_UINT160 = (1n << 160n) - 1n;
-const PERMIT2_EXPIRY_SEC = 60 * 60 * 24 * 30;
+// Approvals are for the exact amount of each trade, never unlimited: an
+// open-ended approval is the main thing wallet security scanners (Blockaid in
+// MetaMask, GoPlus in Trust, OKX and others) flag. The router's Permit2
+// allowance also expires after a day instead of lingering.
+const PERMIT2_EXPIRY_SEC = 60 * 60 * 24;
 const SLIPPAGES = [0.5, 1, 3, 5];
 // USDC is also Arc's gas token, so a buy can't spend the whole balance:
 // keep enough back for the approvals and the swap itself.
@@ -98,14 +101,14 @@ export function TradePanel(p: Props) {
     if (!address || !pc) return;
     const erc20Allow = await pc.readContract({ address: inToken, abi: erc20Abi, functionName: 'allowance', args: [address, CONFIG.permit2] });
     if (erc20Allow < amountIn) {
-      setBusy('Approving token spend…');
-      await waitOk(await writeContractAsync({ chainId: arc.id, address: inToken, abi: erc20Abi, functionName: 'approve', args: [CONFIG.permit2, maxUint256] }), 'Token approval');
+      setBusy('Approving this amount…');
+      await waitOk(await writeContractAsync({ chainId: arc.id, address: inToken, abi: erc20Abi, functionName: 'approve', args: [CONFIG.permit2, amountIn] }), 'Token approval');
     }
     const [permit2Allow, expiration] = await pc.readContract({ address: CONFIG.permit2, abi: permit2Abi, functionName: 'allowance', args: [address, inToken, CONFIG.router] });
     const nowSec = Math.floor(Date.now() / 1000);
     if (permit2Allow < amountIn || expiration <= nowSec + 60) {
-      setBusy('Approving the router…');
-      await waitOk(await writeContractAsync({ chainId: arc.id, address: CONFIG.permit2, abi: permit2Abi, functionName: 'approve', args: [inToken, CONFIG.router, MAX_UINT160, nowSec + PERMIT2_EXPIRY_SEC] }), 'Router approval');
+      setBusy('Letting the router use this amount…');
+      await waitOk(await writeContractAsync({ chainId: arc.id, address: CONFIG.permit2, abi: permit2Abi, functionName: 'approve', args: [inToken, CONFIG.router, amountIn, nowSec + PERMIT2_EXPIRY_SEC] }), 'Router approval');
     }
   }
 

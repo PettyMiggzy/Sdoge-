@@ -10,7 +10,7 @@ import { poolIdOf, poolKeyFor, priceFromSqrt, readSlot0, type PoolKey } from './
 import { buildExactInSwap, quoteExactIn, withSlippage } from './swap.js';
 
 const MAX_UINT160 = (1n << 160n) - 1n;
-const PERMIT2_EXPIRY_SEC = 60 * 60 * 24 * 30;
+const PERMIT2_EXPIRY_SEC = 60 * 60 * 24;
 
 export type PadClientOptions = {
   publicClient: PublicClient<Transport, Chain | undefined>;
@@ -20,6 +20,12 @@ export type PadClientOptions = {
   config?: Partial<PadConfig>;
   /** USDC (6 decimals) a buy always leaves behind for gas. Default $0.10. */
   gasReserveUsdc?: bigint;
+  /**
+   * 'exact' (default): every trade approves just the amount it spends, and
+   * the router's Permit2 allowance expires after a day. 'unlimited': approve
+   * once and reuse it, which saves two transactions per trade.
+   */
+  approvals?: 'exact' | 'unlimited';
 };
 
 export type TradeResult = { hash: Hash; receipt: TransactionReceipt; quotedOut: bigint; amountOutMin: bigint };
@@ -61,6 +67,7 @@ export function createPadClient(opts: PadClientOptions) {
   const pc = opts.publicClient;
   const wc = opts.walletClient;
   const gasReserve = opts.gasReserveUsdc ?? DEFAULT_GAS_RESERVE_USDC;
+  const unlimited = opts.approvals === 'unlimited';
 
   function signer(): Account {
     if (!wc?.account) throw new Error('This needs a walletClient with an account (see createArcClients)');
@@ -104,15 +111,19 @@ export function createPadClient(opts: PadClientOptions) {
   /** USDC out (6-decimal units) for `tokensIn` (18-decimal units), after tax, fee and price impact. */
   const quoteSell = (token: Address, tokensIn: bigint) => quoteExactIn(pc, config.universalRouter, leg(token, 'sell', tokensIn));
 
-  /** ERC-20 approval to Permit2, then Permit2 approval to the router; each only when missing. */
+  /**
+   * ERC-20 approval to Permit2, then Permit2 approval to the router; each
+   * only when missing. Exact amounts unless the client was made with
+   * approvals: 'unlimited'.
+   */
   async function ensureAllowance(currency: Address, amount: bigint): Promise<void> {
     const owner = signer().address;
     const erc20Allow = await pc.readContract({ address: currency, abi: erc20Abi, functionName: 'allowance', args: [owner, config.permit2] });
-    if (erc20Allow < amount) await send({ address: currency, abi: erc20Abi, functionName: 'approve', args: [config.permit2, maxUint256] } as never);
+    if (erc20Allow < amount) await send({ address: currency, abi: erc20Abi, functionName: 'approve', args: [config.permit2, unlimited ? maxUint256 : amount] } as never);
     const [allowed, expiration] = await pc.readContract({ address: config.permit2, abi: permit2Abi, functionName: 'allowance', args: [owner, currency, config.universalRouter] });
     const now = Math.floor(Date.now() / 1000);
     if (allowed < amount || expiration <= now + 60) {
-      await send({ address: config.permit2, abi: permit2Abi, functionName: 'approve', args: [currency, config.universalRouter, MAX_UINT160, now + PERMIT2_EXPIRY_SEC] } as never);
+      await send({ address: config.permit2, abi: permit2Abi, functionName: 'approve', args: [currency, config.universalRouter, unlimited ? MAX_UINT160 : amount, now + PERMIT2_EXPIRY_SEC] } as never);
     }
   }
 

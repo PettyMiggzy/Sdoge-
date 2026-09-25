@@ -8,7 +8,8 @@ import { createArcClients, createPadClient } from '../dist/index.js';
 
 if (!process.env.PRIVATE_KEY) throw new Error('Set PRIVATE_KEY (a wallet holding a little USDC on Arc)');
 const { account, publicClient, walletClient } = createArcClients(process.env.PRIVATE_KEY, process.env.ARC_RPC_URL);
-const pad = createPadClient({ publicClient, walletClient });
+// Speed matters here, so approve once instead of before every buy.
+const pad = createPadClient({ publicClient, walletClient, approvals: 'unlimited' });
 
 const usdcIn = parseUnits(process.env.BUY_USDC ?? '1', 6);
 const maxTaxBps = Number(process.env.MAX_TAX_BPS ?? 500);
