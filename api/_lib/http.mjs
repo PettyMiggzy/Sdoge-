@@ -22,8 +22,14 @@ export function body(req) {
   return {};
 }
 
+// Off-switch: Studio AI stays closed on the live site, even with VENICE_API_KEY set, until the
+// fixes from the 2026-09-25 audit (prompt screening, credit storage) are in. Test runs use the
+// in-memory store and aren't affected.
+const STUDIO_AI_READY = false;
+
 /** Whether Studio AI can take money right now, and if not, why (in words for the page). */
 export async function availability() {
+  if (!STUDIO_AI_READY && process.env.AI_STORE !== 'memory') return { ok: false, reason: "Studio AI isn't switched on yet." };
   if (!veniceKey()) return { ok: false, reason: "Studio AI isn't switched on yet." };
   if (!blobToken() && process.env.AI_STORE !== 'memory') return { ok: false, reason: "Studio AI isn't switched on yet." };
   const usd = await veniceBalance();

@@ -47,7 +47,7 @@ export function ArcBadge({ className }: { className?: string }) {
 function NavLink({ item, active, onClick, mobile }: { item: Item; active: boolean; onClick?: () => void; mobile?: boolean }) {
   const base = mobile
     ? 'rounded-lg px-2 py-2.5 text-base font-semibold'
-    : 'border-b-2 pb-1 text-[15px] font-semibold';
+    : 'whitespace-nowrap border-b-2 pb-1 text-[15px] font-semibold';
   if (item.soon) {
     return (
       <span className={clsx(base, 'flex cursor-default items-center gap-1.5 border-transparent text-text/45')} title="Coming soon">

@@ -6,9 +6,13 @@
   "SDOGE STAKING" logo, a stat bar (Total Staked, Est. APR, Stakers, Rewards Distributed), the
   stake/unstake card with quick-percent buttons, "Your Staking Overview", a 4-card "Why stake"
   row, and the FAQ over the "Stake Earn Chill" scene.
-- `nft-page-mockup.jpg`: a new NFT page. Not built yet. It uses rarity tiers (OG/Rare/Epic/
-  Legendary), which `nft/designs.json` now has, and numbered editions (#001, #042...), which
-  `SDOGECollectibles.sol` doesn't: it sells a named roster of designs.
+- `nft-page-mockup.jpg`: the NFT page (`nft.html`, styles in `nft.css` on top of `staking.css`).
+  Built: hero with the 3D "SDOGE NFT" logo, the 4-item feature bar, "The Collection" grid with
+  All/OG/Rare/Epic/Legendary pills, and the "Hold, Collect, Get Rewards" scene. The mockup's
+  numbered editions (#001, #042...) became each design's token number (#1 to #12), since
+  `SDOGECollectibles.sol` sells a named roster of designs where every copy is the same token.
+  Each card also shows its staking boost. The marketplace and the Studio link sit between the
+  collection and the closing scene.
 - `nft-collection-poster.jpg`: a poster for social posts, not a page layout.
 
 ## Art
@@ -31,8 +35,12 @@ The key comes from the environment only and never goes in the repo. Raw outputs 
 | `staking/logo-staking.webp` | The "SDOGE STAKING" title |
 | `staking/chill.webp` | The scene behind the staking FAQ |
 | `staking/social-share.jpg` | Staking link previews |
-| `wordmark.webp` | The SDOGE wordmark in the staking nav (the logo's top line) |
+| `wordmark.webp` | The SDOGE wordmark in the staking and NFT navs (the logo's top line) |
 | `arc-mark.png` | The Arc arch next to "ARC" in the nav |
+| `nft/hero.webp` | NFT hero background |
+| `nft/logo-nft.webp` | The "SDOGE NFT" title |
+| `nft/rewards.webp` | The "Hold, Collect, Get Rewards" scene |
+| `nft/social-share.jpg` | NFT page link previews |
 
 Where the mockup shows made-up numbers, the page shows real ones from the staking contract, and
 the $SDOGE price from DexScreener for the USDC part of the APR, or "—" before launch. The mockup's

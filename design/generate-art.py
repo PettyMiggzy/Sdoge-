@@ -55,6 +55,35 @@ JOBS = {
                       "QUESTIONS' heading and all the question boxes in the middle and on the right, and repaint that "
                       "area as dark starry space above grey moon ground, dark enough for white text on top. No other "
                       "text anywhere. " + STYLE),
+    'nft-hero': ('nft-page-mockup.jpg', (0, 58, 1024, 505), '21:9',
+                 "Recreate this image as a clean, high-resolution website hero background. Keep the composition: on "
+                 "the right, the big Shiba Inu doge (blue cap with a white USDC dollar-sign logo, small gold hoop "
+                 "earring, glowing pixel-art sunglasses in blue, violet and pink, a toothpick in his grinning mouth, "
+                 "a black crossbody bag with a pink strap and a white USDC logo) sitting in a huge pile of glossy "
+                 "blue USDC coins; behind him on the far right a dark blue flag on a pole that reads 'SDOGE NFT' with "
+                 "small crown doodles; the glowing violet Arc arch on the moon's surface; the full moon, palm trees "
+                 "and night city silhouettes at the top, and the starry sky. REMOVE all website text and interface "
+                 "elements on the left (the big 'SDOGE NFT' title, the slogan, the paragraph and both buttons) and "
+                 "repaint that area as a natural continuation of the scene: starry night sky above moon rocks and "
+                 "craters, slightly darker so white text placed there stays readable. No other text anywhere except "
+                 "'SDOGE NFT' on the flag. " + STYLE),
+    'nft-logo': ('nft-page-mockup.jpg', (28, 88, 420, 288), '16:9',
+                 "Recreate only this logo as a crisp, high-resolution graphic, centered on a plain, flat, solid pure "
+                 "black background with nothing else in the image. Top line: the word 'SDOGE' in bold glossy "
+                 "white-and-silver 3D letters with a thick dark navy outline and a blue edge glow, where the letter O "
+                 "is a round badge showing a Shiba Inu doge face wearing a blue cap with a white USDC dollar-sign "
+                 "logo. Second line: the word 'NFT' in big bold glossy gold 3D letters with a dark brown outline. "
+                 "Spell both words exactly. Leave a clear gap between the two lines. " + STYLE),
+    'nft-rewards': ('nft-page-mockup.jpg', (0, 1255, 1024, 1536), '21:9',
+                    "Recreate this scene as a clean, high-resolution ultra-wide banner. Keep: on the left, the Shiba "
+                    "Inu doge in a blue cap with a white USDC dollar-sign logo and blue sunglasses, black hoodie with a "
+                    "USDC logo, black cargo pants and white-and-blue sneakers, lounging back in a big glossy blue bean "
+                    "bag chair with his feet up, holding a glowing blue USDC coin in one paw, a laptop with a USDC logo "
+                    "on his lap; stacks of glossy blue USDC coins around him; behind him a night city with warm windows "
+                    "and palm trees. REMOVE the 'HOLD COLLECT GET REWARDS' lettering, the crown, the four perk icons "
+                    "and their texts and both buttons on the right, and repaint that area as a natural continuation of "
+                    "the scene: dark night sky and dark city walls with a few coin stacks on the ground, dark enough "
+                    "for white text on top. No text anywhere. " + STYLE),
 }
 
 
@@ -112,6 +141,20 @@ def split_lines(logo):
     return top.crop(top.split()[3].getbbox()), bottom.crop(bottom.split()[3].getbbox())
 
 
+def social_share(hero_png, logo_rel, out_rel):
+    """Link preview (1200x630): the hero art's right side, with the page's logo on the left."""
+    hero = Image.open(os.path.join(OUT, hero_png)).convert('RGB')
+    hero = hero.resize((round(hero.width * 630 / hero.height), 630), Image.LANCZOS)
+    og = hero.crop((hero.width - 1200, 0, hero.width, 630)).convert('RGBA')
+    shade = Image.new('RGBA', (1200, 630)); d = ImageDraw.Draw(shade)
+    for x in range(600):
+        d.line([(x, 0), (x, 630)], fill=(4, 10, 24, int(210 * (1 - x / 600))))
+    og.alpha_composite(shade)
+    logo = Image.open(os.path.join(IMG, logo_rel)).convert('RGBA'); logo.thumbnail((560, 400))
+    og.alpha_composite(logo, (40, (630 - logo.height) // 2 - 20))
+    og.convert('RGB').save(os.path.join(IMG, out_rel), quality=85)
+
+
 def convert(names):
     """2K PNGs -> the web files the pages load."""
     src = lambda n: Image.open(os.path.join(OUT, f'{n}.png'))  # noqa: E731
@@ -125,17 +168,17 @@ def convert(names):
         webp(fit(wordmark, 480), 'wordmark.webp', 90)  # the nav's SDOGE wordmark
     if 'staking-chill' in names:
         webp(fit(src('staking-chill').convert('RGB'), 2000), 'staking/chill.webp', 78)
-    if 'staking-hero' in names or 'staking-logo' in names:  # link preview: hero art with the logo on the left
-        hero = src('staking-hero').convert('RGB')
-        hero = hero.resize((round(hero.width * 630 / hero.height), 630), Image.LANCZOS)
-        og = hero.crop((hero.width - 1200, 0, hero.width, 630)).convert('RGBA')
-        shade = Image.new('RGBA', (1200, 630)); d = ImageDraw.Draw(shade)
-        for x in range(600):
-            d.line([(x, 0), (x, 630)], fill=(4, 10, 24, int(210 * (1 - x / 600))))
-        og.alpha_composite(shade)
-        logo = Image.open(os.path.join(IMG, 'staking', 'logo-staking.webp')).convert('RGBA'); logo.thumbnail((560, 400))
-        og.alpha_composite(logo, (40, (630 - logo.height) // 2 - 20))
-        og.convert('RGB').save(os.path.join(IMG, 'staking', 'social-share.jpg'), quality=85)
+    if 'staking-hero' in names or 'staking-logo' in names:
+        social_share('staking-hero.png', 'staking/logo-staking.webp', 'staking/social-share.jpg')
+    if 'nft-hero' in names:
+        webp(fit(src('nft-hero').convert('RGB'), 2000), 'nft/hero.webp', 78)
+    if 'nft-logo' in names:
+        logo = src('nft-logo').convert('RGBA')
+        webp(fit(logo.crop(logo.split()[3].getbbox()), 900), 'nft/logo-nft.webp', 90)
+    if 'nft-rewards' in names:
+        webp(fit(src('nft-rewards').convert('RGB'), 2000), 'nft/rewards.webp', 78)
+    if 'nft-hero' in names or 'nft-logo' in names:
+        social_share('nft-hero.png', 'nft/logo-nft.webp', 'nft/social-share.jpg')
 
 
 if __name__ == '__main__':

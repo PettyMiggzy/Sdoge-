@@ -3,297 +3,268 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>$SDOGE NFT Collection</title>
-<meta name="description" content="A collection of 12 hand-styled SDOGE characters on Arc, minted with native USDC. Same vibes, more utility." />
+<title>SDOGE NFT | Same vibes. More SDOGE.</title>
+<meta name="description" content="A collection of 12 unique SDOGE characters on Arc, minted with USDC. Stake one with your $SDOGE for up to 50% more rewards." />
+<meta property="og:title" content="SDOGE NFT" />
+<meta property="og:description" content="A collection of unique SDOGE characters on ARC. Built for the community. Same vibes. More utility." />
+<meta property="og:image" content="assets/img/nft/social-share.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
 
 <link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
+<link rel="stylesheet" href="assets/css/staking.css" />
+<link rel="stylesheet" href="assets/css/nft.css" />
 </head>
-<body class="starfield">
+<body class="stk nft">
 
 <!-- ===== NAV ===== -->
-<nav class="navbar" id="navbar">
-  <div class="container navbar__inner">
-    <a href="index.html" class="brand">
-      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
-      <span class="brand__name">$SDOGE</span>
+<nav class="navbar stk-nav" id="navbar">
+  <div class="stk-wrap stk-nav__inner">
+    <a href="index.html" class="stk-nav__brand" aria-label="SDOGE home">
+      <img src="assets/img/wordmark.webp" alt="SDOGE" width="480" height="121" />
     </a>
 
     <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
 
-    <div class="navbar__links" id="navLinks">
+    <div class="navbar__links stk-nav__links" id="navLinks">
       <a href="index.html">Home</a>
       <a href="index.html#about">About</a>
       <a href="index.html#tokenomics">Tokenomics</a>
-      <a href="staking.html">Staking</a>
-      <a href="nft.html" style="color: var(--text-primary);">NFT</a>
-      <a href="studio.html">Studio</a>
+      <a href="nft.html" class="is-active" aria-current="page">NFT</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
-      <button class="btn btn--primary btn--small js-connect-wallet">Connect Wallet</button>
+      <button class="stk-btn stk-btn--primary stk-nav__buy-mobile js-connect-wallet" type="button">Connect Wallet</button>
     </div>
 
-    <div class="navbar__chain">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 20v-6a7 7 0 0 1 14 0v6M8.5 20v-6a3.5 3.5 0 0 1 7 0v6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>ARC</span>
+    <div class="stk-nav__right">
+      <span class="stk-arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
+      <button class="stk-btn stk-btn--primary js-connect-wallet" type="button">Connect Wallet</button>
     </div>
   </div>
 </nav>
 
 <!-- ===== HERO ===== -->
-<header class="hero" id="top">
-  <div class="hero__bg" style="background-image:url('assets/img/nft-hero.jpg')"></div>
-  <div class="hero__overlay"></div>
-
-  <div class="container hero__inner">
-    <div class="pill">
-      <span class="pill__dot"></span> <span data-preview-copy data-live-copy="Live on Arc">Contract not deployed yet &middot; preview UI</span>
-    </div>
-
-    <h1 class="hero__title hero__title--gold">
-      <span class="hero__title-brand">SDOGE</span>
-      NFT
-    </h1>
-    <p class="hero__title-tagline">Same vibes. <em>More SDOGE.</em></p>
-
-    <p class="hero__subtitle">
-      12 hand-styled SDOGE characters on Arc, minted with native USDC.
-      Built for the community — same collection, whichever way you'd
-      rather show it off.
-    </p>
-
-    <div class="hero__cta">
-      <a href="#collection" class="btn btn--primary">View Collection</a>
-      <button class="btn btn--ghost js-connect-wallet" id="connectWalletHero">Connect Wallet</button>
+<header class="stk-hero nft-hero" id="top">
+  <div class="stk-hero__art" role="img" aria-label="A grinning doge in a blue USDC cap and pixel sunglasses, sitting in a pile of USDC coins on the moon next to an SDOGE NFT flag"></div>
+  <div class="stk-wrap stk-hero__inner">
+    <h1 class="stk-hero__logo"><img src="assets/img/nft/logo-nft.webp" alt="SDOGE NFT" width="900" height="476" /></h1>
+    <p class="stk-hero__slogan">Same vibes.<br><span>More <em>SDOGE.</em></span></p>
+    <p class="stk-hero__text">A collection of unique SDOGE characters on ARC. Built for the community. Same vibes. More utility.</p>
+    <div class="stk-hero__cta">
+      <a href="#collection" class="stk-btn stk-btn--primary stk-btn--lg">View Collection</a>
+      <button class="stk-btn stk-btn--outline stk-btn--lg js-connect-wallet" type="button">Connect Wallet</button>
     </div>
   </div>
 </header>
 
 <main>
-
-  <!-- ===== FEATURE STRIP ===== -->
-  <section class="section section--tight">
-    <div class="container">
-      <div class="feature-row">
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l2.6 7.9H21l-6.7 4.9L16.9 22 12 17.1 7.1 22l2.6-7.2L3 9.9h6.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-          <h3>Unique Artwork</h3>
-          <p>12 named designs, each with its own limited mintable supply.</p>
+  <!-- ===== FEATURES ===== -->
+  <section class="stk-wrap" aria-label="Why SDOGE NFTs">
+    <div class="stk-stats nft-features">
+      <div class="stk-stat nft-feature">
+        <svg class="nft-feature__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gFeatGem" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9ad3ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gFeatGem)" d="M14 8h20l8 11-18 22L6 19z"/><path fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.6" d="M6 19h36M14 8l4 11 6 22 6-22 4-11M18 19l6-11 6 11"/></svg>
+        <div>
+          <h3>Unique artwork</h3>
+          <p>12 SDOGE characters, each with its own tier and limited supply.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l3 5 5.5.8-4 3.9.9 5.5L12 14.8 6.6 17.2l.9-5.5-4-3.9L9 7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-          <h3>Community Focused</h3>
-          <p>Built by and for the SDOGE community, same vibes as the token.</p>
+      </div>
+      <div class="stk-stat nft-feature">
+        <svg class="nft-feature__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gFeatCrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gFeatCrown)" d="M6 14l10 9 8-14 8 14 10-9-4 24H10z"/><rect x="10" y="38" width="28" height="5" rx="2" fill="#7cc4ff"/></svg>
+        <div>
+          <h3>Community focused</h3>
+          <p>Built by the SDOGE community, for the community.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 7H4a1 1 0 0 0-1 1v3a5 5 0 0 0 5 5h1a5 5 0 0 0 5-5V8a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 16v3m-4 2h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
-          <h3>Feeds Stakers</h3>
-          <p>Marketplace fees and a share of Studio mint sales go to $SDOGE stakers' USDC rewards.</p>
+      </div>
+      <div class="stk-stat nft-feature">
+        <svg class="nft-feature__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gFeatGift" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><rect x="6" y="15" width="36" height="9" rx="2" fill="url(#gFeatGift)"/><rect x="9" y="24" width="30" height="19" rx="2" fill="url(#gFeatGift)"/><path fill="#fff" fill-opacity=".85" d="M22 15h4v28h-4z"/><path fill="none" stroke="#9ad3ff" stroke-width="3" stroke-linecap="round" d="M24 15c-3-7-11-8-11-3s8 3 11 3c3 0 11 2 11-3s-8-4-11 3"/></svg>
+        <div>
+          <h3>Real utility</h3>
+          <p>Stake one with your $SDOGE for up to 50% more <a href="staking.html">staking</a> rewards.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 14l4-4 4 4 8-8M20 6h-4v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <h3>On Arc</h3>
-          <p>Low fees, fast mints, native-USDC pricing.</p>
+      </div>
+      <div class="stk-stat nft-feature">
+        <svg class="nft-feature__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gFeatBolt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9ad3ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gFeatBolt)" d="M28 3 9 27h13l-4 18 21-26H26z"/></svg>
+        <div>
+          <h3>On ARC</h3>
+          <p>Low fees, fast mints, priced in USDC.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ===== COLLECTION ===== -->
-  <section class="section" id="collection">
-    <div class="container">
-      <div class="panel__head" style="margin-bottom: 0;">
-        <div>
-          <div class="eyebrow">The Collection</div>
-          <h2 class="section__title">12 designs. Pick your favorite.</h2>
-        </div>
-        <div class="filter-tabs" id="filterTabs">
-          <button class="filter-tab is-active" data-filter="all">All</button>
-          <button class="filter-tab" data-filter="og">OG</button>
-          <button class="filter-tab" data-filter="rare">Rare</button>
-          <button class="filter-tab" data-filter="epic">Epic</button>
-          <button class="filter-tab" data-filter="legendary">Legendary</button>
-        </div>
+  <section class="stk-wrap nft-collection" id="collection" aria-labelledby="collectionTitle">
+    <div class="nft-collection__head">
+      <h2 class="stk-h2" id="collectionTitle">The Collection</h2>
+      <div class="nft-pills" id="filterTabs" role="group" aria-label="Filter by tier">
+        <button class="filter-tab is-active" data-filter="all" type="button">All</button>
+        <button class="filter-tab" data-filter="og" type="button">OG</button>
+        <button class="filter-tab" data-filter="rare" type="button">Rare</button>
+        <button class="filter-tab" data-filter="epic" type="button">Epic</button>
+        <button class="filter-tab" data-filter="legendary" type="button">Legendary</button>
       </div>
-
-      <div class="nft-grid" id="nftGrid">
-        <!-- populated by nft.js from the roster below -->
-      </div>
-
-      <p class="fine-print" data-preview-copy>
-        Until the contract is live, prices and tiers shown are placeholders
-        (the $20/$30/$40/$50 spread discussed early on), not a final
-        decision.
-      </p>
-      <p class="fine-print">
-        Every price, supply and sale state is read straight from the
-        contract, and a design can only be minted when its on-chain name
-        matches the art shown. Supply is shown as minted/cap rather than a
-        fake "#001" edition number, since every copy of a design is
-        interchangeable on this ERC-1155 contract.
-      </p>
     </div>
+
+    <div class="nft-grid" id="nftGrid">
+      <!-- nft.js renders the 12 designs -->
+    </div>
+
+    <p class="stk-notice" data-preview-copy>Minting opens soon: the NFT contract isn't on Arc yet, so the prices, supplies and staking boosts shown are placeholders, and nothing here sends a transaction.</p>
+    <p class="nft-fine">
+      Prices, supply and sale state come straight from the contract, and a design can only be
+      minted when its on-chain name matches the art shown. All copies of a design are the same
+      ERC-1155 token, so each card shows the design's token number instead of an edition number.
+    </p>
   </section>
 
   <!-- ===== MARKETPLACE ===== -->
-  <section class="section section--alt" id="marketplace">
-    <div class="container">
-      <div class="eyebrow">Resale</div>
-      <h2 class="section__title">Marketplace: list your NFTs for sale.</h2>
-      <p class="section__lead">
-        Buy and sell SDOGE Collectibles, Community Art and creators' own
-        SDOGE Studio collections. A 2% fee on each sale goes to $SDOGE
-        stakers' USDC rewards, and creators get their royalty. Listing moves
-        your NFT into the marketplace contract (escrow) until it sells or
-        you cancel, so every listing you see can really be bought.
-      </p>
+  <section class="stk-wrap nft-market" id="marketplace" aria-labelledby="marketTitle">
+    <h2 class="stk-h2" id="marketTitle">Marketplace</h2>
+    <p class="nft-lead">
+      Buy and sell SDOGE Collectibles, Community Art and creators' own SDOGE Studio collections.
+      A 2% fee on each sale goes to $SDOGE stakers' USDC rewards, and creators get their royalty.
+      Listing moves your NFT into the marketplace contract (escrow) until it sells or you cancel,
+      so every listing you see can really be bought.
+    </p>
 
-      <div class="app-grid">
-        <!-- Active listings -->
-        <div class="panel">
-          <div class="panel__head">
-            <span class="panel__title">Active Listings</span>
-            <div class="tabs" id="marketFilterTabs">
-              <button class="tab is-active" data-market-filter="all">All</button>
-              <button class="tab" data-market-filter="collectibles">Collectibles</button>
-              <button class="tab" data-market-filter="community">Community Art</button>
-              <button class="tab" data-market-filter="creators">Creators</button>
-              <button class="tab" data-market-filter="mine">Mine</button>
-            </div>
-          </div>
-          <div class="stakes-list" id="marketListings">
-            <p class="empty-state" data-js-managed>Not deployed yet &mdash; the marketplace contract isn't live, so there's nothing to list here yet.</p>
+    <div class="nft-market__grid">
+      <div class="stk-card">
+        <div class="panel__head">
+          <span class="stk-card__title stk-card__title--sm">Active listings</span>
+          <div class="tabs" id="marketFilterTabs">
+            <button class="tab is-active" data-market-filter="all" type="button">All</button>
+            <button class="tab" data-market-filter="collectibles" type="button">Collectibles</button>
+            <button class="tab" data-market-filter="community" type="button">Community Art</button>
+            <button class="tab" data-market-filter="creators" type="button">Creators</button>
+            <button class="tab" data-market-filter="mine" type="button">Mine</button>
           </div>
         </div>
+        <div class="stakes-list" id="marketListings">
+          <p class="empty-state" data-js-managed>Not deployed yet &mdash; the marketplace contract isn't live, so there's nothing to list here yet.</p>
+        </div>
+      </div>
 
-        <!-- List your own -->
-        <div class="panel">
-          <div class="panel__head"><span class="panel__title">List an NFT</span></div>
+      <div class="stk-card">
+        <div class="panel__head"><span class="stk-card__title stk-card__title--sm">List an NFT</span></div>
 
-          <div class="input-field">
-            <div class="input-field__top"><span>Collection</span></div>
-            <select id="marketCollection" class="chip-btn" style="width: 100%; padding: 12px; text-align: left;">
+        <div class="input-field">
+          <div class="input-field__top"><span>Collection</span></div>
+          <div class="stk-select">
+            <select id="marketCollection" aria-label="Collection">
               <option value="community">SDOGE Community Art (ERC-721)</option>
               <option value="collectibles">SDOGE Collectibles (ERC-1155)</option>
               <option value="creator">A SDOGE Studio collection (ERC-721)</option>
             </select>
           </div>
-
-          <div class="input-field" id="marketCollectionAddressField" style="display:none;">
-            <div class="input-field__top"><span>Collection address</span></div>
-            <input class="studio-input" id="marketCollectionAddress" placeholder="0x..." />
-          </div>
-
-          <div class="input-field">
-            <div class="input-field__top"><span>Token ID</span></div>
-            <div class="input-field__row">
-              <input type="number" min="0" placeholder="e.g. 1" id="marketTokenId" />
-            </div>
-          </div>
-
-          <div class="input-field" id="marketAmountField" style="display:none;">
-            <div class="input-field__top"><span>Amount to list</span></div>
-            <div class="input-field__row">
-              <input type="number" min="1" placeholder="1" id="marketAmount" />
-            </div>
-          </div>
-
-          <div class="input-field">
-            <div class="input-field__top"><span>Price per unit (USDC)</span></div>
-            <div class="input-field__row">
-              <input type="number" min="0" step="0.01" placeholder="0.00" id="marketPrice" />
-            </div>
-          </div>
-
-          <button class="btn btn--primary btn--wide" id="marketListBtn" data-js-managed disabled>Listing not live yet</button>
-          <p class="fine-print" style="margin-top:16px;" id="marketStatus"></p>
-          <p class="fine-print" style="margin-top:8px;">
-            Listing asks your wallet to let the marketplace move that NFT
-            (for Collectibles it's one approval for the whole collection,
-            since ERC-1155 has no per-token approval), then lists it. The
-            marketplace only ever moves an NFT when its owner lists it.
-            Cancel any time from the Mine tab; it comes straight back.
-          </p>
         </div>
+
+        <div class="input-field" id="marketCollectionAddressField" style="display:none;">
+          <div class="input-field__top"><span>Collection address</span></div>
+          <input class="studio-input" id="marketCollectionAddress" placeholder="0x..." />
+        </div>
+
+        <div class="input-field">
+          <div class="input-field__top"><span>Token ID</span></div>
+          <div class="input-field__row">
+            <input type="number" min="0" placeholder="e.g. 1" id="marketTokenId" />
+          </div>
+        </div>
+
+        <div class="input-field" id="marketAmountField" style="display:none;">
+          <div class="input-field__top"><span>Amount to list</span></div>
+          <div class="input-field__row">
+            <input type="number" min="1" placeholder="1" id="marketAmount" />
+          </div>
+        </div>
+
+        <div class="input-field">
+          <div class="input-field__top"><span>Price per unit (USDC)</span></div>
+          <div class="input-field__row">
+            <input type="number" min="0" step="0.01" placeholder="0.00" id="marketPrice" />
+          </div>
+        </div>
+
+        <button class="stk-btn stk-btn--primary stk-btn--block nft-list-btn" id="marketListBtn" type="button" data-js-managed disabled>Listing not live yet</button>
+        <p class="nft-fine" id="marketStatus"></p>
+        <p class="nft-fine">
+          Listing asks your wallet to let the marketplace move that NFT (for Collectibles it's one
+          approval for the whole collection, since ERC-1155 has no per-token approval), then lists
+          it. The marketplace only ever moves an NFT when its owner lists it. Cancel any time from
+          the Mine tab; it comes straight back.
+        </p>
       </div>
     </div>
   </section>
 
-  <!-- ===== STUDIO CTA ===== -->
-  <section class="section">
-    <div class="container">
-      <div class="perks-cta">
-        <div>
-          <p class="hero__sticky-note" style="margin: 0 0 8px;">Got art?</p>
-          <h2 class="perks-cta__title">Mint your own.</h2>
-          <p class="section__lead">
-            SDOGE Studio: 1 mint for 5 USDC, or 1,000 mints for 100 USDC.
-            Launch a whole collection with its own contract, drops and
-            royalties.
-          </p>
-          <div class="hero__cta" style="margin-top: 24px;">
-            <a href="studio.html" class="btn btn--primary">Open SDOGE Studio</a>
+  <!-- ===== STUDIO ===== -->
+  <section class="stk-wrap">
+    <div class="stk-card nft-studio">
+      <div>
+        <p class="nft-studio__kicker">Got art?</p>
+        <h2 class="nft-studio__title">Mint your own</h2>
+        <p class="nft-studio__text">
+          SDOGE Studio: 1 mint for 5 USDC, or 1,000 mints for 100 USDC. Launch a whole collection
+          with its own contract, drops and royalties.
+        </p>
+      </div>
+      <a href="studio.html" class="stk-btn stk-btn--primary stk-btn--lg">Open SDOGE Studio</a>
+    </div>
+  </section>
+
+  <!-- ===== HOLD. COLLECT. GET REWARDS. ===== -->
+  <section class="nft-rewards" aria-labelledby="rewardsTitle">
+    <div class="nft-rewards__art" role="img" aria-label="A doge in a USDC cap and sunglasses lounging in a blue bean bag with a laptop, holding a USDC coin"></div>
+    <div class="stk-wrap nft-rewards__inner">
+      <div class="nft-rewards__panel">
+        <h2 class="nft-rewards__title" id="rewardsTitle">
+          <svg class="nft-rewards__crown" viewBox="0 0 48 36" aria-hidden="true"><path d="M4 10l10 9 10-15 10 15 10-9-4 22H8z"/></svg>
+          Hold<br><span>Collect</span><br><em>Get rewards</em>
+        </h2>
+        <div class="nft-perks">
+          <div class="nft-perk">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="15" width="36" height="9" rx="2"/><rect x="9" y="24" width="30" height="19" rx="2"/><path class="nft-perk__cut" d="M22 15h4v28h-4z"/></svg>
+            <div><h3>Exclusive rewards</h3><p>Stake one with your $SDOGE for a bigger share of the rewards.</p></div>
           </div>
+          <div class="nft-perk">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4l6 13 14 1.5-10.5 9.5 3 14L24 35l-12.5 7 3-14L4 18.5 18 17z"/></svg>
+            <div><h3>Early access</h3><p>Be first for new releases and features.</p></div>
+          </div>
+          <div class="nft-perk">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 8h20l8 11-18 22L6 19z"/></svg>
+            <div><h3>Community benefits</h3><p>NFT holder perks and giveaways.</p></div>
+          </div>
+          <div class="nft-perk">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3c4 7 12 11 12 22a12 12 0 0 1-24 0c0-4 1.6-7 3.6-9.4.4 3 2 5 4.4 5.4C18.6 14 20 8 24 3z"/></svg>
+            <div><h3>Flex your SDOGE</h3><p>Show off your unique character on ARC.</p></div>
+          </div>
+        </div>
+        <div class="nft-rewards__cta">
+          <a href="#collection" class="stk-btn stk-btn--primary stk-btn--lg">View Collection</a>
+          <button class="stk-btn stk-btn--outline stk-btn--lg js-connect-wallet" type="button">Connect Wallet</button>
         </div>
       </div>
     </div>
   </section>
-
-  <!-- ===== PERKS CTA ===== -->
-  <section class="section section--alt">
-    <div class="container">
-      <div class="perks-cta">
-        <div>
-          <p class="hero__sticky-note" style="margin: 0 0 8px;">Hold. Collect.</p>
-          <h2 class="perks-cta__title">Get Rewards.</h2>
-          <div class="hero__cta" style="margin-top: 24px;">
-            <a href="#collection" class="btn btn--primary">View Collection</a>
-            <button class="btn btn--ghost js-connect-wallet">Connect Wallet</button>
-          </div>
-        </div>
-        <div class="perks-cta__list">
-          <div class="perk-item">
-            <div class="perk-item__icon"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M20 7H4a1 1 0 0 0-1 1v3a5 5 0 0 0 5 5h1a5 5 0 0 0 5-5V8a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
-            <div><h4>Exclusive Rewards</h4><p>Special drops and future airdrops for holders.</p></div>
-          </div>
-          <div class="perk-item">
-            <div class="perk-item__icon"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 2l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V5l7-3z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
-            <div><h4>Early Access</h4><p>First in line for new releases and features.</p></div>
-          </div>
-          <div class="perk-item">
-            <div class="perk-item__icon"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
-            <div><h4>Community Benefits</h4><p>Holder perks and giveaways as the community grows.</p></div>
-          </div>
-          <div class="perk-item">
-            <div class="perk-item__icon"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 2c2 3 5 5 5 9a5 5 0 0 1-10 0c0-1.3.4-2.3 1-3.2.2 1 .8 1.7 1.6 1.7-.4-2 .4-4.4 2.4-5.8z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
-            <div><h4>Flex Your SDOGE</h4><p>Show off your character across every SDOGE surface.</p></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
 </main>
 
 <!-- ===== FOOTER ===== -->
-<footer class="footer">
+<footer class="footer stk-footer">
   <div class="container footer__inner">
     <div class="footer__brand">
       <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
       <div>
         <span class="brand__name">$SDOGE</span>
-        <p>The Stable Doge — on Arc.</p>
+        <p>The Stable Doge, on Arc.</p>
       </div>
     </div>
 
     <nav class="footer__nav">
       <a href="index.html">Home</a>
-      <a href="staking.html">Staking</a>
       <a href="nft.html">NFT</a>
       <a href="studio.html">Studio</a>
       <a href="index.html#roadmap">Roadmap</a>
@@ -310,15 +281,15 @@
       </a>
     </div>
 
-    <a href="index.html#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    <a href="index.html#buy" class="stk-btn stk-btn--primary">Buy SDOGE</a>
   </div>
 
   <div class="container">
     <p class="disclaimer">
-      <strong>Risk disclaimer:</strong> These NFTs are collectibles, not
-      an investment product and not a promise of future value or utility
-      beyond what's explicitly built and live. <span data-preview-copy>Prices shown are
-      placeholders pending a final decision.</span> Do your own research.
+      <strong>Risk disclaimer:</strong> These NFTs are collectibles, not an investment product and
+      not a promise of future value or utility beyond what's explicitly built and live. Staking
+      boosts depend on the staking contract and rewards aren't guaranteed. <span data-preview-copy>Prices
+      shown are placeholders pending a final decision.</span> Do your own research.
     </p>
     <p class="copyright">© <span id="year"></span> $SDOGE. All rights reserved. Stable. Simple. On Arc.</p>
   </div>

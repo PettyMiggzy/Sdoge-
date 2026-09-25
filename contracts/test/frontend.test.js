@@ -166,6 +166,30 @@ describe("front end (assets/js)", function () {
       expect(p.sent.length).to.equal(0);
     });
 
+    it("preview mode shows each design's placeholder staking boost from nft/staking-boosts.json", async function () {
+      const [a] = await ethers.getSigners();
+      const p = await loadPage({ files: ["arc.js", "wallet.js", "nft.js"], hreProvider: network.provider, account: a.address });
+      const { tierBoostBps } = JSON.parse(fs.readFileSync(path.join(ROOT, "nft", "staking-boosts.json"), "utf8"));
+      expect(JSON.parse(p.run("JSON.stringify(PREVIEW_BOOST_BPS)"))).to.deep.equal(tierBoostBps);
+      p.run("renderGrid()");
+      const html = p.el("nftGrid").innerHTML;
+      expect(html).to.include("Token #2");
+      expect(html).to.include(`+${tierBoostBps.legendary / 100}% staking boost`); // Space Doge
+    });
+
+    it("live: shows the boost the staking contract gives each design, and none it doesn't give", async function () {
+      const f = await deployAll();
+      await f.staking.setDesignBoosts([2, 6], [5000, 1250]);
+      const p = await page(f, NFT_PAGE, f.alice);
+      await p.run("loadDesignBoosts()");
+      expect(p.run("designBoost[2]")).to.equal(5000);
+      expect(p.run("designBoost[1]")).to.equal(0);
+      const html = p.el("nftGrid").innerHTML;
+      expect(html).to.include("+50% staking boost");
+      expect(html).to.include("+12.5% staking boost");
+      expect(html.match(/staking boost/g)).to.have.length(2); // no placeholder for the rest
+    });
+
     it("a price change after the page loaded stops the mint until it's seen", async function () {
       const f = await deployAll();
       const p = await page(f, NFT_PAGE, f.alice);

@@ -1,6 +1,7 @@
 /* SDOGE Staking page (staking.html), after the owner's mockup
    (design/ui-reference/staking-page-mockup.jpg). Everything here is scoped to body.stk and
-   stk-* classes, so the other pages that share style.css are untouched. */
+   stk-* classes, so the other pages that share style.css are untouched. The NFT page (nft.html)
+   uses it too, as the base for nft.css. */
 
 body.stk {
   --stk-bg: #040a18;
