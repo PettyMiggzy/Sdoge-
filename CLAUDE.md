@@ -89,6 +89,10 @@ creator-set tax 0–10% per side.
 - **Wallet warnings** (owner, 2026-09-25): trades approve the exact amount they
   spend, never unlimited, and the router's Permit2 allowance expires after a day
   (the SDK does the same by default; `approvals: 'unlimited'` is opt-in for bots).
+  Every trade, flush, harvest, claim, launch and the switch-on is first simulated
+  against Arc, so a call that would fail never reaches the wallet. GoPlus's free
+  transaction-simulation API only covers Ethereum, BSC and Base (checked
+  2026-09-25), not Arc, so the pad does that check itself.
   Token pages show GoPlus's free token scan (`/api/goplus`, cached 5 min). GoPlus
   marks every token on an Arc v4 hook pool as a honeypot, $SDOGE included; the
   panel says so. Report that false positive to GoPlus once a launch has real sells.

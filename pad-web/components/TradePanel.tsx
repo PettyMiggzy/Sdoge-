@@ -119,8 +119,13 @@ export function TradePanel(p: Props) {
       // Approval runs for BOTH sides — a buy spends USDC via ERC-20
       // transferFrom just as a sell spends the launch token.
       await ensureAllowance();
-      setBusy('Swap waiting on your wallet…');
       const { args } = buildExactInSwap({ key: p.poolKey, zeroForOne, amountIn, amountOutMin, currencyIn: inToken, currencyOut: outToken });
+      // Run the exact swap against Arc first: if it would fail (price moved
+      // past the slippage, balance changed), say why here instead of sending
+      // the wallet a transaction it would warn is likely to fail.
+      setBusy('Checking the swap…');
+      await pc.simulateContract({ address: CONFIG.router, abi: universalRouterAbi, functionName: 'execute', args, account: address });
+      setBusy('Swap waiting on your wallet…');
       const h = await writeContractAsync({ chainId: arc.id, address: CONFIG.router, abi: universalRouterAbi, functionName: 'execute', args });
       setTx(h); setBusy(`Waiting for ${CONFIG.chainName}…`);
       await waitOk(h, 'Swap');

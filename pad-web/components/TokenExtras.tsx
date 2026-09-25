@@ -82,11 +82,14 @@ export function CreatorCard({ launch }: { launch: Launch }) {
   const sharePct = mainPad.data === undefined ? undefined : mainPad.data ? 90 : 85;
   const fmt = (v: bigint) => Number(formatUnits(v, CONFIG.quoteDecimals)).toFixed(4);
 
-  async function run(label: string, fn: () => Promise<`0x${string}`>) {
+  // Each action is first run against Arc as a simulation, so a call that
+  // would fail never reaches the wallet (and its "likely to fail" warning).
+  async function run(label: string, check: () => Promise<unknown>, send: () => Promise<`0x${string}`>) {
     if (!pc) return;
     setMsg(null); setBusy(label);
     try {
-      const h = await fn();
+      await check();
+      const h = await send();
       const r = await pc.waitForTransactionReceipt({ hash: h });
       setMsg(r.status === 'success' ? `${label} went through.` : `${label} failed on-chain.`);
       credUsdc.refetch(); pending.refetch(); canHarvest.refetch();
@@ -113,18 +116,24 @@ export function CreatorCard({ launch }: { launch: Launch }) {
 
       <div className="grid grid-cols-2 gap-2">
         <button className="btn-ghost" disabled={pendingTax === 0n || !!busy || !address}
-          onClick={() => run('Flush tax', () => writeContractAsync({ address: CONFIG.hook, abi: hookAbi, functionName: 'flush', args: [keyTuple], chainId: arc.id }))}>
+          onClick={() => run('Flush tax',
+            () => pc!.simulateContract({ address: CONFIG.hook, abi: hookAbi, functionName: 'flush', args: [keyTuple], account: address! }),
+            () => writeContractAsync({ address: CONFIG.hook, abi: hookAbi, functionName: 'flush', args: [keyTuple], chainId: arc.id }))}>
           Flush tax
         </button>
         <button className="btn-ghost" disabled={!canHarvest.data || !!busy || !address}
           title={canHarvest.data ? 'Sends the fees this pool has earned to the splitter' : 'Nothing earned since the last harvest'}
-          onClick={() => run('Harvest LP fees', () => writeContractAsync({ address: launch.locker, abi: lockerAbi, functionName: 'harvestFees', chainId: arc.id }))}>
+          onClick={() => run('Harvest LP fees',
+            () => pc!.simulateContract({ address: launch.locker, abi: lockerAbi, functionName: 'harvestFees', account: address! }),
+            () => writeContractAsync({ address: launch.locker, abi: lockerAbi, functionName: 'harvestFees', chainId: arc.id }))}>
           Harvest LP fees
         </button>
       </div>
       {isCreator && (
         <button className="btn-brand w-full" disabled={usdc === 0n || !!busy}
-          onClick={() => run('Claim USDC', () => writeContractAsync({ address: launch.splitter, abi: splitterAbi, functionName: 'claim', args: [address!, CONFIG.usdc], chainId: arc.id }))}>
+          onClick={() => run('Claim USDC',
+            () => pc!.simulateContract({ address: launch.splitter, abi: splitterAbi, functionName: 'claim', args: [address!, CONFIG.usdc], account: address! }),
+            () => writeContractAsync({ address: launch.splitter, abi: splitterAbi, functionName: 'claim', args: [address!, CONFIG.usdc], chainId: arc.id }))}>
           {busy ?? `Claim ${fmt(usdc)} USDC`}
         </button>
       )}
