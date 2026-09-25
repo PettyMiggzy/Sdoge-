@@ -4,9 +4,9 @@ The launchpad contracts behind SDOGE Pad: anyone can launch a token on Arc
 that trades against USDC on a real Uniswap v4 pool from its first block.
 There is no bonding curve, no graduation and no migration.
 
-**Status:** deployed on Arc mainnet on 2026-09-25, source verified on
-Sourcify (exact match). The pad stays switched off until the pad admin sends
-one transaction (step 2 under "Deploy"). Full record:
+**Status:** live on Arc mainnet since 2026-09-25: deployed, source verified
+on Sourcify (exact match) and switched on by the pad admin. The first launch
+is the team's test token, Stable Doge (TEST). Full record:
 `deployments/arc-mainnet.json`.
 
 | Contract | Address |

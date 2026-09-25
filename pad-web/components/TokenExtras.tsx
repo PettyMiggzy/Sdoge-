@@ -66,6 +66,9 @@ export function CreatorCard({ launch }: { launch: Launch }) {
   const keyTuple = [poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks] as const;
 
   const creator = useReadContract({ address: launch.splitter, abi: splitterAbi, functionName: 'creator', chainId: arc.id });
+  // A creator can hand the role to another wallet in two steps; the new
+  // wallet accepts here.
+  const pendingCreator = useReadContract({ address: launch.splitter, abi: splitterAbi, functionName: 'pendingCreator', chainId: arc.id });
   const mainPad = useReadContract({ address: launch.splitter, abi: splitterAbi, functionName: 'isMainPad', chainId: arc.id });
   const credUsdc = useReadContract({ address: launch.splitter, abi: splitterAbi, functionName: 'creditedToCreator', args: [CONFIG.usdc], chainId: arc.id, query: { refetchInterval: 15_000 } });
   const pending = useReadContract({ address: CONFIG.hook, abi: hookAbi, functionName: 'pendingTax', args: [launch.poolId], chainId: arc.id, query: { refetchInterval: 15_000 } });
@@ -79,6 +82,7 @@ export function CreatorCard({ launch }: { launch: Launch }) {
   });
 
   const isCreator = !!address && !!creator.data && address.toLowerCase() === creator.data.toLowerCase();
+  const isPendingCreator = !!address && !!pendingCreator.data && address.toLowerCase() === pendingCreator.data.toLowerCase();
   const usdc = credUsdc.data ?? 0n;
   const pendingTax = pending.data ?? 0n;
   const sharePct = mainPad.data === undefined ? undefined : mainPad.data ? 90 : 85;
@@ -95,7 +99,7 @@ export function CreatorCard({ launch }: { launch: Launch }) {
       const h = await send();
       const r = await pc.waitForTransactionReceipt({ hash: h });
       setMsg(r.status === 'success' ? `${label} went through.` : `${label} failed on-chain.`);
-      credUsdc.refetch(); pending.refetch(); canHarvest.refetch();
+      credUsdc.refetch(); pending.refetch(); canHarvest.refetch(); creator.refetch(); pendingCreator.refetch();
     } catch (e: unknown) {
       setMsg(explainTxError(e));
     } finally {
@@ -132,6 +136,14 @@ export function CreatorCard({ launch }: { launch: Launch }) {
           Harvest LP fees
         </button>
       </div>
+      {isPendingCreator && (
+        <button className="btn-brand w-full" disabled={!!busy}
+          onClick={() => run('Accept creator role',
+            () => pc!.simulateContract({ address: launch.splitter, abi: splitterAbi, functionName: 'acceptCreator', account: address! }),
+            () => writeContractAsync({ address: launch.splitter, abi: splitterAbi, functionName: 'acceptCreator', chainId: arc.id }))}>
+          {busy ?? 'Accept the creator role'}
+        </button>
+      )}
       {isCreator && (
         <button className="btn-brand w-full" disabled={usdc === 0n || !!busy}
           onClick={() => run('Claim USDC',

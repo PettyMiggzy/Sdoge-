@@ -28,6 +28,8 @@ export const hookAbi = parseAbi([
 
 export const splitterAbi = parseAbi([
   'function creator() view returns (address)',
+  'function pendingCreator() view returns (address)',
+  'function acceptCreator()',
   'function creditedToCreator(address) view returns (uint256)',
   'function creditedToPlatform(address) view returns (uint256)',
   'function claim(address to, address quoteAsset)',

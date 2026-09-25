@@ -1,7 +1,7 @@
 {
   "network": "Arc mainnet",
   "chainId": 5042,
-  "status": "deployed 2026-09-25 (switched off until the pad admin sends one transaction; see switchOn)",
+  "status": "deployed and switched on 2026-09-25",
   "deployer": "0xfA8CaC2eDb8d25508F65C7bF2e81674be210aE40",
   "treasuryOwner": "0x5899a0576A94327a6316E01190f951edf7645914",
   "padAdmin": "0x5899a0576A94327a6316E01190f951edf7645914",
@@ -32,10 +32,29 @@
     "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
   },
   "switchOn": {
-    "status": "waiting: the pad admin sends one transaction",
+    "status": "done 2026-09-25 by the pad admin",
     "to": "0x10dE365Cc583bA953a9e6C36658A138082d9e8cc",
     "function": "bootstrapMainPortal(address)",
     "argument": "0x7F80b1198e6DAa56b0019Cb45020382358E385Fd",
-    "calldata": "0x0b17ab7e0000000000000000000000007f80b1198e6daa56b0019cb45020382358e385fd"
-  }
+    "calldata": "0x0b17ab7e0000000000000000000000007f80b1198e6daa56b0019cb45020382358e385fd",
+    "tx": "0xaa3566950088ade669e2e6a536e758f9b073a3c70c3735c27317574aa14fad4a",
+    "block": 22740029
+  },
+  "testToken": {
+    "name": "Stable Doge",
+    "symbol": "TEST",
+    "token": "0x35fdf2d0c42BDd435e2669DB4407351ee332E4C0",
+    "splitter": "0x105CD107a2fe1a42fce9556D42965Fa80F8D769c",
+    "locker": "0x7E1bDF89950C67cdA28E225aeb38427F461c2A60",
+    "poolId": "0xaa7eb4f426e37aff034c3ce5dcfcfc234868e4b60ace7932033a038cac567797",
+    "tx": "0x37946e49c6c3ff76edac0fd50c84fd1510897c6e0cbe8e4e2035df8da8ae7490",
+    "block": 22740076,
+    "startingMarketCapUsd": 1000,
+    "buyTaxBps": 300,
+    "sellTaxBps": 300,
+    "sourceVerified": "Sourcify, exact match (runtime bytecode)",
+    "creator": "launched by the deploy wallet; creator role offered to the pad admin (transferCreator tx 0x3acce4f5274610c9fe8b2942e0a401d53959da0e75d3a503fd15428eca467fb3), waiting on acceptCreator",
+    "firstTrades": "0.25 USDC buy 0xc59850de217f35ab1d9eadfd45919909939cb5220283d566ab58e3d7b02a6df2 and full sell-back 0xb7e07ac2d705d4d30caa21c746ed2793a6a68d05703db290d8fc2050dc24ab66"
+  },
+  "deployWalletRefund": "leftover USDC returned to the pad admin, tx 0x0aeb0ee82cbe08c7082e2d261aea59ac6ae5f5c2e6902b91adb9d9f52d6eaaa3"
 }

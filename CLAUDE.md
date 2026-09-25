@@ -66,17 +66,18 @@ creator-set tax 0–10% per side.
   `0x7F80b1198e6DAa56b0019Cb45020382358E385Fd` (block 22720736, which is also the
   site's, the indexer's and the SDK's `portalGenesisBlock`). Record:
   `pad/deployments/arc-mainnet.json`.
-- **Switch-on:** waiting on `0x5899…5914`, which calls `bootstrapMainPortal(portal)` on
-  the hook (the site's unlinked `/admin` page, the explorer's Write tab, or `cast send`).
+- **Switched on** 2026-09-25 by `0x5899…5914` (block 22740029). The pad is live.
 - **Deploy wallet:** the owner was driving, so an agent-made throwaway wallet
   `0xfA8CaC2eDb8d25508F65C7bF2e81674be210aE40` (funded by the owner; key only in that
   session's scratchpad) ran `DeploySdogePad.s.sol` with `TREASURY_OWNER` =
-  `PAD_ADMIN` = `0x5899…5914`. It keeps no power; leftover gas USDC goes back to
-  `0x5899…5914` once the test token is out.
+  `PAD_ADMIN` = `0x5899…5914`. It keeps no power; its leftover USDC went back to
+  `0x5899…5914`.
 - **Test token:** "Stable Doge", ticker `TEST` (owner's request, 2026-09-25), so the
-  community can see the pad being tested. Launch it right after the switch-on, hand
-  the creator role to `0x5899…5914` (`transferCreator`, then `acceptCreator` from
-  that wallet), and verify it with `script/verify.sh` (`LAUNCH_TOKEN=`).
+  community can see the pad being tested: `0x35fdf2d0c42BDd435e2669DB4407351ee332E4C0`
+  (block 22740076, 3%/3% tax, $1,000 opening cap, source verified on Sourcify). A
+  0.25 USDC buy and sell-back went through on mainnet. The creator role is offered
+  to `0x5899…5914`, which accepts it with the "Accept the creator role" button on
+  the token's page.
 - **Hosting:** Vercel project `sdoge-launchpad` (root `pad-web`) deploys from this
   branch. Its only storage is its own private Vercel Blob store (token info,
   images, a snapshot of the launch list); everything is served through the
@@ -107,9 +108,9 @@ creator-set tax 0–10% per side.
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** the switch-on, the test token,
-  publishing `pad-sdk` to npm (needs the owner's account). Optional: host
-  `pad-indexer`.
+- **Still needed:** `0x5899…5914` accepting the TEST creator role; publishing
+  `pad-sdk` to npm (needs the owner's account). Optional: host `pad-indexer`
+  (volume, holders and candles on token pages show "—" until it runs).
 - **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →
   `cname.vercel-dns.com`, added by the owner 2026-09-25; `stabledoge.site` itself is
   on Vercel with GoDaddy DNS). https://sdoge-launchpad.vercel.app serves the same
