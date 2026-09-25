@@ -105,7 +105,7 @@ close to zero. Say so wherever staking is promoted.
 
 ```bash
 npm install
-npx hardhat test   # 248 tests:
+npx hardhat test   # 251 tests:
                    #  54 staking         (fixed terms, terms guard, penalty streamed to stakers,
                    #                      USDC + SDOGE rewards and forfeiture, maturity, allowEarly,
                    #                      splits, NFT boosts and returns, deferred payouts and NFTs,
@@ -122,7 +122,7 @@ npx hardhat test   # 248 tests:
                    #                      royalty limits, cancel paths, proceeds, pause)
                    #  31 deploy scripts  (run for real on the local chain with a mock Safe,
                    #                      verify-deployment, sync-frontend)
-                   #  43 front end       (the site's real assets/js files against these contracts)
+                   #  46 front end       (the site's real assets/js files against these contracts)
 ```
 
 `test/helpers/fe-harness.js` loads the site's scripts the way a browser page does, with an

@@ -20,3 +20,6 @@ tgpad/data/
 contracts/deployments/hardhat*
 contracts/deployments/localhost*
 contracts/deployments/arc-rehearsal*
+
+# Venice raw outputs (design/generate-art.py)
+design/out/

@@ -767,5 +767,68 @@ describe("front end (assets/js)", function () {
       expect(p.el("connectOrStakeBtn").textContent).to.equal("Stake");
       expect(p.el("connectOrStakeBtn").disabled).to.equal(false);
     });
+
+    // Space Doge (design 2) boosts stakes by +50%.
+    async function nftStake(f) {
+      await f.staking.setDesignBoosts([2], [5000]);
+      await f.collectibles.connect(f.alice).mint(2, 1, { value: E("50") });
+      const p = await page(f, STAKING_PAGE, f.alice);
+      await p.ready();
+      expect(await p.run("connectWallet()")).to.equal(true);
+      expect(p.el("nftSelect").innerHTML).to.include("Space Doge (+50%)");
+      p.el("nftSelect").value = "2";
+      p.el("stakeAmount").value = "1000";
+      await p.run("doStake()");
+      return p;
+    }
+
+    it("stakes with an NFT boost in one NFT transfer: exact SDOGE approval, no blanket NFT approval", async function () {
+      const f = await deployAll();
+      const p = await nftStake(f);
+      const [id] = await f.staking.getStakeIds(f.alice.address);
+      const s = await f.staking.getStake(id);
+      expect([s.amount, s.boostBps, s.holdsNft, s.nftId]).to.deep.equal([E("1000"), 5000n, true, 2n]);
+      expect(s.weighted).to.equal(E("1500"));
+      expect(await f.collectibles.balanceOf(await f.staking.getAddress(), 2)).to.equal(1);
+      expect(await f.sdoge.allowance(f.alice.address, await f.staking.getAddress())).to.equal(0);
+      const blanket = f.collectibles.interface.getFunction("setApprovalForAll").selector;
+      expect(p.sent.some((tx) => String(tx.data).startsWith(blanket))).to.equal(false);
+      expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
+      expect(p.el("myStakesList").innerHTML).to.include("Space Doge +50%");
+      expect(p.el("overviewStaked").textContent).to.equal("1,000 SDOGE");
+    });
+
+    it("unstaking early says what stays with the stakers, and gives the NFT back", async function () {
+      const f = await deployAll();
+      const p = await nftStake(f);
+      await p.run("exitStake(1n)");
+      const asked = p.confirms.at(-1);
+      expect(asked).to.include("Leaving now costs 150 SDOGE");
+      expect(asked).to.include("stays in the pool for the stakers who stay");
+      expect(asked).to.include("You would get back 850 SDOGE and your NFT");
+      expect((await f.staking.getStake(1)).closed).to.equal(true);
+      expect(await f.collectibles.balanceOf(f.alice.address, 2)).to.equal(1);
+    });
+
+    it("shows the pool's real numbers and an APR from the live reward rates", async function () {
+      const f = await deployAll();
+      const address = await f.staking.getAddress();
+      await f.sdoge.connect(f.alice).approve(address, E("1000"));
+      await f.staking.connect(f.alice).stake(0, E("1000"), 7 * 86400, 10000);
+      await f.sdoge.mint(f.owner.address, E("70"));
+      await f.sdoge.connect(f.owner).approve(address, E("70"));
+      await f.staking.connect(f.owner).notifySdogeRewards(E("70")); // 10 SDOGE a day
+      const p = await page(f, STAKING_PAGE, f.bob);
+      await p.ready();
+      await p.run("liveLoad");
+      expect(p.el("statTotalStaked").textContent).to.equal("1,000");
+      expect(p.el("statStakers").textContent).to.equal("1");
+      expect(p.el("statApr").textContent).to.equal("365%"); // 10 a day over 1,000 staked at 1.0x
+      p.el("stakeAmount").value = "1000";
+      p.run("updateEstimates()");
+      // another 1,000 at 1.0x would share the stream half and half
+      expect(p.el("estDaily").textContent).to.equal("5 SDOGE");
+      expect(p.el("estApr").textContent).to.equal("182.5%");
+    });
   });
 });

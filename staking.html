@@ -3,343 +3,286 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>$SDOGE Staking — Stake, Earn, On Arc</title>
-<meta name="description" content="Stake $SDOGE on Arc across 5 lock tiers and earn native USDC. Longer locks earn faster. Rewards come from SDOGE NFT profits, plus whatever early exits forfeit." />
+<title>SDOGE Staking | Same vibes. More SDOGE.</title>
+<meta name="description" content="Stake $SDOGE on Arc and earn $SDOGE and USDC. Pick a 7 to 365-day lock, boost it with an SDOGE NFT, and early-exit penalties go to the stakers who stay." />
+<meta property="og:title" content="SDOGE Staking" />
+<meta property="og:description" content="Stake your SDOGE on ARC, earn rewards and be part of a more stable tomorrow." />
+<meta property="og:image" content="assets/img/staking/social-share.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
 
 <link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
+<link rel="stylesheet" href="assets/css/staking.css" />
 </head>
-<body class="starfield">
+<body class="stk">
 
 <!-- ===== NAV ===== -->
-<nav class="navbar" id="navbar">
-  <div class="container navbar__inner">
-    <a href="index.html" class="brand">
-      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
-      <span class="brand__name">$SDOGE</span>
+<nav class="navbar stk-nav" id="navbar">
+  <div class="stk-wrap stk-nav__inner">
+    <a href="index.html" class="stk-nav__brand" aria-label="SDOGE home">
+      <img src="assets/img/wordmark.webp" alt="SDOGE" width="480" height="121" />
     </a>
 
     <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
 
-    <div class="navbar__links" id="navLinks">
+    <div class="navbar__links stk-nav__links" id="navLinks">
       <a href="index.html">Home</a>
       <a href="index.html#about">About</a>
       <a href="index.html#tokenomics">Tokenomics</a>
-      <a href="staking.html" style="color: var(--text-primary);">Staking</a>
-      <a href="nft.html">NFT</a>
+      <a href="staking.html" class="is-active" aria-current="page">Staking</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
-      <a href="index.html#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+      <a href="index.html#buy" class="stk-btn stk-btn--primary stk-nav__buy-mobile">Buy SDOGE</a>
     </div>
 
-    <div class="navbar__chain">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 20v-6a7 7 0 0 1 14 0v6M8.5 20v-6a3.5 3.5 0 0 1 7 0v6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>ARC</span>
+    <div class="stk-nav__right">
+      <span class="stk-arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
+      <a href="index.html#buy" class="stk-btn stk-btn--primary">Buy SDOGE</a>
     </div>
   </div>
 </nav>
 
 <!-- ===== HERO ===== -->
-<header class="hero" id="top">
-  <div class="hero__bg" style="background-image:url('assets/img/hero-space.jpg')"></div>
-  <div class="hero__overlay"></div>
-
-  <div class="container hero__inner">
-    <div class="pill">
-      <span class="pill__dot"></span> <span data-preview-copy data-live-copy="Live on Arc">Contract not deployed yet &middot; preview UI</span>
-    </div>
-
-    <h1 class="hero__title hero__title--gold">
-      <span class="hero__title-brand">SDOGE</span>
-      STAKING
-    </h1>
-    <p class="hero__title-tagline">Same vibes. <em>More SDOGE.</em></p>
-
-    <p class="hero__subtitle">
-      Stake $SDOGE across 5 lock tiers and earn native USDC. Longer locks
-      earn faster. The USDC comes from SDOGE NFT profits, and anyone who
-      leaves a lock early forfeits their reward back into the pool for
-      the stakers who stay.
-    </p>
-
-    <div class="hero__cta">
-      <a href="#stake" class="btn btn--primary">Stake Now</a>
-      <a href="index.html#buy" class="btn btn--ghost">Buy $SDOGE</a>
+<header class="stk-hero" id="top">
+  <div class="stk-hero__art" role="img" aria-label="A doge astronaut relaxing on a pile of USDC coins on the moon, next to an SDOGE Staking flag"></div>
+  <div class="stk-wrap stk-hero__inner">
+    <h1 class="stk-hero__logo"><img src="assets/img/staking/logo-staking.webp" alt="SDOGE Staking" width="1100" height="490" /></h1>
+    <p class="stk-hero__slogan">Same vibes.<br><span>More <em>SDOGE.</em></span></p>
+    <p class="stk-hero__text">Stake your SDOGE on ARC, earn rewards and be part of a more stable tomorrow.</p>
+    <div class="stk-hero__cta">
+      <a href="#stake" class="stk-btn stk-btn--primary stk-btn--lg">Stake Now</a>
+      <a href="index.html#buy" class="stk-btn stk-btn--outline stk-btn--lg">Buy SDOGE</a>
     </div>
   </div>
 </header>
 
 <main>
-
   <!-- ===== STATS ===== -->
-  <section class="section section--tight">
-    <div class="container">
-      <div class="stat-bar">
-        <div class="stat-item">
-          <div class="stat-item__icon"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-          <div>
-            <div class="stat-item__label">Total Staked</div>
-            <div class="stat-item__value" id="statTotalStaked">—</div>
-          </div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-item__icon"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 12h4l3-8 4 16 3-8h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div>
-            <div class="stat-item__label">Top Tier APY-Equivalent</div>
-            <div class="stat-item__value">3.0&times; multiplier</div>
-          </div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-item__icon"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 20v-2a4 4 0 0 0-3-3.87M16 4.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div>
-            <div class="stat-item__label">Reward Pool</div>
-            <div class="stat-item__value" id="statRewardPool">—</div>
-          </div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-item__icon"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.8L12 15.8 6.4 19.4l2-6.8L3 8.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-          <div>
-            <div class="stat-item__label">Funded By</div>
-            <div class="stat-item__value" style="font-size: 15px;">NFT profits</div>
-          </div>
-        </div>
+  <section class="stk-wrap" aria-label="Staking stats">
+    <div class="stk-stats">
+    <div class="stk-stat">
+      <span class="stk-stat__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="7" rx="6" ry="2.6"/><path d="M3 7v4c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V7"/><path d="M3 11v4c0 1.4 2.7 2.6 6 2.6 1 0 1.9-.1 2.7-.3"/><ellipse cx="16" cy="14" rx="5" ry="2.2"/><path d="M11 14v3.4c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V14"/></svg></span>
+      <div>
+        <div class="stk-stat__label">Total staked</div>
+        <div class="stk-stat__value" id="statTotalStaked">—</div>
+        <div class="stk-stat__unit">SDOGE</div>
       </div>
+    </div>
+    <div class="stk-stat">
+      <span class="stk-stat__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/></svg></span>
+      <div>
+        <div class="stk-stat__label">Est. APR <span class="stk-info" tabindex="0" title="Rewards per year for a 7-day stake, at today's reward rates and $SDOGE price. Longer locks earn up to 3x, and an NFT adds up to 50% more. Rates change as people stake and as rewards come in.">i</span></div>
+        <div class="stk-stat__value" id="statApr">—</div>
+        <div class="stk-stat__unit" id="statAprNote">Up to 4.5&times; with longer locks and NFTs</div>
+      </div>
+    </div>
+    <div class="stk-stat">
+      <span class="stk-stat__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 13.6c2.6.2 4.5 2 4.5 4.9"/></svg></span>
+      <div>
+        <div class="stk-stat__label">Stakers</div>
+        <div class="stk-stat__value" id="statStakers">—</div>
+        <div class="stk-stat__unit">wallets staking now</div>
+      </div>
+    </div>
+    <div class="stk-stat">
+      <span class="stk-stat__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+      <div>
+        <div class="stk-stat__label">Rewards distributed</div>
+        <div class="stk-stat__value" id="statRewardsPaid">—</div>
+        <div class="stk-stat__unit" id="statRewardsPaidUsdc">SDOGE</div>
+      </div>
+    </div>
     </div>
   </section>
 
   <!-- ===== STAKE APP ===== -->
-  <section class="section" id="stake">
-    <div class="container">
-      <div class="eyebrow">Stake $SDOGE</div>
-      <h2 class="section__title">Pick a lock tier, stake, earn USDC.</h2>
-      <p class="section__lead">
-        Reach 80% of your committed lock and it's treated as fully
-        unlocked — no principal penalty, no forfeited reward — even
-        before the full term ends. Leave earlier than that and you keep
-        the commitment-breaker's short end: a 15% principal penalty plus
-        every bit of that stake's unclaimed reward, forfeited to the pool.
-      </p>
-
-      <div class="app-grid">
-        <!-- Main stake/unstake panel -->
-        <div class="panel">
-          <div class="panel__head">
-            <span class="panel__title">Stake SDOGE</span>
-            <div class="tabs">
-              <button class="tab is-active" data-tab="stake">Stake</button>
-              <button class="tab" data-tab="unstake">Unstake</button>
-            </div>
-          </div>
-
-          <div id="tabPanelStake">
-            <div class="tier-grid" id="tierGrid">
-              <!-- populated by staking.js from the contract's actual tier config -->
-            </div>
-
-            <div class="input-field">
-              <div class="input-field__top">
-                <span>Amount to stake</span>
-                <span>Balance: <span id="sdogeBalance">0</span> SDOGE</span>
-              </div>
-              <div class="input-field__row">
-                <input type="number" min="0" placeholder="0.00" id="stakeAmount" />
-                <button class="chip-btn" id="maxStakeBtn">MAX</button>
-                <span class="token-tag"><img src="assets/img/logo.jpg" alt="" /> SDOGE</span>
-              </div>
-            </div>
-            <div class="percent-row">
-              <button data-pct="25">25%</button>
-              <button data-pct="50">50%</button>
-              <button data-pct="75">75%</button>
-              <button data-pct="100">100%</button>
-            </div>
-
-            <div class="meta-row">
-              <div class="meta-row__item">
-                <div class="meta-row__label">Lock Length</div>
-                <div class="meta-row__value" id="metaLockLength">7 days</div>
-              </div>
-              <div class="meta-row__item">
-                <div class="meta-row__label">Multiplier</div>
-                <div class="meta-row__value" id="metaMultiplier">1.0&times;</div>
-              </div>
-              <div class="meta-row__item">
-                <div class="meta-row__label">Unlocks at 80%</div>
-                <div class="meta-row__value" id="metaEarlyUnlock">~5.6 days</div>
-              </div>
-            </div>
-
-            <button class="btn btn--primary btn--wide" id="connectOrStakeBtn">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 8h15a3 3 0 0 1 3 3v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8zM3 8V6a2 2 0 0 1 2-2h11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="14" r="1.3" fill="currentColor"/></svg>
-              Connect Wallet
-            </button>
-          </div>
-
-          <div id="tabPanelUnstake" style="display:none;">
-            <div class="stakes-list" id="myStakesList">
-              <p class="empty-state">Connect your wallet to see your stakes.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Overview side panel -->
-        <div class="panel">
-          <div class="panel__head"><span class="panel__title">Your Staking Overview</span></div>
-
-          <div class="overview-row">
-            <span class="overview-row__label">Wallet</span>
-            <span class="overview-row__value" id="overviewWallet">Not connected</span>
-          </div>
-          <div class="overview-row overview-row--stat">
-            <span class="overview-row__label">Total Staked (you)</span>
-            <span class="overview-row__value" id="overviewStaked">0 SDOGE</span>
-          </div>
-          <div class="overview-row overview-row--stat">
-            <span class="overview-row__label">Pending Rewards</span>
-            <span class="overview-row__value" id="overviewRewards">0 USDC</span>
-          </div>
-          <div class="overview-row overview-row--stat">
-            <span class="overview-row__label">Active Stakes</span>
-            <span class="overview-row__value" id="overviewCount">0</span>
-          </div>
-
-          <button class="btn btn--ghost btn--wide" id="claimAllBtn" disabled>Claim All Ready Rewards</button>
+  <section class="stk-wrap stk-app" id="stake">
+    <div class="stk-card stk-card--stake">
+      <div class="stk-card__head">
+        <h2 class="stk-card__title">Stake SDOGE</h2>
+        <div class="stk-seg" role="tablist">
+          <button class="stk-seg__btn is-active" data-tab="stake" role="tab" aria-selected="true">Stake</button>
+          <button class="stk-seg__btn" data-tab="unstake" role="tab" aria-selected="false">Unstake</button>
         </div>
       </div>
 
-      <p class="fine-print" data-preview-copy>
-        Not deployed yet: this page is a preview. Nothing here sends a
-        transaction until the staking contract is live on Arc.
-      </p>
+      <div id="tabPanelStake">
+        <div class="stk-input">
+          <div class="stk-input__top">Balance: <span id="sdogeBalance">0</span> SDOGE</div>
+          <div class="stk-input__row">
+            <img src="assets/img/logo.jpg" alt="" class="stk-coin" width="36" height="36" />
+            <input type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" id="stakeAmount" aria-label="Amount of SDOGE to stake" />
+            <button class="stk-chip" id="maxStakeBtn" type="button">MAX</button>
+            <span class="stk-input__token">SDOGE</span>
+          </div>
+        </div>
+        <div class="stk-pcts">
+          <button type="button" data-pct="25">25%</button>
+          <button type="button" data-pct="50">50%</button>
+          <button type="button" data-pct="75">75%</button>
+          <button type="button" data-pct="100">100%</button>
+        </div>
+
+        <div class="stk-field">
+          <div class="stk-field__label">Lock period</div>
+          <div class="stk-tiers" id="tierGrid" role="radiogroup" aria-label="Lock period"><!-- staking.js --></div>
+        </div>
+
+        <div class="stk-field">
+          <div class="stk-field__label">NFT boost <a href="nft.html" class="stk-field__link">Get an SDOGE NFT</a></div>
+          <div class="stk-select">
+            <select id="nftSelect" aria-label="Stake an NFT with this stake">
+              <option value="">No NFT</option>
+            </select>
+          </div>
+          <p class="stk-field__hint" id="nftHint">Stake one of your SDOGE NFTs with this stake to earn up to 50% more. It comes back when the stake ends.</p>
+        </div>
+
+        <div class="stk-meta">
+          <div class="stk-meta__item">
+            <div class="stk-meta__label">Est. APR</div>
+            <div class="stk-meta__value" id="estApr">—</div>
+          </div>
+          <div class="stk-meta__item">
+            <div class="stk-meta__label">Your rewards (daily)</div>
+            <div class="stk-meta__value"><img src="assets/img/logo.jpg" alt="" class="stk-coin stk-coin--sm" width="22" height="22" /><span id="estDaily">0 SDOGE</span></div>
+            <div class="stk-meta__sub" id="estDailyUsdc"></div>
+          </div>
+          <div class="stk-meta__item">
+            <div class="stk-meta__label">Lock period</div>
+            <div class="stk-meta__value" id="metaLockLength">7 days</div>
+            <div class="stk-meta__sub" id="metaMultiplier">1.0&times; rewards</div>
+          </div>
+        </div>
+
+        <button class="stk-btn stk-btn--primary stk-btn--block" id="connectOrStakeBtn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h15a3 3 0 0 1 3 3v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8zM3 8V6a2 2 0 0 1 2-2h11"/><circle cx="17" cy="14" r="1.2"/></svg>
+          <span>Connect Wallet</span>
+        </button>
+        <p class="stk-terms" id="stakeTerms">Penalty-free after 5.6 days (80% of the lock). Leave before that and 15% of what you take out stays in the pool for the stakers who stay, and the stake's rewards are forfeited.</p>
+      </div>
+
+      <div id="tabPanelUnstake" hidden>
+        <div class="stk-stakes" id="myStakesList">
+          <p class="stk-empty">Connect your wallet to see your stakes.</p>
+        </div>
+      </div>
     </div>
+
+    <aside class="stk-card stk-card--overview" aria-label="Your staking overview">
+      <h2 class="stk-card__title stk-card__title--sm">Your Staking Overview</h2>
+      <div class="stk-box">
+        <div class="stk-box__label">Staked Balance</div>
+        <div class="stk-box__value"><img src="assets/img/logo.jpg" alt="" class="stk-coin stk-coin--sm" width="22" height="22" /><span id="overviewStaked">0 SDOGE</span></div>
+      </div>
+      <div class="stk-box stk-box--split">
+        <div>
+          <div class="stk-box__label">Pending Rewards</div>
+          <div class="stk-box__value"><img src="assets/img/logo.jpg" alt="" class="stk-coin stk-coin--sm" width="22" height="22" /><span id="overviewRewards">0 SDOGE</span></div>
+          <div class="stk-box__sub" id="overviewRewardsUsdc"></div>
+        </div>
+        <button class="stk-btn stk-btn--soft" id="claimAllBtn" type="button" disabled>Claim Rewards</button>
+      </div>
+      <div class="stk-box stk-box--rows">
+        <div class="stk-row"><span>APR</span><span id="overviewApr">—</span></div>
+        <div class="stk-row"><span>Lock Period</span><span id="overviewLock">—</span></div>
+        <div class="stk-row"><span>Next Reward</span><span id="overviewNext">--</span></div>
+      </div>
+      <button class="stk-btn stk-btn--ghost stk-btn--block" id="overviewConnectBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h15a3 3 0 0 1 3 3v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8zM3 8V6a2 2 0 0 1 2-2h11"/><circle cx="17" cy="14" r="1.2"/></svg>
+        <span id="overviewWallet">Connect Wallet</span>
+      </button>
+    </aside>
   </section>
 
-  <!-- ===== WHY STAKE ===== -->
-  <section class="section section--alt">
-    <div class="container">
-      <div class="eyebrow">Why stake</div>
-      <h2 class="section__title">Commitment gets rewarded. Leaving early costs you.</h2>
+  <p class="stk-wrap stk-notice" data-preview-copy>Staking opens soon: the contract is not live on Arc yet, so nothing on this page sends a transaction.</p>
 
-      <div class="feature-row">
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.8L12 15.8 6.4 19.4l2-6.8L3 8.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-          <h3>5 Lock Tiers</h3>
-          <p>7 / 30 / 90 / 180 / 365 days, from 1.0&times; up to 3.0&times; reward weight. The tiers, the 15% penalty and the 80% maturity point are fixed in the contract: nobody can change them.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
-          <h3>80% Early-Unlock</h3>
-          <p>Hit 80% of your committed lock and it's treated as fully matured — no penalty, no forfeited reward, even a bit before the finish line.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 21c-4-2-7-5.5-7-10V6l7-3 7 3v5c0 4.5-3 8-7 10z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
-          <h3>Funded by NFT Profits</h3>
-          <p>Every marketplace resale fee flows into the pool automatically, the team adds NFT sale profits, and rewards forfeited by early exits go back in.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.3" opacity="0.5"/></svg></div>
-          <h3>Paid in Native USDC</h3>
-          <p>Rewards are Arc's native currency, not another token you have to sell — claim straight into your wallet.</p>
-        </div>
+  <!-- ===== WHY STAKE ===== -->
+  <section class="stk-wrap stk-why" aria-labelledby="whyTitle">
+    <h2 class="stk-h2" id="whyTitle">Why stake SDOGE?</h2>
+    <div class="stk-why__grid">
+      <div class="stk-why__card">
+        <svg class="stk-why__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gRocket" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gRocket)" d="M38 6c-9 1-16 6-20 14l-6 1-5 6 7 1 2 5-3 5 5-1 5 3 1 7 6-5 1-6c8-4 13-11 14-20l-1-3-3-1zm-7 9a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/><path fill="#ffb13b" d="M12 33c-3 1-5 4-6 9 5-1 8-3 9-6z"/></svg>
+        <h3>Earn more SDOGE</h3>
+        <p>Grow your bag with $SDOGE and USDC rewards. Longer locks earn up to 3&times;.</p>
+      </div>
+      <div class="stk-why__card">
+        <svg class="stk-why__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gShield" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gShield)" d="M24 4 7 10v12c0 11 7 19 17 22 10-3 17-11 17-22V10z"/><path fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" d="m16 24 6 6 11-12"/></svg>
+        <h3>Penalties pay stakers</h3>
+        <p>Leave early and 15% stays in the pool for the stakers who stay.</p>
+      </div>
+      <div class="stk-why__card">
+        <svg class="stk-why__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gGem" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9ad3ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><path fill="url(#gGem)" d="M14 8h20l8 11-18 22L6 19z"/><path fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.6" d="M6 19h36M14 8l4 11 6 22 6-22 4-11M18 19l6-11 6 11"/></svg>
+        <h3>NFT boost</h3>
+        <p>Stake an SDOGE NFT with your stake and earn up to 50% more.</p>
+      </div>
+      <div class="stk-why__card">
+        <svg class="stk-why__icon" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gClock" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1d6cf2"/></linearGradient></defs><circle cx="24" cy="25" r="17" fill="url(#gClock)"/><path fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" d="M24 15v10l7 5"/><path fill="#7cc4ff" d="M19 3h10v5H19z"/></svg>
+        <h3>Pick your lock</h3>
+        <p>7 to 365 days. Penalty-free once you reach 80% of your lock.</p>
       </div>
     </div>
   </section>
 
   <!-- ===== FAQ ===== -->
-  <section class="section" id="faq">
-    <div class="container">
-      <div class="faq-side">
-        <div class="faq-side__art" style="background-image:url('assets/img/moon-buggy.jpg')">
-          <div class="faq-side__art-text">
-            <div class="faq-side__art-title">Stake. Earn. Chill.</div>
-            <p class="faq-side__art-sub">Relax while your $SDOGE works for you on Arc.</p>
+  <section class="stk-faq" id="faq" aria-labelledby="faqTitle">
+    <div class="stk-faq__art" role="img" aria-label="A doge hugging a USDC coin next to a treasure chest and a sign that says Stake Earn Chill"></div>
+    <div class="stk-wrap stk-faq__inner">
+      <div class="stk-faq__panel">
+        <h2 class="stk-h2 stk-h2--sm" id="faqTitle">Frequently asked questions</h2>
+        <div class="accordion stk-acc">
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">How do I stake SDOGE? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>Connect your wallet on Arc, enter an amount, pick a lock period and press Stake. Your wallet first asks you to approve that exact amount of SDOGE, then to stake it. To add an NFT boost, pick one of your SDOGE NFTs before you stake.</p></div>
           </div>
-        </div>
-
-        <div>
-      <div class="eyebrow">FAQ</div>
-      <h2 class="section__title">Staking, explained.</h2>
-
-      <div class="accordion">
-        <div class="accordion__item">
-          <button class="accordion__trigger">What happens if I withdraw early? <span>+</span></button>
-          <div class="accordion__panel">
-            <p>Before your stake matures (80% of its lock), leaving costs a
-            15% principal penalty (fixed in the contract) plus 100% of that
-            stake's unclaimed reward.
-            The forfeited reward goes back into the pool for everyone else,
-            and the SDOGE penalty goes to the Treasury to be turned into
-            rewards. The site shows the exact cost and asks you to confirm
-            before an early exit. After 80%, none of this applies.</p>
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">When do I receive rewards? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>Rewards build up every second, in $SDOGE and USDC. Once your stake matures (at 80% of its lock) you can claim them and keep the stake running, or take them when you unstake.</p></div>
           </div>
-        </div>
-        <div class="accordion__item">
-          <button class="accordion__trigger">Can I have more than one stake open? <span>+</span></button>
-          <div class="accordion__panel">
-            <p>Yes. Each stake is tracked separately with its own tier,
-            unlock time, and reward — stake into different tiers, or the
-            same tier multiple times, whenever you want.</p>
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">Is there a lock period? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>Yes. Each stake has its own lock: 7, 30, 90, 180 or 365 days, earning 1.0&times;, 1.2&times;, 1.5&times;, 2.0&times; or 3.0&times; the rewards. A stake counts as matured at 80% of its lock, so a 30-day stake is penalty-free after 24 days. These terms are fixed in the contract: nobody can change them.</p></div>
           </div>
-        </div>
-        <div class="accordion__item">
-          <button class="accordion__trigger">Where do rewards actually come from? <span>+</span></button>
-          <div class="accordion__panel">
-            <p>From SDOGE NFT profits: once the marketplace and the Studio
-            are connected to the pool, the marketplace fee on every resale
-            and a share of every Studio mint-credit sale flow in on their
-            own (the NFT and Studio pages show where fees go right now),
-            and the team adds USDC from NFT sales. Rewards forfeited by
-            early exits go back in, and anyone can top up the pool. The size
-            of the pool depends on NFT volume, so it isn't guaranteed. The
-            Treasury schedules reward periods, and once the first one has
-            run, if a week passes without a new one, anyone can restart it
-            from what's waiting in the pool.</p>
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">Can I unstake anytime? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>Yes. After your stake matures it costs nothing. Before that, leaving costs 15% of what you take out, and that stake's unclaimed rewards are forfeited. None of it leaves the pool: it goes to the stakers who stay. The page shows you the exact cost and asks you to confirm first.</p></div>
           </div>
-        </div>
-        <div class="accordion__item">
-          <button class="accordion__trigger">Can I withdraw part of a stake? <span>+</span></button>
-          <div class="accordion__panel">
-            <p>Yes, with the contract's <code>withdraw</code> function (for
-            example from Arc's explorer); this page exits whole stakes. From
-            a matured stake it costs nothing. From a stake that hasn't
-            matured, taking any part out forfeits that stake's whole accrued
-            reward and charges the penalty on the part you take, and only
-            if you pass <code>allowEarly = true</code>; otherwise it reverts.
-            Each stake is its own position, so your other stakes aren't
-            touched.</p>
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">Where do the rewards come from? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>$SDOGE rewards come from the team's dev fees, from early-exit penalties and from forfeited rewards. USDC rewards come from SDOGE NFT profits: the marketplace fee, a share of Studio sales and NFT sales. How much there is depends on that activity, so rewards aren't guaranteed.</p></div>
           </div>
-        </div>
-      </div>
+          <div class="accordion__item">
+            <button class="accordion__trigger" type="button">How does the NFT boost work? <span aria-hidden="true"></span></button>
+            <div class="accordion__panel"><p>Pick one of your SDOGE NFTs when you stake and that stake's share of the rewards goes up, by up to 50% depending on the design (the page shows the boost when you pick it). The NFT is held with the stake and comes back to you when the stake ends, early or not. It's never penalized.</p></div>
+          </div>
         </div>
       </div>
     </div>
   </section>
-
 </main>
 
 <!-- ===== FOOTER ===== -->
-<footer class="footer">
+<footer class="footer stk-footer">
   <div class="container footer__inner">
     <div class="footer__brand">
       <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
       <div>
         <span class="brand__name">$SDOGE</span>
-        <p>The Stable Doge — on Arc.</p>
+        <p>The Stable Doge, on Arc.</p>
       </div>
     </div>
 
     <nav class="footer__nav">
       <a href="index.html">Home</a>
       <a href="staking.html">Staking</a>
-      <a href="nft.html">NFT</a>
       <a href="index.html#roadmap">Roadmap</a>
       <a href="index.html#community">Community</a>
-      <a href="index.html#faq">FAQ</a>
+      <a href="#faq">FAQ</a>
     </nav>
 
     <div class="footer__social">
@@ -351,17 +294,16 @@
       </a>
     </div>
 
-    <a href="index.html#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    <a href="index.html#buy" class="stk-btn stk-btn--primary">Buy SDOGE</a>
   </div>
 
   <div class="container">
     <p class="disclaimer">
-      <strong>Risk disclaimer:</strong> Staking $SDOGE is not risk-free.
-      Locking tokens exposes you to smart-contract risk and to $SDOGE's
-      own price movement for the full lock duration. The early-withdrawal
-      penalty is real and enforced by the contract, not a suggestion.
-      Rewards depend on NFT volume and are not guaranteed.
-      This is not financial advice — do your own research.
+      <strong>Risk disclaimer:</strong> Staking $SDOGE is not risk-free. Locking tokens exposes you
+      to smart-contract risk and to $SDOGE's own price for the whole lock. The early-exit penalty is
+      real and enforced by the contract. Rewards depend on NFT activity and team funding and are
+      not guaranteed. The APR is an estimate from today's reward rates and price, not a promise.
+      This is not financial advice. Do your own research.
     </p>
     <p class="copyright">© <span id="year"></span> $SDOGE. All rights reserved. Stable. Simple. On Arc.</p>
   </div>
