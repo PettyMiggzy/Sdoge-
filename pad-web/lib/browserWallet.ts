@@ -76,3 +76,19 @@ export function walletErrorText(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? String(e);
   return code !== undefined ? `${msg} (code ${code})` : msg;
 }
+
+/**
+ * Links that reopen `url` inside a wallet app's own browser, where the wallet
+ * is built in and connects directly. For phone browsers that have no wallet
+ * (plain Safari or Chrome), which can't connect any other way unless
+ * WalletConnect is set up.
+ */
+export function walletAppLinks(url: string): { name: string; href: string }[] {
+  const u = encodeURIComponent(url);
+  return [
+    { name: 'MetaMask', href: `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}` },
+    { name: 'Coinbase Wallet', href: `https://go.cb-w.com/dapp?cb_url=${u}` },
+    { name: 'Trust Wallet', href: `https://link.trustwallet.com/open_url?coin_id=60&url=${u}` },
+    { name: 'OKX Wallet', href: `https://www.okx.com/download?deeplink=${encodeURIComponent(`okx://wallet/dapp/url?dappUrl=${u}`)}` },
+  ];
+}
