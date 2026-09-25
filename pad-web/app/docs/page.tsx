@@ -39,7 +39,7 @@ export default function Docs() {
   // SDOGE Pad lives on Arc mainnet: show its public endpoint, never the
   // provider URL this site uses.
   const PUBLIC_RPC = 'https://rpc.mainnet.arc.io';
-  const siteBase = CONFIG.siteUrl || 'https://sdoge-launchpad.vercel.app';
+  const siteBase = CONFIG.siteUrl || 'https://pad.stabledoge.site';
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

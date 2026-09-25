@@ -1,6 +1,6 @@
 # sdoge-pad-sdk
 
-TypeScript SDK for [SDOGE Pad](https://sdoge-launchpad.vercel.app), the SDOGE
+TypeScript SDK for [SDOGE Pad](https://pad.stabledoge.site), the SDOGE
 token launchpad on Arc. Find launches the block they happen, quote, buy,
 sell, launch tokens and claim creator fees. Built on [viem](https://viem.sh).
 
@@ -106,7 +106,7 @@ every origin. `createPadApi()` wraps it.
 | `GET /api/v1/market?limit=30` | Live price, market cap and change since launch of the newest launches. |
 | `GET /api/v1/tokens/<address>` | One launch: pool details, live price, tax waiting to be flushed, description and links. |
 
-Base URL: `https://sdoge-launchpad.vercel.app`.
+Base URL: `https://pad.stabledoge.site`.
 
 ## Contracts on Arc mainnet (chain 5042)
 

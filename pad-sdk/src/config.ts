@@ -30,7 +30,7 @@ export type PadConfig = {
 export const ARC_MAINNET: PadConfig = {
   chainId: 5042,
   rpcUrl: 'https://rpc.mainnet.arc.io',
-  apiUrl: 'https://sdoge-launchpad.vercel.app/api/v1',
+  apiUrl: 'https://pad.stabledoge.site/api/v1',
   portal: '0x7F80b1198e6DAa56b0019Cb45020382358E385Fd',
   hook: '0x10dE365Cc583bA953a9e6C36658A138082d9e8cc',
   treasury: '0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa',

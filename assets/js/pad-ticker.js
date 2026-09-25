@@ -5,8 +5,8 @@
 // launches the strip fills out with plain pad facts instead of sample data.
 // If both sources are down it still shows the facts, so it never looks broken.
 (() => {
-  // The pad site. Change this one line if the pad moves to its own domain.
-  const PAD_URL = 'https://sdoge-launchpad.vercel.app';
+  // The pad site. Change this one line if the pad ever moves.
+  const PAD_URL = 'https://pad.stabledoge.site';
   const SDOGE = '0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405';
   const REFRESH_MS = 30_000;
   const MIN_ITEMS = 8; // below this the strip is padded with pad facts

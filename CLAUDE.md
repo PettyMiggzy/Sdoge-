@@ -91,11 +91,13 @@ creator-set tax 0–10% per side.
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
 - **Still needed:** the switch-on, the test token, a WalletConnect project ID,
-  publishing `pad-sdk` to npm (needs the owner's account), the `pad.` DNS record
-  (below). Optional: host `pad-indexer`.
-- **Domain:** `stabledoge.site` is on Vercel with GoDaddy DNS. A `pad.` subdomain
-  needs the owner to add a CNAME `pad` → `cname.vercel-dns.com` at GoDaddy; then
-  change `PAD_URL` in `assets/js/pad-ticker.js` and `NEXT_PUBLIC_SITE_URL`.
+  publishing `pad-sdk` to npm (needs the owner's account). Optional: host
+  `pad-indexer`.
+- **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →
+  `cname.vercel-dns.com`, added by the owner 2026-09-25; `stabledoge.site` itself is
+  on Vercel with GoDaddy DNS). https://sdoge-launchpad.vercel.app serves the same
+  site. The main site's links, the ticker (`PAD_URL`), the SDK's `apiUrl` and the
+  pad's `NEXT_PUBLIC_SITE_URL` all use the `pad.` address.
 - White-label factory: slot left open; its contracts are newer than the last audit.
 
 ## Other parts
