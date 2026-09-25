@@ -10,6 +10,7 @@ import { poolKeyFor } from '@/lib/pool';
 import { CONFIG, explorerAddr, explorerTx } from '@/lib/config';
 import { shortAddr, bpsToPct } from '@/lib/format';
 import { explainTxError } from '@/lib/txError';
+import { useEnsureArc } from '@/lib/ensureArc';
 
 export function AddrLink({ a }: { a: string }) {
   const href = explorerAddr(a);
@@ -58,6 +59,7 @@ export function CreatorCard({ launch }: { launch: Launch }) {
   const { address } = useAccount();
   const pc = usePublicClient({ chainId: arc.id });
   const { writeContractAsync } = useWriteContract();
+  const ensureArc = useEnsureArc();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const poolKey = poolKeyFor(launch.token).key;
@@ -88,6 +90,7 @@ export function CreatorCard({ launch }: { launch: Launch }) {
     if (!pc) return;
     setMsg(null); setBusy(label);
     try {
+      await ensureArc();
       await check();
       const h = await send();
       const r = await pc.waitForTransactionReceipt({ hash: h });

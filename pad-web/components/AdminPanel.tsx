@@ -9,6 +9,7 @@ import { arc } from '@/lib/chain';
 import { explainTxError } from '@/lib/txError';
 import { shortAddr } from '@/lib/format';
 import { browserProvider, browserWalletName, switchWalletToArc, walletErrorText } from '@/lib/browserWallet';
+import { useEnsureArc } from '@/lib/ensureArc';
 import { ConnectButton } from './ConnectButton';
 
 const hookAdminAbi = parseAbi([
@@ -31,6 +32,7 @@ export function AdminPanel() {
   const { address, isConnected } = useAccount();
   const pc = usePublicClient({ chainId: arc.id });
   const { writeContractAsync } = useWriteContract();
+  const ensureArc = useEnsureArc();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tx, setTx] = useState<string | null>(null);
@@ -56,6 +58,8 @@ export function AdminPanel() {
     try {
       const call = { address: CONFIG.hook, abi: hookAdminAbi, functionName: 'bootstrapMainPortal', args: [CONFIG.portal] } as const;
       await pc.simulateContract({ ...call, account: address });
+      setBusy(`Checking your wallet is on ${CONFIG.chainName}…`);
+      await ensureArc();
       setBusy('Waiting for your wallet approval…');
       const hash = await writeContractAsync({ ...call, chainId: arc.id });
       setTx(hash); setBusy(`Waiting for ${CONFIG.chainName}…`);

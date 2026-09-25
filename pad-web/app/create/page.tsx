@@ -10,6 +10,7 @@ import { fmtUsd } from '@/lib/format';
 import { saveMeta, readImageFile } from '@/lib/metadata';
 import { arc } from '@/lib/chain';
 import { ensureGasFunds, explainTxError, knownErrorsAbi } from '@/lib/txError';
+import { useEnsureArc } from '@/lib/ensureArc';
 import { TokenIcon } from '@/components/TokenIcon';
 
 const PRESETS = [500, 1000, 2500, 5000, 10000];
@@ -20,6 +21,7 @@ export default function Create() {
   const { address, isConnected } = useAccount();
   const pc = usePublicClient({ chainId: arc.id });
   const { writeContractAsync } = useWriteContract();
+  const ensureArc = useEnsureArc();
   const { signMessageAsync } = useSignMessage();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +104,8 @@ export default function Create() {
       await pc.simulateContract({ ...call, account: address });
       const gas = ((await pc.estimateContractGas({ ...call, account: address })) * 12n) / 10n;
       await ensureGasFunds(pc, address, gas);
+      setBusy(`Checking your wallet is on ${CONFIG.chainName}…`);
+      await ensureArc();
       setBusy('Waiting for your wallet approval…');
       const hash = await writeContractAsync({ ...call, chainId: arc.id, gas });
       setTx(hash); setBusy(`Waiting for ${CONFIG.chainName}…`);

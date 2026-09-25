@@ -11,6 +11,7 @@ import type { PoolKey } from '@/lib/pool';
 import { buildExactInSwap, quoteExactIn } from '@/lib/swap';
 import { fmtCompact, parseUnitsSafe } from '@/lib/format';
 import { explainTxError } from '@/lib/txError';
+import { useEnsureArc } from '@/lib/ensureArc';
 
 type Props = {
   token: Address; symbol: string; poolKey: PoolKey; tokenIsToken0: boolean;
@@ -31,6 +32,7 @@ export function TradePanel(p: Props) {
   const { address, isConnected } = useAccount();
   const pc = usePublicClient({ chainId: arc.id });
   const { writeContractAsync } = useWriteContract();
+  const ensureArc = useEnsureArc();
 
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
@@ -116,6 +118,8 @@ export function TradePanel(p: Props) {
     if (!pc || !address || !canTrade || amountOutMin === undefined) return;
     setErr(null); setTx(null);
     try {
+      setBusy(`Checking your wallet is on ${CONFIG.chainName}…`);
+      await ensureArc();
       // Approval runs for BOTH sides — a buy spends USDC via ERC-20
       // transferFrom just as a sell spends the launch token.
       await ensureAllowance();

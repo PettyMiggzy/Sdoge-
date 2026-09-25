@@ -1,12 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { ConnectButton as RKConnectButton } from '@rainbow-me/rainbowkit';
-import { useBalance, useSwitchChain } from 'wagmi';
+import { useBalance } from 'wagmi';
 import { formatEther, type Address } from 'viem';
 import { ExternalLink, Wallet, X } from 'lucide-react';
 import { arc } from '@/lib/chain';
 import { shortAddr } from '@/lib/format';
 import { browserProvider, isPhone, walletAppLinks } from '@/lib/browserWallet';
+import { useEnsureArc, useWalletChainId } from '@/lib/ensureArc';
 
 // With a WalletConnect project ID, RainbowKit's own list reaches phone
 // wallets (see lib/wallets.ts). Without one, a phone browser with no wallet
@@ -15,7 +16,10 @@ import { browserProvider, isPhone, walletAppLinks } from '@/lib/browserWallet';
 const hasWalletConnect = !!process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
 export function ConnectButton() {
-  const { switchChain } = useSwitchChain();
+  const ensureArc = useEnsureArc();
+  // The wallet's own network, which can differ from wagmi's record (see
+  // lib/ensureArc.ts); if either says it isn't Arc, offer the switch.
+  const walletChain = useWalletChainId();
   const [appsOpen, setAppsOpen] = useState(false);
   return (
     <>
@@ -28,8 +32,8 @@ export function ConnectButton() {
             const connect = () => (!hasWalletConnect && isPhone() && !browserProvider() ? setAppsOpen(true) : openConnectModal());
             return <button className="btn-brand px-6 py-3 text-[15px]" onClick={connect}>Connect Wallet</button>;
           }
-          if (chain?.unsupported) {
-            return <button className="btn-down" onClick={() => switchChain({ chainId: arc.id })}>Switch to Arc</button>;
+          if (chain?.unsupported || (walletChain !== undefined && walletChain !== arc.id)) {
+            return <button className="btn-down" onClick={() => ensureArc().catch(() => {})}>Switch to Arc</button>;
           }
           return <Connected address={account.address as Address} onClick={openAccountModal} />;
         }}
