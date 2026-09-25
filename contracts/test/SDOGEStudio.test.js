@@ -16,7 +16,11 @@ async function deployFixture() {
     "ipfs://bafy/community.json"
   );
   const community = await ethers.getContractAt("SDOGEStudioCollection", await studio.communityCollection());
-  const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(await sdoge.getAddress(), owner.address);
+  const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(
+    await sdoge.getAddress(),
+    ethers.ZeroAddress,
+    owner.address
+  );
   for (const u of [alice, bob]) {
     await sdoge.mint(u.address, E("10000000"));
     await sdoge.connect(u).approve(await studio.getAddress(), ethers.MaxUint256);

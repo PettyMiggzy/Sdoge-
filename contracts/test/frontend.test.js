@@ -15,13 +15,17 @@ const hex = (n) => ethers.toQuantity(n);
 async function deployAll({ designNames } = {}) {
   const [owner, alice, bob, carol, treasury] = await ethers.getSigners();
   const sdoge = await (await ethers.getContractFactory("MockERC20")).deploy("Stable Doge", "SDOGE");
-  const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(await sdoge.getAddress(), owner.address);
   const collectibles = await (await ethers.getContractFactory("SDOGECollectibles")).deploy(owner.address, "ipfs://meta/", treasury.address);
   for (const d of designs) {
     const name = designNames?.[d.id] ?? d.name;
     await collectibles.createDesign(d.id, name, d.maxSupply, E(d.priceUsdc), d.reserved);
     await collectibles.setPublicMint(d.id, true);
   }
+  const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(
+    await sdoge.getAddress(),
+    await collectibles.getAddress(),
+    owner.address
+  );
   const { studio, community } = await deployStudio(owner, sdoge, treasury);
   const marketplace = await (await ethers.getContractFactory("SDOGENFTMarketplace")).deploy(
     owner.address,

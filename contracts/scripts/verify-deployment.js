@@ -3,7 +3,8 @@
 //   recorded block (a record written on a fork of Arc fails here: its transactions never
 //   reached Arc);
 // - each one is owned by the recorded Safe (2+ signers), with no ownership transfer pending;
-// - the wiring: staking's token, sink and notifier; the collectibles' treasury and metadata URI;
+// - the wiring: staking's token, NFT collection, notifier and design boosts; the collectibles'
+//   treasury and metadata URI;
 //   the Studio's treasury, token and revenue routing; the marketplace's Studio, collectibles,
 //   fee recipient, fee and revenue routing.
 //
@@ -25,8 +26,9 @@ const ABI = {
   SDOGEStaking: [
     ...OWNABLE,
     "function stakingToken() view returns (address)",
-    "function tokenSink() view returns (address)",
+    "function boostCollection() view returns (address)",
     "function notifier() view returns (address)",
+    "function designBoostBps(uint256) view returns (uint256)",
   ],
   SDOGECollectibles: [
     ...OWNABLE,
@@ -51,7 +53,7 @@ const ABI = {
   ],
 };
 // Where each contract's recorded constructor args hold its owner.
-const OWNER_ARG = { SDOGEStaking: 1, SDOGECollectibles: 0, SDOGEStudio: 0, SDOGENFTMarketplace: 0 };
+const OWNER_ARG = { SDOGEStaking: 2, SDOGECollectibles: 0, SDOGEStudio: 0, SDOGENFTMarketplace: 0 };
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 const same = (a, b) =>
@@ -186,10 +188,24 @@ async function verify(opts = {}) {
       const settings = recorded[name].settings || {};
       const batch = " (the staking-setup Safe batch sets it)";
       expectAddress(name, "stakingToken", await read(name, "stakingToken", () => staking.stakingToken()), sdoge, "SDOGE is");
-      const sink = settings.tokenSink || recorded[name].args?.[OWNER_ARG[name]];
-      expectAddress(name, "tokenSink", await read(name, "tokenSink", () => staking.tokenSink()), sink, "the record says", batch);
+      const collection = await read(name, "boostCollection", () => staking.boostCollection());
+      if (recorded.SDOGECollectibles) {
+        expectAddress(name, "boostCollection", collection, recorded.SDOGECollectibles.address, "the recorded SDOGECollectibles is");
+      } else {
+        expectAddress(name, "boostCollection", collection, recorded[name].args?.[1], "the record says");
+      }
       const notifier = settings.notifier || ethers.ZeroAddress;
       expectAddress(name, "notifier", await read(name, "notifier", () => staking.notifier()), notifier, "the record says", batch);
+      const boosts = Object.entries(settings.designBoosts || {});
+      if (!boosts.length) return note(name, "designBoostBps", "none recorded");
+      const wrong = [];
+      for (const [id, bps] of boosts) {
+        const onChain = await read(name, "designBoostBps", () => staking.designBoostBps(id));
+        if (onChain === undefined) return;
+        if (onChain !== BigInt(bps)) wrong.push(`design ${id} is ${onChain} on-chain, the record says ${bps}`);
+      }
+      if (wrong.length) fail(name, "designBoostBps", `${wrong.join("; ")}${batch}`);
+      else pass(name, "designBoostBps", `all ${boosts.length} designs match the record`);
     },
     SDOGECollectibles: async (name, collectibles) => {
       const [, baseUri, treasury] = recorded[name].args || [];

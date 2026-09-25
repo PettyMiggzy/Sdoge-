@@ -6,7 +6,7 @@ is deployed yet.
 
 | Contract | What it does |
 |---|---|
-| `SDOGEStaking.sol` | Stake $SDOGE in 5 lock tiers and earn native USDC. |
+| `SDOGEStaking.sol` | Stake $SDOGE in 5 lock tiers and earn native USDC and $SDOGE. Staking a Collectible with a stake boosts it. |
 | `SDOGECollectibles.sol` | The 12 named Doge designs (ERC-1155), sold for USDC. See `../nft/README.md`. |
 | `SDOGEStudio.sol` + `SDOGEStudioCollection.sol` | Mint your own NFTs. Credits come in packages (1 mint = 5 USDC, 1,000 = 100 USDC). Buyers use them for Community Art 1-of-1s, or for their own collections with drops and royalties. See `../nft/README.md`. |
 | `SDOGENFTMarketplace.sol` | Escrowed resale of all of the above. The fee goes to staking and royalties go to creators. |
@@ -23,7 +23,7 @@ Marketplace fee (2%) ───────────────────�
 Creator royalty (≤10%) ─────────────────────> the collection's royalty receiver
 Collectibles mint revenue ──withdraw()─────> treasury
 Studio SDOGE payments ──────────────────────> burned (0x…dEaD)
-Staking early-exit penalties (SDOGE) ──sweepTokens()──> tokenSink (treasury)
+Staking early-exit penalties (SDOGE) ───────> streamed to the stakers who stay
 ```
 
 `contributeUSDC()` adds to staking's `unallocatedUsdc`. The owner (or the notifier) turns it
@@ -53,41 +53,63 @@ still paid.
   then on you can exit, or claim rewards and keep the stake running. A stake keeps earning at
   its multiplier after it matures, for as long as it stays open.
 - **Leaving early** costs 15% of the principal you take out and forfeits all of that stake's
-  unclaimed reward. Your other stakes are unaffected.
+  unclaimed rewards, USDC and SDOGE. Your other stakes are unaffected.
   - `exitStake(id, false)` and `withdraw(..., false)` revert instead of leaving early, so an
     early exit always has to be asked for with `allowEarly = true`.
-  - The forfeited USDC goes back into the pool. The SDOGE penalty is swept to `tokenSink`.
-- **Rewards are native USDC.**
-  - If a payout fails (a contract wallet or blocklisted address), it waits in
-    `deferredRewards` for `claimDeferredRewards(to)`. It never blocks principal.
-  - The contract tracks every USDC it owes (`rewardsOutstanding + unallocatedUsdc`) and never
-    schedules more than it holds.
+  - **None of it leaves the pool.** The forfeited USDC goes back into the USDC pool. The SDOGE
+    penalty and the forfeited SDOGE stream to the stakers who stay, over 7 days. There is no
+    sweep: nobody, the owner included, can take them out.
+- **Rewards come in two currencies**, both split by the same weights (amount x tier multiplier
+  x NFT boost).
+  - **USDC** (native) from the treasury, Studio and marketplace revenue. The owner or notifier
+    schedules it with `notifyRewardAmount()`. If a payout fails (a contract wallet or
+    blocklisted address), it waits in `deferredRewards` for `claimDeferredRewards(to)`. It never
+    blocks principal.
+  - **SDOGE** from early-exit penalties, forfeits, donations (`contributeTokens`) and the
+    treasury (`notifySdogeRewards(amount)`). Once rewards have started, new SDOGE joins the
+    stream on its own whenever someone stakes, exits or claims, unless that would slow a
+    running period down; `notifyUnallocatedSdoge()` lets anyone push it in during a quiet spell.
+  - The contract tracks everything it owes in each currency and never schedules more than it
+    holds: the native balance covers `rewardsOutstanding + unallocatedUsdc`, and the SDOGE
+    balance covers principal + `unallocatedSdoge + sdogeRewardsOutstanding`.
   - Rewards that stream while nobody is staked return to the pool.
   - USDC or SDOGE forced in outside the normal paths is picked up by `absorbSurplus()`.
+- **NFT boosts.** Send one SDOGE Collectible with a new stake and the stake's share of both
+  streams is multiplied by 1 + that design's boost (at most +50%, from
+  `../nft/staking-boosts.json` by tier).
+  - The page does it in one transaction, `collectibles.safeTransferFrom(you, staking, designId,
+    1, abi.encode(tier, amount, duration, multiplier, boost))`, after an exact SDOGE approval.
+    No blanket NFT approval is ever asked for.
+  - A stake keeps the boost it opened with. The NFT comes back when the stake closes, early or
+    not; it's never penalized. If the wallet refuses it, it waits in `deferredNfts` for
+    `claimDeferredNft(designId, to)`, and the exit still goes through.
+  - Only the recorded Collectibles count, one NFT per stake, the staker's own, and only designs
+    with a boost; anything else sent to the contract is refused.
 - **`withdraw(id, amount, recipients, splitAmounts, allowEarly)`** pays principal to 1-4
   wallets. `splitAmounts` must add up to the exact payout.
 - **Roles.**
-  - The owner (the Safe) schedules rewards and sets the notifier, `tokenSink` and the reward
-    period length (1-90 days, between periods). It can't touch the terms or anyone's stake.
-  - The optional `notifier` can only call `notifyRewardAmount()` and `sweepTokens()`.
-  - `sweepTokens()` can only send to `tokenSink`, which the owner sets; a sink that pointed at
-    the old owner follows an ownership transfer.
+  - The owner (the Safe) schedules rewards, sets the notifier, the USDC reward period length
+    (1-90 days, between periods) and the design boosts until `lockBoosts()`. It can't touch the
+    terms, anyone's stake, or the pool's SDOGE.
+  - The optional `notifier` can only call `notifyRewardAmount()` and `notifySdogeRewards()`.
   - `recoverERC20` can never touch SDOGE or the `0x3600` USDC view.
 - **The first reward period.** A dust stake opened while nobody else is staked would take
   that period's whole stream, so the team's Safe opens a permanent seed stake before any
-  revenue is routed to staking or any period is started (see the runbook).
+  revenue is routed to staking or any period is started (see the runbook). Nothing streams
+  until the owner or notifier starts rewards, penalties included.
 
-The pool is not self-funding. Without treasury, Studio or marketplace USDC, rewards are close to
-zero. Say so wherever staking is promoted.
+The USDC pool is not self-funding. Without treasury, Studio or marketplace USDC, USDC rewards are
+close to zero. Say so wherever staking is promoted.
 
 ## Development
 
 ```bash
 npm install
-npx hardhat test   # 232 tests:
-                   #  39 staking         (fixed terms, terms guard, penalty + forfeiture, maturity,
-                   #                      allowEarly, splits, deferred payouts, first period,
-                   #                      exact USDC accounting fuzz)
+npx hardhat test   # 248 tests:
+                   #  54 staking         (fixed terms, terms guard, penalty streamed to stakers,
+                   #                      USDC + SDOGE rewards and forfeiture, maturity, allowEarly,
+                   #                      splits, NFT boosts and returns, deferred payouts and NFTs,
+                   #                      first period, exact two-currency accounting fuzz)
                    #  22 collectibles    (closed-by-default designs, expected ids, reserve, changes
                    #                      only while closed, supply lock, URI rules, freeze,
                    #                      airdrop gas budget)
@@ -98,7 +120,7 @@ npx hardhat test   # 232 tests:
                    #                      ownership handover, cap, royalties)
                    #  39 marketplace     (escrow, per-seller/per-collection indexes, fee and
                    #                      royalty limits, cancel paths, proceeds, pause)
-                   #  30 deploy scripts  (run for real on the local chain with a mock Safe,
+                   #  31 deploy scripts  (run for real on the local chain with a mock Safe,
                    #                      verify-deployment, sync-frontend)
                    #  43 front end       (the site's real assets/js files against these contracts)
 ```
@@ -139,21 +161,24 @@ export ARC_RPC_URL=https://rpc.mainnet.arc.io DEPLOYER_PRIVATE_KEY=0x...   # gas
 SAFE=0x...        # the team's Safe on Arc (2+ signers)
 TREASURY=0x...    # where USDC revenue goes; must accept a plain USDC transfer (the Safe does)
 
-# 1. Staking
-STAKING_OWNER_ADDRESS=$SAFE npx hardhat run scripts/deploy-staking.js --network arc
-#    Then, from the Safe, BEFORE any revenue is routed to staking:
-#    a. open a seed stake it never exits (e.g. the 365-day tier), so no dust stake can ever
-#       be alone in the pool;
-#    b. call notifyRewardAmount() for the first period (only the owner or notifier can start
-#       it; after that, anyone can restart an idle pool).
-
-# 2. The 12 designs. Pin the art and metadata first: the script fetches all 12 files from the
+# 1. The 12 designs. Pin the art and metadata first: the script fetches all 12 files from the
 #    base URI and checks them against nft/designs.json.
 COLLECTIBLES_OWNER_ADDRESS=$SAFE TREASURY_ADDRESS=$TREASURY COLLECTIBLES_BASE_URI=ipfs://<CID>/ \
   npx hardhat run scripts/deploy-collectibles.js --network arc
 npx hardhat run scripts/setup-designs.js --network arc   # batch: createDesign x12, all closed
 #    Check the printed reserves before signing: a reserve can never be raised later. Execute
 #    the batch in the Safe, then re-run: it checks every design against the manifest.
+
+# 2. Staking, tied for good to the recorded Collectibles (their NFTs boost stakes)
+STAKING_OWNER_ADDRESS=$SAFE npx hardhat run scripts/deploy-staking.js --network arc
+#    Then, from the Safe, BEFORE any revenue is routed to staking:
+#    a. execute the staking-setup batch (the design boosts from nft/staking-boosts.json);
+#    b. open a seed stake it never exits (e.g. the 365-day tier), so no dust stake can ever
+#       be alone in the pool;
+#    c. start rewards: notifyRewardAmount() with USDC and notifySdogeRewards(amount) with SDOGE
+#       (only the owner or notifier can start them; after that, penalties stream on their own
+#       and anyone can restart an idle pool);
+#    d. once the boosts are final, lockBoosts().
 
 # 3. SDOGE Studio (packages from nft/studio.json, which also needs a pinned
 #    communityContractURI, or ALLOW_EMPTY_CONTRACT_URI=1 and setCommunityContractURI later)
@@ -163,9 +188,8 @@ STUDIO_OWNER_ADDRESS=$SAFE TREASURY_ADDRESS=$TREASURY npx hardhat run scripts/de
 MARKETPLACE_OWNER_ADDRESS=$SAFE FEE_RECIPIENT_ADDRESS=$TREASURY \
   npx hardhat run scripts/deploy-marketplace.js --network arc
 
-# 5. In the Safe: the staking-setup batch (if written), then, only after step 1's seed stake
-#    and first period, the studio-setup and marketplace-setup batches that route revenue to
-#    staking.
+# 5. In the Safe, only after step 2's seed stake and first period: the studio-setup and
+#    marketplace-setup batches that route revenue to staking.
 
 # 6. Check everything on Arc (read-only, through the public RPC), then point the site at it.
 #    sync-frontend runs the same checks and won't touch assets/js/arc.js unless they pass.
@@ -182,6 +206,7 @@ npx hardhat verify --network arc <address> <constructor args...>
 
 Before launch:
 - Replace the `ipfs://REPLACE_ME` images in `nft/metadata`.
-- Settle the design prices and reserves in `nft/designs.json` (placeholders today).
+- Settle the design prices and reserves in `nft/designs.json` and the boosts in
+  `nft/staking-boosts.json` (placeholders today).
 - Check the packages, `poolShareBps` and `communityContractURI` in `nft/studio.json`.
 - Get an independent audit before real money flows through these contracts.

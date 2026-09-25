@@ -28,7 +28,12 @@ for decisions to live in the repo so nothing depends on chat memory.
   forfeiture. They are constants in `SDOGEStaking.sol`. Don't edit the tokenomics
   copy in `index.html` without the owner.
 - **Staking rewards:** the SDOGE side comes from the owner's dev fees, the USDC side
-  from NFT profits.
+  from NFT profits. Staking is for $SDOGE only.
+- **The early-exit penalty stays in the pool** ("it stays in there"): the 15% and any
+  forfeited rewards stream to the stakers who stay. There is no sweep.
+- **Staking an NFT boosts the stake**, by the Collectible design's tier
+  (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%, placeholders until
+  the owner decides). The owner can change them until `lockBoosts()`.
 - **SDOGE Studio minting is fully open, no review** (only encoding checks).
 - **Images are made with Venice, not Adobe.** The Venice API key never goes in the
   repo.

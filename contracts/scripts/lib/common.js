@@ -157,7 +157,7 @@ async function checkOwner(label, address, { deployer, allowEoa = false, allowLow
   return owner;
 }
 
-// A treasury, fee recipient, token sink or notifier: never a reserved address. A USDC recipient
+// A treasury, fee recipient or notifier: never a reserved address. A USDC recipient
 // must also take a plain native transfer, because that's how the Studio and the collectibles pay
 // it: one that reverts would block their payouts.
 async function checkAddress(label, address, { from, receivesUsdc = false } = {}) {

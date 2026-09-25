@@ -26,6 +26,7 @@ async function deployFixture() {
   );
   const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(
     await sdoge.getAddress(),
+    await collectibles.getAddress(),
     owner.address
   );
 

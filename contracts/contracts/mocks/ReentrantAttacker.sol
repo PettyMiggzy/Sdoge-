@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface ISDOGEStaking {
-    function claimReward(uint256 stakeId) external returns (uint256);
+    function claimReward(uint256 stakeId) external returns (uint256, uint256);
     function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps)
         external
         returns (uint256);

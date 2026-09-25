@@ -7,8 +7,8 @@ interface IStakingForNoReceive {
     function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps)
         external
         returns (uint256);
-    function exitStake(uint256 stakeId, bool allowEarly) external returns (uint256, uint256);
-    function claimReward(uint256 stakeId) external returns (uint256);
+    function exitStake(uint256 stakeId, bool allowEarly) external returns (uint256, uint256, uint256);
+    function claimReward(uint256 stakeId) external returns (uint256, uint256);
     function claimDeferredRewards(address payable to) external returns (uint256);
     function tierDuration(uint256) external view returns (uint256);
     function tierMultiplierBps(uint256) external view returns (uint256);
