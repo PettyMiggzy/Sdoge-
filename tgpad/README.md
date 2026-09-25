@@ -111,7 +111,7 @@ Telegram takes bots down for publishing illegal or sexual content, for scams and
 2. **Create the launch channel.** Add the bot as an admin that can **post, edit and delete** messages (editing is how posts older than 48 hours are taken down), and note its ID (e.g. `-100…`).
 3. **Install and configure:**
    ```bash
-   cd ~/tr-bot-sdoge/Sdoge-/tgpad
+   cd ~/Sdoge-/tgpad   # wherever this repo is cloned on the box
    npm install --omit=dev
    cp .env.example .env && chmod 600 .env
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # paste as WALLET_MASTER_SECRET

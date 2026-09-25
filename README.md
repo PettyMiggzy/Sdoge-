@@ -45,6 +45,10 @@ python3 -m http.server 8811
   `studio.json`); see `nft/README.md`
 - `launchpad/` — the Uniswap v4 meme launchpad with the meme vault (Foundry)
 - `tgpad/` — the Telegram bot for the launchpad
+- `pad/`, `pad-web/`, `pad-indexer/`, `pad-sdk/` — SDOGE Pad, the SDOGE
+  token launchpad: contracts (Foundry), the Next.js site with its public
+  JSON API, the stats indexer, and the TypeScript SDK for bots and traders.
+  Deploy runbook and status in `pad/README.md`.
 - `assets/img/` — logo, hero/community/CTA artwork, social share image,
   card/chart icons. `hero-space.jpg`, `moon-buggy.jpg`, `signpost-pool.jpg`,
   and the four `icon-*.jpg` badges were AI-generated via the Venice API
@@ -55,8 +59,8 @@ python3 -m http.server 8811
   a GitHub Actions cron (no server needed). Token/pool addresses are
   configured; only the Telegram bot token + chat ID are still needed to go
   live. See `bot/README.md`.
-- `.github/workflows/ci.yml` — runs the contract, launchpad and tgpad test
-  suites on every push and pull request.
+- `.github/workflows/ci.yml` — runs the contract, launchpad, tgpad and SDOGE
+  Pad checks on every push and pull request.
 
 ## Still placeholder
 

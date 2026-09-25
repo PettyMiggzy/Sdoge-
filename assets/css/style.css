@@ -1295,3 +1295,117 @@ textarea.studio-input { min-height: 84px; resize: vertical; font-family: ui-mono
   .package-grid { grid-template-columns: 1fr; }
   .stake-row { flex-wrap: wrap; }
 }
+
+/* ===================== Market bar (live SDOGE Pad launches) ===================== */
+/* A slim stock-ticker strip pinned above the navbar. assets/js/pad-ticker.js
+   fills it from the pad's public API and DexScreener; everything shown is live
+   data or plain pad facts, never made-up numbers. */
+:root { --market-bar-h: 32px; }
+.market-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 101;
+  height: var(--market-bar-h);
+  display: flex;
+  align-items: stretch;
+  background: #030814;
+  border-bottom: 1px solid rgba(95, 168, 245, 0.18);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+}
+.market-bar__label {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  color: var(--navy-900);
+  background: var(--gold);
+  letter-spacing: 1.2px;
+}
+.market-bar__label:hover { background: var(--gold-light); }
+.market-bar__dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #1FAF5B;
+  box-shadow: 0 0 0 0 rgba(31, 175, 91, 0.7);
+  animation: market-pulse 1.8s infinite;
+}
+.market-bar--soon .market-bar__dot { background: var(--navy-600); animation: none; }
+@keyframes market-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 175, 91, 0.7); }
+  70% { box-shadow: 0 0 0 7px rgba(31, 175, 91, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 175, 91, 0); }
+}
+.market-bar__viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+}
+.market-bar__track {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: max-content;
+  white-space: nowrap;
+  animation: scroll-left var(--market-bar-speed, 40s) linear infinite;
+}
+.market-bar__viewport:hover .market-bar__track { animation-play-state: paused; }
+.market-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 18px;
+  height: 100%;
+  color: var(--text-primary);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+a.market-bar__item:hover { background: rgba(95, 168, 245, 0.08); }
+.market-bar__item--info { color: var(--text-muted); }
+.market-bar__icon {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--navy-700);
+  flex-shrink: 0;
+}
+.market-bar__icon--letter {
+  display: inline-grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--gold);
+}
+.market-bar__sym { color: #fff; }
+.market-bar__price { color: var(--text-muted); font-family: var(--font-body); font-weight: 600; font-size: 12px; }
+.market-bar__chg { font-family: var(--font-body); font-weight: 700; font-size: 12px; }
+.market-bar__chg--up { color: #2BD47D; }
+.market-bar__chg--down { color: var(--burn); }
+.market-bar__new {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(242, 193, 78, 0.16);
+  color: var(--gold);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .market-bar__track { animation: none; }
+  .market-bar__viewport { overflow-x: auto; }
+}
+
+/* Everything pinned or anchored under the navbar moves down by the bar. */
+body.has-market-bar .navbar { top: var(--market-bar-h); }
+body.has-market-bar .hero { padding-top: calc(150px + var(--market-bar-h)); }
+body.has-market-bar section[id],
+body.has-market-bar header[id] { scroll-margin-top: calc(88px + var(--market-bar-h)); }
+.navbar__links a.nav-pad { color: var(--gold); }
+.navbar__links a.nav-pad:hover { color: var(--gold-light); }
+@media (max-width: 720px) {
+  body.has-market-bar .hero { padding-top: calc(80px + var(--market-bar-h)); }
+  body.has-market-bar section[id],
+  body.has-market-bar header[id] { scroll-margin-top: calc(72px + var(--market-bar-h)); }
+  .market-bar__label { padding: 0 10px; font-size: 12px; }
+}

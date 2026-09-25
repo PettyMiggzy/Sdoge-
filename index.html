@@ -24,7 +24,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
 </head>
-<body>
+<body class="has-market-bar">
+
+<!-- ===== MARKET BAR: live SDOGE Pad launches (assets/js/pad-ticker.js) ===== -->
+<div class="market-bar" id="marketBar" aria-label="Live SDOGE Pad launches">
+  <a class="market-bar__label" id="marketBarLabel" href="https://sdoge-launchpad.vercel.app">
+    <span class="market-bar__dot"></span>SDOGE PAD
+  </a>
+  <div class="market-bar__viewport">
+    <div class="market-bar__track" id="marketBarTrack">
+      <span class="market-bar__item market-bar__item--info">Loading the pad…</span>
+    </div>
+  </div>
+</div>
 
 <!-- ===== NAV ===== -->
 <nav class="navbar" id="navbar">
@@ -44,6 +56,7 @@
       <a href="#tokenomics">Tokenomics</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#community">Community</a>
+      <a href="https://sdoge-launchpad.vercel.app" class="nav-pad" data-pad-link>Pad</a>
       <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
     </div>
 
@@ -459,6 +472,7 @@
       <a href="#tokenomics">Tokenomics</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#community">Community</a>
+      <a href="https://sdoge-launchpad.vercel.app" data-pad-link>Pad</a>
       <a href="#faq">FAQ</a>
     </nav>
 
@@ -494,5 +508,6 @@
 </footer>
 
 <script src="assets/js/main.js"></script>
+<script src="assets/js/pad-ticker.js"></script>
 </body>
 </html>

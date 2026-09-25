@@ -5,6 +5,8 @@ name: CI
 #   site's own assets/js run against those contracts (Hardhat)
 # - launchpad: the Uniswap v4 launchpad and meme vault (Foundry)
 # - tgpad: the Telegram launchpad bot
+# - pad, pad-web, pad-indexer, pad-sdk: SDOGE Pad's contracts (Foundry), site
+#   (Next.js build), indexer and TypeScript SDK
 on:
   push:
   pull_request:
@@ -43,7 +45,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-          submodules: recursive
+      # Only this project's pinned dependencies, not every submodule in the repo.
+      - name: Dependencies
+        run: git submodule update --init --recursive -- launchpad/lib
       - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
           version: v1.5.1
@@ -71,4 +75,87 @@ jobs:
         run: npm ci
       - name: Test
         working-directory: tgpad
+        run: npm test
+
+  pad:
+    name: SDOGE Pad contracts (Foundry)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      # Only this project's pinned dependencies, not every submodule in the repo.
+      - name: Dependencies
+        run: git submodule update --init --recursive -- pad/lib
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.5.1
+      - name: Build
+        working-directory: pad
+        run: forge build
+      - name: Test
+        working-directory: pad
+        # ForkArcTest skips itself without ARC_FORK_URL; run it by hand (see pad/README.md).
+        run: forge test
+
+  pad-web:
+    name: SDOGE Pad site (Next.js build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: pad-web/package-lock.json
+      - name: Install
+        working-directory: pad-web
+        run: npm ci
+      - name: Build (type check + lint)
+        working-directory: pad-web
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          # Placeholders: the build needs addresses, not live ones.
+          NEXT_PUBLIC_PORTAL: "0x0000000000000000000000000000000000000000"
+          NEXT_PUBLIC_HOOK: "0x0000000000000000000000000000000000000000"
+        run: npx next build
+
+  pad-indexer:
+    name: SDOGE Pad indexer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: pad-indexer/package-lock.json
+      - name: Install
+        working-directory: pad-indexer
+        run: npm ci
+      - name: Syntax check
+        working-directory: pad-indexer
+        run: for f in src/*.js; do node --check "$f"; done
+
+  pad-sdk:
+    name: SDOGE Pad SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: pad-sdk/package-lock.json
+      - name: Install
+        working-directory: pad-sdk
+        run: npm ci
+      - name: Build + unit tests
+        working-directory: pad-sdk
         run: npm test
