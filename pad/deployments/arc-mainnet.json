@@ -56,5 +56,22 @@
     "creator": "launched by the deploy wallet; creator role offered to the pad admin (transferCreator tx 0x3acce4f5274610c9fe8b2942e0a401d53959da0e75d3a503fd15428eca467fb3), waiting on acceptCreator",
     "firstTrades": "0.25 USDC buy 0xc59850de217f35ab1d9eadfd45919909939cb5220283d566ab58e3d7b02a6df2 and full sell-back 0xb7e07ac2d705d4d30caa21c746ed2793a6a68d05703db290d8fc2050dc24ab66"
   },
-  "deployWalletRefund": "leftover USDC returned to the pad admin, tx 0x0aeb0ee82cbe08c7082e2d261aea59ac6ae5f5c2e6902b91adb9d9f52d6eaaa3"
+  "deployWalletRefund": "leftover USDC returned to the pad admin, txs 0x0aeb0ee82cbe08c7082e2d261aea59ac6ae5f5c2e6902b91adb9d9f52d6eaaa3 and 0x687431ad8e29bfcd900e5b3cbc3ec95de999fc5155367062bb0b560b3c6237dd",
+  "testToken2": {
+    "name": "Stable Doge Pad",
+    "symbol": "TEST",
+    "token": "0xB480fADcdf58464951B98EE81F0566135Ab5da8E",
+    "splitter": "0x5dA359c43b557a32d08DB82ddA205c40E25B224f",
+    "locker": "0xAeA55acC635F1238aCd02A3ca1D66602e70672d9",
+    "poolId": "0x6709abf17720ca0236a21e788987d8f1a6e6df17350b2a89fd2dd81c0cc56fd9",
+    "tx": "0x03e5a879ece14a6934e1401993a2b52bbcfde1ce80688194147b4c4daa6a6f5e",
+    "block": 22743316,
+    "startingMarketCapUsd": 1000000000,
+    "buyTaxBps": 300,
+    "sellTaxBps": 300,
+    "why": "owner's test of a high starting market cap (2026-09-25): DexScreener showed $1.01B market cap and $1.01B liquidity; GoPlus flagged nothing on its first scan",
+    "sourceVerified": "Sourcify, exact match (runtime bytecode)",
+    "creator": "offered to the pad admin (transferCreator tx 0x8ff6f239ebd5f47c98fc1d6af6796ef1d6f537a5592b3430223018e47ea6690e), waiting on acceptCreator",
+    "firstTrades": "0.25 USDC buy 0x87e6c8f39c56f322c611e1bede643553aae434c9cb9d225d6c8820f4aece9b9e and full sell-back 0x770492f20a2d42d14f1ae64a31a3119b8013a66f5508d79218d16424594e0d0b"
+  }
 }
