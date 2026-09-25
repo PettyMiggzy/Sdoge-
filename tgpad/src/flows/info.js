@@ -1,4 +1,4 @@
-import { esc, fmtCompactUsd, fmtPrice, fmtTokens, fmtUsdc6, fmtUsdcWei, bpsToPct } from '../format.js';
+import { esc, fmtCompactUsd, fmtPrice, fmtTokens, fmtUsdc6, fmtUsdcWei, bpsToPct, short, tokenLine } from '../format.js';
 import { TOTAL_SUPPLY, usdPerToken, volume24h } from '../market.js';
 import { promptBuyAmount } from './trade.js';
 
@@ -81,7 +81,7 @@ export async function wallet(bot, m, user) {
     const l = bot.store.launch(t);
     if (!l) return null;
     const b = await bot.chain.tokenBalance(l.token, address).catch(() => 0n);
-    return b > 0n ? `• $${esc(l.symbol)}: ${fmtTokens(b)} (/t_${l.key})` : null;
+    return b > 0n ? `• $${esc(l.symbol)} (${esc(l.name)} · <code>${short(l.token)}</code>): ${fmtTokens(b)} (/t_${l.key})` : null;
   }));
   const held = holdings.filter(Boolean);
   if (held.length) lines.push('', '<b>Tokens</b>', ...held);
@@ -126,7 +126,7 @@ export async function token(bot, m, user, args, rest, { byKey = false } = {}) {
     l = bot.store.launchByKey(String(args[0] ?? '').toLowerCase());
     if (!l || ((l.hidden || l.status !== 'approved') && !bot.isAdmin(uid))) return bot.reply(uid, 'Token not found.');
   } else {
-    const r = bot.resolveToken(args[0], { includeHidden: true });
+    const r = bot.resolveToken(args[0], { includeHidden: true, uid });
     if (r.error) return bot.reply(uid, r.error);
     l = r.launch;
   }
@@ -148,13 +148,14 @@ export async function token(bot, m, user, args, rest, { byKey = false } = {}) {
 
 export async function vault(bot, m, user, args) {
   const uid = uidOf(m);
-  const r = bot.resolveToken(args[0], { includeHidden: true });
+  const r = bot.resolveToken(args[0], { includeHidden: true, uid });
   if (r.error) return bot.reply(uid, r.error);
   const l = r.launch;
   const s = await marketSnapshot(bot, l);
   const premium = s.floor > 0 && s.price > 0 ? (s.price / s.floor - 1) * 100 : null;
   return bot.reply(uid, [
     `🏦 <b>$${esc(l.symbol)} meme vault</b>`,
+    tokenLine(l),
     '',
     `Backing: <b>${fmtUsdc6(s.backing6)} USDC</b> (0.5% of every buy)`,
     `Shared by: ${fmtTokens(s.supply)} $${esc(l.symbol)} (every token, even the ones still in the pool)`,
@@ -176,7 +177,7 @@ export async function trending(bot, m) {
     .sort((a, b) => (b.vol > a.vol ? 1 : b.vol < a.vol ? -1 : 0))
     .slice(0, 10);
   if (!rows.length) return bot.reply(uid, 'No trades in the last 24h yet. Be first: /launch');
-  const lines = rows.map(({ l, vol }, i) => `${i + 1}. <b>$${esc(l.symbol)}</b>: ${fmtCompactUsd(Number(vol) / 1e6)} 24h · /t_${l.key}`);
+  const lines = rows.map(({ l, vol }, i) => `${i + 1}. <b>$${esc(l.symbol)}</b> ${esc(l.name)}: ${fmtCompactUsd(Number(vol) / 1e6)} 24h · /t_${l.key}`);
   return bot.reply(uid, ['🔥 <b>Trending (24h volume)</b>', '', ...lines].join('\n'));
 }
 

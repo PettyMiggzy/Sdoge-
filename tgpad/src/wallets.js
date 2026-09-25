@@ -40,4 +40,13 @@ export class Wallets {
   address(tgUserId) {
     return this.get(tgUserId).address;
   }
+
+  // Keeps the cache to the `max` most recently created wallets (they're
+  // re-derived on demand anyway).
+  trim(max) {
+    for (const id of this.#cache.keys()) {
+      if (this.#cache.size <= max) break;
+      this.#cache.delete(id);
+    }
+  }
 }

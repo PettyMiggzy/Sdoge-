@@ -12,13 +12,13 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         Longer locks earn faster: each tier multiplies the stake's share of the reward stream.
 ///
 /// Early exit: leave before your stake matures and you forfeit ALL of that stake's accrued,
-/// unclaimed reward AND pay a penalty on the principal you take out (15% by default). The
-/// forfeited USDC goes back into the reward pool; the SDOGE penalty is swept to the Treasury's
-/// token sink to be turned into rewards. Deliberately harsh, per explicit instruction.
+/// unclaimed reward AND pay a 15% penalty on the principal you take out. The forfeited USDC goes
+/// back into the reward pool; the SDOGE penalty is swept to the Treasury's token sink to be
+/// turned into rewards. Deliberately harsh, per explicit instruction.
 ///
-/// Each stake is its own position, with its own terms fixed the moment it's opened: the tier's
-/// lock length and multiplier, the penalty rate, and the time it matures (80% of the way through
-/// its lock by default). Later admin changes only ever apply to NEW stakes.
+/// The terms are fixed in the code and nobody can change them: the five lock lengths and
+/// multipliers, the 15% penalty, and maturity at 80% of the way through the lock (a 30-day stake
+/// is penalty-free after 24 days). Each stake is its own position with its own lock.
 ///
 /// Where the USDC comes from: the Treasury (notifyRewardAmount), marketplace resale fees
 /// (contributeUSDC), forfeited rewards and anything else sent in. The pool is NOT self-funding:
@@ -45,43 +45,51 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     uint256 public constant BPS_DENOMINATOR = 10000;
     uint256 public constant PRECISION = 1e18;
     uint256 public constant MAX_WITHDRAW_RECIPIENTS = 4;
-    uint256 public constant MAX_EARLY_WITHDRAW_PENALTY_BPS = 3000; // 30% cap
-    uint256 public constant MIN_TIER_MULTIPLIER_BPS = 10000; // 1.0x
-    uint256 public constant MAX_TIER_MULTIPLIER_BPS = 100000; // 10x
-    uint256 public constant MIN_TIER_DURATION = 1 days;
-    uint256 public constant MAX_TIER_DURATION = 5 * 365 days;
     uint256 public constant MIN_REWARDS_DURATION = 1 days;
     uint256 public constant MAX_REWARDS_DURATION = 90 days;
     /// @notice After a reward period has been over this long, anyone may start a new one from
     ///         unallocatedUsdc, so the pool never depends on the owner being around.
     uint256 public constant IDLE_NOTIFY_DELAY = 7 days;
 
-    /// @notice Lock length per tier. Tiers must stay strictly increasing in length.
-    uint256[NUM_TIERS] public tierDuration = [uint256(7 days), 30 days, 90 days, 180 days, 365 days];
+    /// @notice Principal penalty for leaving before maturity: 15%.
+    uint256 public constant earlyWithdrawPenaltyBps = 1500;
 
-    /// @notice Reward multiplier per tier in bps (10000 = 1.0x). Non-decreasing across tiers.
-    uint256[NUM_TIERS] public tierMultiplierBps = [uint256(10000), 12000, 15000, 20000, 30000];
+    /// @notice How far into its lock a stake matures (no penalty, no forfeiture from then on): 80%.
+    uint256 public constant earlyUnlockThresholdBps = 8000;
 
-    /// @notice Principal penalty for leaving early, for stakes opened from now on.
-    uint256 public earlyWithdrawPenaltyBps = 1500; // 15%
+    /// @notice Lock length per tier: 7, 30, 90, 180 and 365 days.
+    function tierDuration(uint256 tier) public pure returns (uint256) {
+        if (tier == 0) return 7 days;
+        if (tier == 1) return 30 days;
+        if (tier == 2) return 90 days;
+        if (tier == 3) return 180 days;
+        if (tier == 4) return 365 days;
+        revert("invalid tier");
+    }
 
-    /// @notice How far into its lock a NEW stake matures (no penalty, no forfeiture from then on).
-    ///         Default 80%: a 30-day stake is penalty-free after 24 days.
-    uint256 public earlyUnlockThresholdBps = 8000;
+    /// @notice Reward multiplier per tier in bps (10000 = 1.0x): 1.0x, 1.2x, 1.5x, 2.0x and 3.0x.
+    function tierMultiplierBps(uint256 tier) public pure returns (uint256) {
+        if (tier == 0) return 10000;
+        if (tier == 1) return 12000;
+        if (tier == 2) return 15000;
+        if (tier == 3) return 20000;
+        if (tier == 4) return 30000;
+        revert("invalid tier");
+    }
 
     // ---------- Per-stake accounting ----------
 
     struct StakeInfo {
         address owner;
         uint8 tier;
-        uint32 multiplierBps; // the tier's multiplier when this stake was opened
-        uint16 penaltyBps; // the early-exit penalty when this stake was opened
+        uint32 multiplierBps; // the tier's multiplier
+        uint16 penaltyBps; // the early-exit penalty
         bool closed;
         uint256 amount; // principal still in this stake
         uint256 weighted; // this stake's share of the reward stream
         uint256 startTime;
         uint256 unlockTime; // end of the full lock
-        uint256 matureTime; // penalty-free from here on (fixed when the stake was opened)
+        uint256 matureTime; // penalty-free from here on
         uint256 rewardPerWeightedSharePaid;
         uint256 accruedReward; // settled, unpaid native USDC owed on this stake
     }
@@ -143,13 +151,10 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     event DeferredRewardClaimed(address indexed user, address indexed to, uint256 amount);
     event RewardForfeited(address indexed user, uint256 indexed stakeId, uint256 amount);
     event EarlyWithdrawPenalty(address indexed user, uint256 indexed stakeId, uint256 penaltyAmount);
+    /// `amount` is the USDC newly added to the stream (on top of what a running period still had).
     event RewardAdded(uint256 amount, uint256 newRewardRate, uint256 periodFinish);
     event IdleRewardsReturned(uint256 amount);
     event RewardsDurationUpdated(uint256 newDuration);
-    event EarlyWithdrawPenaltyBpsUpdated(uint256 penaltyBps);
-    event EarlyUnlockThresholdUpdated(uint256 thresholdBps);
-    event TierMultiplierUpdated(uint8 indexed tier, uint256 multiplierBps);
-    event TierDurationUpdated(uint8 indexed tier, uint256 duration);
     event NotifierUpdated(address indexed previousNotifier, address indexed newNotifier);
     event TokenSinkUpdated(address indexed previousSink, address indexed newSink);
     event ERC20Recovered(address indexed token, uint256 amount);
@@ -293,7 +298,7 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     // ---------- Staking ----------
 
     /// @notice Opens a stake. `expectedDuration` and `expectedMultiplierBps` must match the tier's
-    ///         current terms, so a change landing just before this transaction can't surprise you.
+    ///         terms, so a page showing the wrong terms can't stake on them.
     function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps)
         external
         nonReentrant
@@ -301,8 +306,8 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     {
         require(amount > 0, "cannot stake 0");
         require(tier < NUM_TIERS, "invalid tier");
-        uint256 duration = tierDuration[tier];
-        uint256 multiplier = tierMultiplierBps[tier];
+        uint256 duration = tierDuration(tier);
+        uint256 multiplier = tierMultiplierBps(tier);
         require(duration == expectedDuration && multiplier == expectedMultiplierBps, "tier terms changed");
 
         _updateGlobalReward();
@@ -384,19 +389,22 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     }
 
     /// @notice Withdraws `amount` of principal from `stakeId`, paid to 1-4 wallets. `splitAmounts`
-    ///         must add up to exactly what is paid out after any penalty, which doubles as a guard:
-    ///         a split computed for a matured exit reverts if the stake turns out to be early.
+    ///         must add up to exactly what is paid out after any penalty. Pass allowEarly = false
+    ///         unless you mean to leave early: then a withdrawal that would land before maturity
+    ///         reverts instead of charging the penalty and forfeiting the stake's whole reward.
     ///         A matured stake's reward goes to msg.sender. Each stake is its own position:
     ///         leaving one early forfeits that stake's whole reward, not your other stakes'.
-    function withdraw(uint256 stakeId, uint256 amount, address[] calldata recipients, uint256[] calldata splitAmounts)
-        external
-        nonReentrant
-        returns (uint256 payout, uint256 reward)
-    {
+    function withdraw(
+        uint256 stakeId,
+        uint256 amount,
+        address[] calldata recipients,
+        uint256[] calldata splitAmounts,
+        bool allowEarly
+    ) external nonReentrant returns (uint256 payout, uint256 reward) {
         require(recipients.length > 0 && recipients.length <= MAX_WITHDRAW_RECIPIENTS, "1-4 recipients");
         require(recipients.length == splitAmounts.length, "recipients/amounts length mismatch");
 
-        (payout, reward,) = _processWithdraw(stakeId, amount, true);
+        (payout, reward,) = _processWithdraw(stakeId, amount, allowEarly);
 
         uint256 sum;
         for (uint256 i = 0; i < splitAmounts.length; i++) {
@@ -493,8 +501,10 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     }
 
     /// @notice Once the last period has been over for IDLE_NOTIFY_DELAY, anyone can start a new
-    ///         one from unallocatedUsdc. Keeps rewards flowing without the owner.
+    ///         one from unallocatedUsdc. Keeps rewards flowing without the owner. The very first
+    ///         period is always started by the owner or notifier.
     function notifyUnallocated() external {
+        require(periodFinish != 0, "the owner starts the first period");
         require(block.timestamp >= periodFinish + IDLE_NOTIFY_DELAY, "owner or notifier schedules for now");
         require(totalWeightedSupply > 0, "nobody is staked");
         _notify();
@@ -518,7 +528,7 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
         periodFinish = block.timestamp + rewardsDuration;
 
         require(address(this).balance >= unallocatedUsdc + rewardsOutstanding, "not enough USDC for what's owed");
-        emit RewardAdded(msg.value, newRate, periodFinish);
+        emit RewardAdded(scheduled - leftover, newRate, periodFinish);
     }
 
     // ---------- Admin ----------
@@ -548,45 +558,6 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
         emit RewardsDurationUpdated(_rewardsDuration);
     }
 
-    /// @notice Penalty for stakes opened from now on. Capped at 30%. Never changes open stakes.
-    function setEarlyWithdrawPenalty(uint256 _penaltyBps) external onlyOwner {
-        require(_penaltyBps <= MAX_EARLY_WITHDRAW_PENALTY_BPS, "penalty too high");
-        earlyWithdrawPenaltyBps = _penaltyBps;
-        emit EarlyWithdrawPenaltyBpsUpdated(_penaltyBps);
-    }
-
-    /// @notice Maturity point for stakes opened from now on, in (0%, 100%]. Never changes open stakes.
-    function setEarlyUnlockThreshold(uint256 _thresholdBps) external onlyOwner {
-        require(_thresholdBps > 0 && _thresholdBps <= BPS_DENOMINATOR, "threshold out of range");
-        earlyUnlockThresholdBps = _thresholdBps;
-        emit EarlyUnlockThresholdUpdated(_thresholdBps);
-    }
-
-    /// @notice Multiplier for stakes opened from now on, 1.0x-10x, and never below the tier under
-    ///         it or above the tier over it. Never changes open stakes.
-    function setTierMultiplier(uint8 tier, uint256 multiplierBps) external onlyOwner {
-        require(tier < NUM_TIERS, "invalid tier");
-        require(
-            multiplierBps >= MIN_TIER_MULTIPLIER_BPS && multiplierBps <= MAX_TIER_MULTIPLIER_BPS,
-            "multiplier out of range"
-        );
-        require(tier == 0 || tierMultiplierBps[tier - 1] <= multiplierBps, "below the tier under it");
-        require(tier == NUM_TIERS - 1 || multiplierBps <= tierMultiplierBps[tier + 1], "above the tier over it");
-        tierMultiplierBps[tier] = multiplierBps;
-        emit TierMultiplierUpdated(tier, multiplierBps);
-    }
-
-    /// @notice Lock length for stakes opened from now on, 1 day to 5 years, strictly between its
-    ///         neighbours. Never changes open stakes.
-    function setTierDuration(uint8 tier, uint256 duration) external onlyOwner {
-        require(tier < NUM_TIERS, "invalid tier");
-        require(duration >= MIN_TIER_DURATION && duration <= MAX_TIER_DURATION, "duration out of range");
-        require(tier == 0 || tierDuration[tier - 1] < duration, "not longer than the tier under it");
-        require(tier == NUM_TIERS - 1 || duration < tierDuration[tier + 1], "not shorter than the tier over it");
-        tierDuration[tier] = duration;
-        emit TierDurationUpdated(tier, duration);
-    }
-
     /// @notice Sends unallocatedTokens (penalties, donations, surplus) to tokenSink to be turned
     ///         into rewards. Never touches principal.
     function sweepTokens() external onlyOwnerOrNotifier {
@@ -609,5 +580,15 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard {
     /// @notice Disabled: without an owner, nothing could ever be scheduled or fixed again.
     function renounceOwnership() public view override onlyOwner {
         revert("renounce disabled");
+    }
+
+    /// @dev A token sink that still points at the old owner follows ownership to the new one.
+    function _transferOwnership(address newOwner) internal override {
+        address previous = owner();
+        super._transferOwnership(newOwner);
+        if (previous != address(0) && newOwner != address(0) && tokenSink == previous) {
+            tokenSink = newOwner;
+            emit TokenSinkUpdated(previous, newOwner);
+        }
     }
 }

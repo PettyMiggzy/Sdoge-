@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getAddress } from 'ethers';
+import { Interface, getAddress } from 'ethers';
 import { derivePrivateKey } from '../src/wallets.js';
+import { TxError, decodeRevert } from '../src/errors.js';
 import { ADMIN, CHANNEL, E18, StubModerator, acceptTerms, button, makeBot, msg, photo, send, tap } from './helpers.js';
 
 const U = '12345';
@@ -170,11 +171,15 @@ test('launch limits: per user per day', async () => {
   assert.match(tg.lastText(U), /today's limit of 3/);
 });
 
-test('not enough USDC to launch: clear message, no confirmation offered', async () => {
-  const { bot, tg, chain } = await makeBot();
+test('not enough USDC to launch: refused at /launch, before any (paid) screening, no confirmation offered', async () => {
+  const moderator = new StubModerator('allow');
+  const { bot, tg, chain } = await makeBot({ moderator });
   await ready(bot, chain, U, 1n);
-  await runWizard(bot, U);
+  await send(bot, msg(U, '/launch'));
   assert.match(tg.lastText(U), /Launching costs 2 USDC/);
+  assert.equal(bot.getConvo(U), null, 'the wizard never starts');
+  await runWizard(bot, U);
+  assert.equal(moderator.seen.length, 0, 'the model was never called');
   assert.equal(button(tg, U), undefined);
 });
 
@@ -188,20 +193,25 @@ test('buy: quote, slippage floor, exact args to the router, holdings tracked', a
   const call = chain.calls.find((c) => c.fn === 'buy');
   assert.equal(call.token, l.token);
   assert.equal(call.usdc6, 10_000_000n);
-  assert.equal(call.minOut, (10_000_000n * 10n ** 15n * 9500n) / 10000n, '5% default slippage');
+  assert.equal(call.minOut, (10_000_000n * 10n ** 15n * 9900n) / 10000n, '1% default slippage');
   assert.equal(call.deadline, Math.floor(time.t / 1000) + 300);
   assert.match(tg.lastEditText(), /Bought/);
   assert.ok(store.user(U).tokens.includes(l.token.toLowerCase()));
 });
 
-test('custom slippage is used for the minimum out', async () => {
+test('custom slippage bounds the price move since the preview; the fresh quote bounds the rest', async () => {
   const { bot, tg, chain } = await makeBot();
   await ready(bot, chain);
   addLaunch(bot);
   await send(bot, msg(U, '/slippage 3'));
   await send(bot, msg(U, '/buy CAPD 1'));
+  const quote = 1_000_000n * 10n ** 15n;
+  assert.match(tg.lastText(U), /At least 970 after 3% max slippage/);
+  // The price moved 2.5% against the user before the tap: still inside their 3%.
+  chain.quoteBuy = async () => (quote * 975n) / 1000n;
   await send(bot, tap(U, button(tg, U)));
-  assert.equal(chain.calls.find((c) => c.fn === 'buy').minOut, (1_000_000n * 10n ** 15n * 9700n) / 10000n);
+  const minOut = chain.calls.find((c) => c.fn === 'buy').minOut;
+  assert.equal(minOut, (quote * 9700n) / 10000n, 'the previewed 3% floor (the fresh quote minus 1% is lower)');
 });
 
 test('buy refuses when the wallet can\'t cover amount + gas', async () => {
@@ -234,6 +244,9 @@ test('ban: blocks launch/buy/report, never blocks selling, withdrawing or export
   const staleBuy = button(tg, U);
 
   await send(bot, msg(ADMIN, '/ban @user12345 spam'));
+  assert.match(tg.lastText(ADMIN), /Ban user 12345 \(@user12345/, 'a ban by @username shows who it hits');
+  assert.equal(store.user(U).banned, false, 'and waits for the admin to confirm');
+  await send(bot, tap(ADMIN, button(tg, ADMIN)));
   assert.equal(store.user(U).banned, true);
 
   await send(bot, msg(U, '/launch'));
@@ -391,9 +404,15 @@ test('a failed transaction shows a friendly error, not RPC internals', async () 
   await ready(bot, chain);
   addLaunch(bot);
   await send(bot, msg(U, '/buy CAPD 10'));
-  chain.failNext = Object.assign(new Error('execution reverted: TooLittleReceived()'), { shortMessage: 'execution reverted: TooLittleReceived()' });
+  // The router's real revert data (InsufficientOutput(out, minOut)), as the
+  // real Chain reports it when estimateGas says the buy would revert.
+  const data = new Interface(['error InsufficientOutput(uint256 out, uint256 minOut)']).encodeErrorResult('InsufficientOutput', [1n, 2n]);
+  assert.equal(data.slice(0, 10), '0x2c19b8b8');
+  chain.failNext = new TxError('not_sent', 'rpc https://secret-key@node/ said no', { reason: decodeRevert(data) });
   await send(bot, tap(U, button(tg, U)));
   assert.match(tg.lastEditText(), /slippage limit/);
+  assert.match(tg.lastEditText(), /nothing was sent and nothing was spent/);
+  assert.doesNotMatch(tg.lastEditText(), /secret-key/);
 });
 
 test('trading and launching show a clear "not live yet" state before contracts are set', async () => {

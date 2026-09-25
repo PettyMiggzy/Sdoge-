@@ -81,6 +81,15 @@ describe("SDOGEStudio", function () {
       await expect(init(impl)).to.be.revertedWithCustomError(impl, "InvalidInitialization");
       await expect(init(f.community.connect(f.stranger))).to.be.revertedWithCustomError(impl, "InvalidInitialization");
       expect(await impl.owner()).to.equal(ethers.ZeroAddress);
+      expect(await impl.studio()).to.equal(await f.studio.getAddress());
+    });
+
+    it("a clone of the implementation made outside the Studio can't be set up", async function () {
+      const f = await deployFixture();
+      const cloner = await (await ethers.getContractFactory("RogueCloner")).deploy();
+      await expect(cloner.cloneAndInit(await f.studio.collectionImplementation(), f.stranger.address)).to.be.revertedWith(
+        "studio only"
+      );
     });
   });
 
@@ -351,6 +360,54 @@ describe("SDOGEStudio", function () {
         "OwnableUnauthorizedAccount"
       );
     });
+
+    it("the Verified badge belongs to the owner it was given to and lapses if the collection changes hands", async function () {
+      const f = await deployFixture();
+      const c = await createCollection(f);
+      const addr = await c.getAddress();
+      await f.studio.connect(f.owner).setVerified(addr, true);
+      expect(await f.studio.verifiedOwner(addr)).to.equal(f.alice.address);
+      await c.connect(f.alice).transferOwnership(f.bob.address);
+      expect(await f.studio.verified(addr)).to.equal(true); // still Alice's until Bob accepts
+      await c.connect(f.bob).acceptOwnership();
+      expect(await f.studio.verified(addr)).to.equal(false);
+      await f.studio.connect(f.owner).setVerified(addr, true); // the team can verify the new owner
+      expect(await f.studio.verified(addr)).to.equal(true);
+      await expect(f.studio.connect(f.owner).setVerified(addr, false)).to.emit(f.studio, "VerifiedSet").withArgs(addr, false);
+      expect(await f.studio.verified(addr)).to.equal(false);
+      expect(await f.studio.verified(f.stranger.address)).to.equal(false);
+      expect(await f.studio.verified(await f.community.getAddress())).to.equal(true);
+    });
+
+    it("a royalty can't be pointed at the collection itself or the Studio", async function () {
+      const f = await deployFixture();
+      const c = await createCollection(f);
+      const bad = "bad royalty receiver";
+      await expect(c.connect(f.alice).setRoyalty(await c.getAddress(), 500)).to.be.revertedWith(bad);
+      await expect(c.connect(f.alice).setRoyalty(await f.studio.getAddress(), 500)).to.be.revertedWith(bad);
+      await expect(
+        f.studio.connect(f.alice).createCollection("X Club", "X", 0, await f.studio.getAddress(), 500, "")
+      ).to.be.revertedWith(bad);
+    });
+
+    it("the owner can update Community Art's collection metadata, and nothing else in it", async function () {
+      const f = await deployFixture();
+      await expect(f.studio.connect(f.owner).setCommunityContractURI("ipfs://bafy/community-v2.json")).to.emit(
+        f.community,
+        "ContractURIUpdated"
+      );
+      expect(await f.community.contractURI()).to.equal("ipfs://bafy/community-v2.json");
+      await expect(f.studio.connect(f.owner).setCommunityContractURI("bad uri")).to.be.revertedWith(
+        "uri must be 1-512 printable ASCII characters, no spaces"
+      );
+      await expect(f.studio.connect(f.alice).setCommunityContractURI("ipfs://x")).to.be.revertedWithCustomError(
+        f.studio,
+        "OwnableUnauthorizedAccount"
+      );
+      await expect(f.community.connect(f.owner).setCommunityContractURI("ipfs://x")).to.be.revertedWith("studio only");
+      const c = await createCollection(f);
+      await expect(c.connect(f.alice).setCommunityContractURI("ipfs://x")).to.be.revertedWith("studio only");
+    });
   });
 
   describe("revenue", function () {
@@ -391,17 +448,83 @@ describe("SDOGEStudio", function () {
       );
     });
 
-    it("a pool or treasury that refuses USDC makes withdraw revert, with nothing lost", async function () {
+    it("the pool's share is set aside at each sale; a later share change doesn't touch it", async function () {
+      const f = await deployFixture();
+      const pool = await f.staking.getAddress();
+      await f.studio.connect(f.alice).buyCredits(1, 10, f.alice.address, { value: E("20") }); // no pool yet
+      expect(await f.studio.poolOwed()).to.equal(0);
+      await f.studio.connect(f.owner).setRewardsPool(pool, 5000);
+      await f.studio.connect(f.alice).buyCredits(0, 1, f.alice.address, { value: E("5") });
+      expect(await f.studio.poolOwed()).to.equal(E("2.5"));
+      await f.studio.connect(f.owner).setRewardsPool(pool, 0);
+      await f.studio.connect(f.alice).buyCredits(0, 1, f.alice.address, { value: E("5") });
+      expect(await f.studio.poolOwed()).to.equal(E("2.5"));
+      await f.studio.connect(f.alice).buyCreditsWithSdoge(0, 1, E("1000000"), f.alice.address); // burned, not revenue
+      const t0 = await bal(f.treasury.address);
+      await expect(f.studio.withdraw()).to.emit(f.studio, "Withdrawn").withArgs(E("2.5"), E("27.5"));
+      expect(await f.staking.unallocatedUsdc()).to.equal(E("2.5"));
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("27.5"));
+      expect(await f.studio.poolOwed()).to.equal(0);
+    });
+
+    it("a pool or treasury that refuses USDC doesn't block the other; its share waits", async function () {
       const f = await deployFixture();
       const refuser = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
-      await f.studio.connect(f.alice).buyCredits(0, 1, f.alice.address, { value: E("5") });
-      await f.studio.connect(f.owner).setRewardsPool(await f.sdoge.getAddress(), 5000); // no contributeUSDC
-      await expect(f.studio.withdraw()).to.be.reverted;
-      await f.studio.connect(f.owner).setRewardsPool(ethers.ZeroAddress, 0);
+      const noContribute = await f.sdoge.getAddress(); // a contract without contributeUSDC
+      await f.studio.connect(f.owner).setRewardsPool(noContribute, 5000);
+      await f.studio.connect(f.alice).buyCredits(1, 10, f.alice.address, { value: E("20") });
+      const t0 = await bal(f.treasury.address);
+      await expect(f.studio.connect(f.stranger).withdraw())
+        .to.emit(f.studio, "PayoutFailed")
+        .withArgs(noContribute, E("10"))
+        .and.to.emit(f.studio, "Withdrawn")
+        .withArgs(0, E("10"));
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("10"));
+      expect(await f.studio.poolOwed()).to.equal(E("10"));
+      await expect(f.studio.withdraw()).to.be.revertedWith("nothing could be paid");
+
+      // the pool works again, but now the treasury refuses: the pool is paid all it's owed
+      await f.studio.connect(f.owner).setRewardsPool(await f.staking.getAddress(), 5000);
       await f.studio.connect(f.owner).setTreasury(await refuser.getAddress());
-      await expect(f.studio.withdraw()).to.be.revertedWith("treasury transfer failed");
-      expect(await bal(await f.studio.getAddress())).to.equal(E("5"));
+      await f.studio.connect(f.alice).buyCredits(0, 1, f.alice.address, { value: E("5") });
+      await expect(f.studio.withdraw())
+        .to.emit(f.studio, "PayoutFailed")
+        .withArgs(await refuser.getAddress(), E("2.5"))
+        .and.to.emit(f.studio, "Withdrawn")
+        .withArgs(E("12.5"), 0);
+      expect(await f.staking.unallocatedUsdc()).to.equal(E("12.5"));
+      expect(await bal(await f.studio.getAddress())).to.equal(E("2.5"));
+
+      await f.studio.connect(f.owner).setTreasury(f.treasury.address);
+      await expect(f.studio.withdraw()).to.emit(f.studio, "Withdrawn").withArgs(0, E("2.5"));
+      expect(await bal(await f.studio.getAddress())).to.equal(0);
+      await expect(f.studio.withdraw()).to.be.revertedWith("nothing to withdraw");
       await expect(f.studio.connect(f.owner).setTreasury(ethers.ZeroAddress)).to.be.revertedWith("treasury is zero address");
+    });
+
+    it("turning the pool off keeps what it's owed set aside for the next pool", async function () {
+      const f = await deployFixture();
+      await f.studio.connect(f.owner).setRewardsPool(await f.staking.getAddress(), 5000);
+      await f.studio.connect(f.alice).buyCredits(0, 1, f.alice.address, { value: E("5") });
+      await f.studio.connect(f.owner).setRewardsPool(ethers.ZeroAddress, 0);
+      await expect(f.studio.withdraw()).to.emit(f.studio, "Withdrawn").withArgs(0, E("2.5"));
+      await expect(f.studio.withdraw()).to.be.revertedWith("nothing could be paid");
+      expect(await bal(await f.studio.getAddress())).to.equal(E("2.5"));
+      await f.studio.connect(f.owner).setRewardsPool(await f.staking.getAddress(), 1000);
+      await expect(f.studio.withdraw()).to.emit(f.studio, "Withdrawn").withArgs(E("2.5"), 0);
+      expect(await f.staking.unallocatedUsdc()).to.equal(E("2.5"));
+    });
+
+    it("takes plain USDC transfers (e.g. from Community Art's withdraw) and sends them to the treasury", async function () {
+      const f = await deployFixture();
+      await f.alice.sendTransaction({ to: await f.studio.getAddress(), value: E("1") });
+      await network.provider.send("hardhat_setBalance", [await f.community.getAddress(), ethers.toQuantity(E("2"))]);
+      await expect(f.community.withdraw())
+        .to.emit(f.community, "Withdrawn")
+        .withArgs(await f.studio.getAddress(), E("2"));
+      const t0 = await bal(f.treasury.address);
+      await f.studio.withdraw();
+      expect((await bal(f.treasury.address)) - t0).to.equal(E("3"));
     });
 
     it("USDC forced in (e.g. through the 0x3600 ERC-20 view) goes out with the revenue", async function () {

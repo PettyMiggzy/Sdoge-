@@ -1,10 +1,14 @@
 {
-  "_readme": "Matched after normalization: lowercase, leetspeak mapped (0->o, 1->i, 3->e, 4->a, 5->s, 7->t, @->a, $->s). 'reserved' blocks a ticker or whole name that equals the term (anti-impersonation). 'word' terms must be a whole word; elongations like 'niiiigger' still match, but a real word that happens to equal the collapsed form (e.g. 'niger') does not. 'sub' terms match anywhere in the name/description with spaces and punctuation removed. Edit freely; restart the bot to apply.",
+  "_readme": "Matched after normalization: lowercase, and leetspeak read both ways (0->o, 1->i or l, 3->e, 4->a, 5->s, 6->g, 7->t, 8->b, 9->g, @->a, $->s, !->i, |->l). 'reserved' blocks a ticker or whole name that equals the term, also with a leading '$' or trailing digits (USDC2, $USDC). 'reservedWord' blocks a name or ticker with the term as any word or word prefix (Circle USDC, USDC Rewards, USDCR): keep it to brand words. 'word' terms must be a whole word; elongations like 'niiiigger' still match, but a real word that happens to equal the collapsed form (e.g. 'niger') does not. 'part' terms match anywhere inside a word or inside spaced-out/dotted letters (LoliDoge, PedoMoon, N A Z I, K.I.K.E). 'sub' terms match anywhere in the name/description with spaces and punctuation removed. 'allow' words are cut out before 'part' and 'sub' matching (pedometer, ashkenazi, retardant). Edit freely; restart the bot to apply.",
   "reserved": [
     "usdc", "usdt", "eurc", "usyc", "cirbtc", "circle", "arc", "arcnetwork",
     "eth", "ether", "ethereum", "weth", "btc", "bitcoin", "wbtc", "sol", "solana",
     "bnb", "binance", "coinbase", "tether", "uniswap", "uni", "dai", "pyusd",
-    "paypal", "fdusd", "tusd", "usde", "sdoge", "stabledoge", "argus"
+    "paypal", "fdusd", "tusd", "usde", "sdoge", "stabledoge", "argus", "usdcoin"
+  ],
+  "reservedWord": [
+    "usdc", "usdt", "eurc", "usyc", "cirbtc", "circle", "tether", "coinbase", "binance",
+    "paypal", "pyusd", "fdusd", "usdcoin", "sdoge", "stabledoge", "arcnetwork"
   ],
   "word": {
     "minors": ["cp", "loli", "lolis", "shota", "preteen", "preteens", "underage", "jailbait", "pedo", "pedos", "pedophile", "paedo"],
@@ -17,10 +21,18 @@
     "extremism": ["nazi", "nazis", "hitler", "heilhitler", "siegheil", "kkk", "isis", "alqaeda", "taliban", "hamas", "hezbollah", "jihadi"],
     "scam": ["airdrop", "giveaway", "freeclaim", "drainer"]
   },
+  "part": {
+    "minors": ["loli", "shota", "preteen", "underage", "jailbait", "pedo", "paedo"],
+    "sexual": ["porn", "hentai", "nsfw", "onlyfans", "sexcam", "camgirl"],
+    "hate": ["nigger", "nigga", "faggot", "kike", "tranny", "trannie", "retard", "wetback", "raghead", "towelhead"],
+    "extremism": ["nazi", "hitler", "kkk", "taliban", "jihadi", "alqaeda", "hezbollah"],
+    "scam": ["airdrop", "giveaway", "freeclaim", "drainer"]
+  },
   "sub": {
     "minors": ["childporn", "kiddieporn", "lolicon", "shotacon", "pedophil"],
     "hate": ["nigger", "faggot"],
-    "extremism": ["1488", "heilhitler", "siegheil", "whitepower"],
+    "extremism": ["1488", "heilhitler", "siegheil", "whitepower", "alqaeda"],
     "sexual": ["pornhub", "xvideos"]
-  }
+  },
+  "allow": ["pedometer", "torpedo", "pedolog", "ashkenazi", "retardant"]
 }

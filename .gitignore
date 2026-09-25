@@ -19,3 +19,4 @@ tgpad/data/
 # Local deploy rehearsals (the real record is deployments/arc.json)
 contracts/deployments/hardhat*
 contracts/deployments/localhost*
+contracts/deployments/arc-rehearsal*

@@ -13,7 +13,9 @@ interface IERC721ApproveForAttack {
 }
 
 interface IMarketplaceForAttack {
-    function listERC721(address nftContract, uint256 tokenId, uint256 pricePerUnit) external returns (uint256);
+    function listERC721(address nftContract, uint256 tokenId, uint256 pricePerUnit, uint256 maxFeeBps, uint256 maxRoyaltyBps)
+        external
+        returns (uint256);
     function buy(uint256 listingId, uint256 amount) external payable;
 }
 
@@ -39,7 +41,7 @@ contract ReentrantSeller is IERC721Receiver {
         tokenId = studio.mintCommunity(uri);
         address nft = studio.communityCollection();
         IERC721ApproveForAttack(nft).approve(address(marketplace), tokenId);
-        listingId = marketplace.listERC721(nft, tokenId, pricePerUnit);
+        listingId = marketplace.listERC721(nft, tokenId, pricePerUnit, 1000, 1000);
     }
 
     function armReentry(uint256 listingId, uint256 value) external {

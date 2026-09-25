@@ -20,18 +20,19 @@ export class Telegram {
     this.apiBase = apiBase;
   }
 
-  async call(method, payload = {}, { timeoutMs = 20000, retries = 3 } = {}) {
+  async call(method, payload = {}, { timeoutMs = 20000, retries = 3, signal } = {}) {
     for (let attempt = 0; ; attempt++) {
+      const timeout = AbortSignal.timeout(timeoutMs);
       const res = await this.fetch(`${this.apiBase}/bot${this.#token}/${method}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       const body = await res.json();
       if (body.ok) return body.result;
       const err = new TelegramError(method, body);
-      if (err.retryAfterMs && attempt < retries) {
+      if (err.retryAfterMs && attempt < retries && !signal?.aborted) {
         await sleep(err.retryAfterMs);
         continue;
       }
@@ -54,11 +55,12 @@ export class Telegram {
     return body.result;
   }
 
-  getUpdates(offset, timeoutSec = 25) {
+  // `signal` lets shutdown abort the long poll instead of waiting it out.
+  getUpdates(offset, timeoutSec = 25, { signal } = {}) {
     return this.call(
       'getUpdates',
       { offset, timeout: timeoutSec, allowed_updates: ['message', 'callback_query', 'my_chat_member'] },
-      { timeoutMs: (timeoutSec + 15) * 1000, retries: 1 },
+      { timeoutMs: (timeoutSec + 15) * 1000, retries: 1, signal },
     );
   }
 
@@ -77,12 +79,18 @@ export class Telegram {
 
 // Outgoing-message pacing: Telegram throttles (and eventually restricts)
 // bots that exceed ~1 msg/s per private chat, ~20 msg/min per group or
-// channel, or ~30 msg/s overall. Sends to one chat stay in order; different
-// chats proceed in parallel under one global spacing.
+// channel, or ~30 msg/s overall.
+// - Sends to one chat stay in order, spaced by that chat's gap.
+// - A chat waiting out its own gap never holds anyone else back: it only takes
+//   one of the global slots (globalGapMs apart) once it is ready to send.
+// - `guard` is checked right before the API call; returning false skips the
+//   send (resolves null), e.g. for a post whose token was hidden meanwhile.
 export class Sender {
   #chains = new Map();
   #lastByChat = new Map();
+  #queued = new Map();
   #globalNext = 0;
+  #sends = 0;
 
   constructor(tg, { privateGapMs = 1000, groupGapMs = 3100, globalGapMs = 40, now = () => Date.now(), wait = sleep } = {}) {
     this.tg = tg;
@@ -93,16 +101,22 @@ export class Sender {
     this.wait = wait;
   }
 
-  send(chatId, method, payload) {
+  send(chatId, method, payload, { guard } = {}) {
     const key = String(chatId);
+    this.#queued.set(key, (this.#queued.get(key) ?? 0) + 1);
     const prev = this.#chains.get(key) ?? Promise.resolve();
     const run = async () => {
       const gap = key.startsWith('-') ? this.groupGapMs : this.privateGapMs;
       const last = this.#lastByChat.get(key);
-      const earliest = Math.max(last === undefined ? 0 : last + gap, this.#globalNext);
-      const delay = earliest - this.now();
-      this.#globalNext = Math.max(this.now(), earliest) + this.globalGapMs;
-      if (delay > 0) await this.wait(delay);
+      if (last !== undefined) {
+        const own = last + gap - this.now();
+        if (own > 0) await this.wait(own);
+      }
+      const slot = Math.max(this.now(), this.#globalNext);
+      this.#globalNext = slot + this.globalGapMs;
+      const global = slot - this.now();
+      if (global > 0) await this.wait(global);
+      if (guard && !guard()) return null;
       try {
         return method === 'sendPhoto' && payload.photo instanceof Blob
           ? await this.tg.callMultipart(method, { chat_id: chatId, ...payload })
@@ -112,7 +126,23 @@ export class Sender {
       }
     };
     const next = prev.then(run, run);
-    this.#chains.set(key, next.catch(() => {}));
+    this.#chains.set(key, next.catch(() => {}).finally(() => {
+      const left = (this.#queued.get(key) ?? 1) - 1;
+      if (left > 0) this.#queued.set(key, left);
+      else this.#queued.delete(key);
+    }));
+    if (++this.#sends % 500 === 0) this.#prune();
     return next;
+  }
+
+  // Idle chats whose gap is long over don't need to be remembered.
+  #prune() {
+    const t = this.now();
+    for (const [key, at] of this.#lastByChat) {
+      if (!this.#queued.has(key) && t - at > 60_000) {
+        this.#lastByChat.delete(key);
+        this.#chains.delete(key);
+      }
+    }
   }
 }

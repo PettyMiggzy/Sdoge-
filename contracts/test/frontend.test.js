@@ -42,6 +42,8 @@ async function deployAll({ designNames } = {}) {
 
 const page = (f, files, who, extra = {}) =>
   loadPage({ files, contracts: f.contracts, hreProvider: network.provider, account: who.address, ...extra });
+// A collection card on the Studio page, as far as collectionAction reads it.
+const cardStub = (values) => ({ querySelector: (sel) => ({ value: values[sel.match(/data-f="(\w+)"/)[1]] ?? "" }) });
 const NFT_PAGE = ["arc.js", "wallet.js", "nft.js", "marketplace.js"];
 const STUDIO_PAGE = ["arc.js", "wallet.js", "studio.js"];
 const STAKING_PAGE = ["arc.js", "staking.js"];
@@ -74,6 +76,40 @@ describe("front end (assets/js)", function () {
           m.priceSdoge == null ? "0" : E(m.priceSdoge).toString(),
         ])
       );
+    });
+  });
+
+  describe("pages", function () {
+    // Copy that's only true before launch must be marked, so the page's script swaps it out once
+    // the contract is live (or is text the script replaces itself).
+    it("preview-only copy is marked data-preview-copy or data-js-managed", function () {
+      const PREVIEW = /not deployed|preview UI|placeholders|not live|working preview/i;
+      const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+      let checked = 0;
+      for (const file of ["nft.html", "staking.html", "studio.html"]) {
+        const html = fs.readFileSync(path.join(ROOT, file), "utf8");
+        const open = []; // elements enclosing the current text
+        let inScript = false;
+        const re = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z0-9]+)([^>]*)>|([^<]+)/g;
+        for (let m; (m = re.exec(html)); ) {
+          if (m[0].startsWith("<!--")) continue;
+          if (m[2]) {
+            const tag = m[2].toLowerCase();
+            if (tag === "script" || tag === "style") inScript = !m[1];
+            if (m[1]) {
+              const i = open.map((e) => e.tag).lastIndexOf(tag);
+              if (i >= 0) open.length = i;
+            } else if (!VOID.has(tag) && !m[3].trim().endsWith("/")) {
+              open.push({ tag, attrs: m[3] });
+            }
+          } else if (!inScript && PREVIEW.test(m[4])) {
+            checked += 1;
+            const marked = open.some((e) => /data-preview-copy|data-js-managed/.test(e.attrs));
+            expect(marked, `${file}: "${m[4].trim().slice(0, 70)}"`).to.equal(true);
+          }
+        }
+      }
+      expect(checked).to.be.greaterThan(4);
     });
   });
 
@@ -130,7 +166,9 @@ describe("front end (assets/js)", function () {
       const f = await deployAll();
       const p = await page(f, NFT_PAGE, f.alice);
       await p.run("loadLiveDesignData()");
+      await f.collectibles.setPublicMint(1, false); // a price only changes while the sale is closed
       await f.collectibles.setPrice(1, E("45"));
+      await f.collectibles.setPublicMint(1, true);
       await p.run("mint(1)");
       expect(p.alerts.at(-1)).to.match(/price just changed to 45 USDC/);
       expect(p.sent.length).to.equal(0);
@@ -171,7 +209,7 @@ describe("front end (assets/js)", function () {
       await buyer.run("loadListings()");
       await buyer.run("buyListing('1')");
       expect(await f.collectibles.balanceOf(f.bob.address, 1)).to.equal(1);
-      await f.marketplace.connect(f.alice).updatePrice(1, E("60"));
+      await f.marketplace.connect(f.alice).updatePrice(1, E("60"), 1000, 1000);
       await buyer.run("buyListing('1')");
       expect(buyer.alerts.at(-1)).to.match(/price just changed to 60 USDC/);
       expect(await f.collectibles.balanceOf(f.bob.address, 1)).to.equal(1);
@@ -207,7 +245,7 @@ describe("front end (assets/js)", function () {
       await f.studio.grantCredits(f.carol.address, 1);
       await art.connect(f.carol).mintBatch(f.carol.address, 1);
       await art.connect(f.carol).approve(await f.marketplace.getAddress(), 1);
-      await f.marketplace.connect(f.carol).listERC721(await art.getAddress(), 1, E("5"));
+      await f.marketplace.connect(f.carol).listERC721(await art.getAddress(), 1, E("5"), 1000, 1000);
       const p = await page(f, NFT_PAGE, f.bob);
       await p.run("loadListings()");
       const html = p.el("marketListings").innerHTML;
@@ -219,6 +257,148 @@ describe("front end (assets/js)", function () {
       const p2 = await page(f, NFT_PAGE, f.bob);
       await p2.run("loadListings()");
       expect(p2.el("marketListings").innerHTML).to.include(">Verified<");
+    });
+
+    it("every listing stays reachable: Mine and Community read the indexes, All pages with Load more", async function () {
+      const f = await deployAll();
+      const junk = await newCollection(f.studio, f.carol, { name: "Junk", symbol: "JUNK", royaltyBps: 0 });
+      await f.studio.grantCredits(f.carol.address, 55);
+      await junk.connect(f.carol).mintBatch(f.carol.address, 55);
+      await junk.connect(f.carol).setApprovalForAll(await f.marketplace.getAddress(), true);
+      for (let id = 1; id <= 55; id++) {
+        await f.marketplace.connect(f.carol).listERC721(await junk.getAddress(), id, E("1000000"), 1000, 1000);
+      }
+      await f.studio.grantCredits(f.alice.address, 1);
+      await f.studio.connect(f.alice).mintCommunity("ipfs://bafy/alice.json");
+      await f.community.connect(f.alice).approve(await f.marketplace.getAddress(), 1);
+      await f.marketplace.connect(f.alice).listERC721(await f.community.getAddress(), 1, E("5"), 1000, 1000); // #56
+
+      const alice = await page(f, NFT_PAGE, f.alice);
+      await alice.run("connectWallet()");
+      alice.run("marketActiveFilter = 'mine'");
+      await alice.run("loadListings()");
+      expect(alice.el("marketListings").innerHTML).to.include('data-market-cancel="56"');
+
+      const bob = await page(f, NFT_PAGE, f.bob);
+      await bob.run("loadListings()");
+      expect(bob.el("marketListings").innerHTML).to.not.include("Community Art #1");
+      expect(bob.el("marketListings").innerHTML).to.include("data-market-more");
+      await bob.run("loadMoreListings()");
+      expect(bob.el("marketListings").innerHTML).to.include("Community Art #1");
+      bob.run("marketActiveFilter = 'community'");
+      await bob.run("loadListings()");
+      expect(bob.el("marketListings").innerHTML).to.include("Community Art #1");
+      expect(bob.el("marketListings").innerHTML).to.not.include("data-market-more");
+    });
+
+    it("one collection's listings on their own page (?collection=0x...)", async function () {
+      const f = await deployAll();
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART" });
+      await f.studio.grantCredits(f.carol.address, 2);
+      await art.connect(f.carol).mintBatch(f.carol.address, 2);
+      await art.connect(f.carol).setApprovalForAll(await f.marketplace.getAddress(), true);
+      await f.marketplace.connect(f.carol).listERC721(await art.getAddress(), 1, E("5"), 1000, 1000);
+      await f.collectibles.connect(f.alice).mint(1, 1, { value: E("40") });
+      await f.collectibles.connect(f.alice).setApprovalForAll(await f.marketplace.getAddress(), true);
+      await f.marketplace.connect(f.alice).listERC1155(await f.collectibles.getAddress(), 1, 1, E("50"), 1000);
+      const p = await page(f, NFT_PAGE, f.bob, { search: `?collection=${await art.getAddress()}` });
+      await p.ready();
+      const html = p.el("marketListings").innerHTML;
+      expect(html).to.include("Listings from Carol Art");
+      expect(html).to.include("Carol Art #1");
+      expect(html).to.not.include("SWAT Doge");
+    });
+
+    it("the listing confirm quotes the live fee and royalty with the net, and the listing can't take more", async function () {
+      const f = await deployAll();
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART", royaltyBps: 500 });
+      await f.studio.grantCredits(f.carol.address, 1);
+      await art.connect(f.carol).mintBatch(f.alice.address, 1);
+      const p = await page(f, NFT_PAGE, f.alice);
+      await p.run("loadListings()");
+      await f.marketplace.setFeeBps(300); // raised after the page loaded
+      p.el("marketCollection").value = "creator";
+      p.el("marketCollectionAddress").value = await art.getAddress();
+      p.el("marketTokenId").value = "1";
+      p.el("marketPrice").value = "100";
+      await p.run("listNft()");
+      expect(p.confirms.at(-1)).to.match(/Marketplace fee 3% \+ creator royalty 5%: you receive 92 USDC/);
+      const l = await f.marketplace.getListing(1);
+      expect([l.feeBps, l.royaltyBps]).to.deep.equal([300n, 500n]);
+    });
+
+    it("Change price asks first, shows the net, and warns on a big drop", async function () {
+      const { f, seller } = await listed(); // 2 x SWAT Doge at 50 USDC each
+      await seller.run("connectWallet()");
+      seller.answers.prompt.push("20");
+      seller.answers.confirm.push(false);
+      await seller.run("repriceListing('1')");
+      expect(seller.confirms.at(-1)).to.match(/from 50 to 20 USDC each/);
+      expect(seller.confirms.at(-1)).to.match(/you receive 19.6 USDC each/);
+      expect(seller.confirms.at(-1)).to.match(/Careful: that's 60% below the current price/);
+      expect((await f.marketplace.getListing(1)).pricePerUnit).to.equal(E("50"));
+      seller.answers.prompt.push("45");
+      await seller.run("repriceListing('1')");
+      expect((await f.marketplace.getListing(1)).pricePerUnit).to.equal(E("45"));
+    });
+
+    it("proceeds a wallet can't receive go to an address it picks", async function () {
+      const f = await deployAll();
+      const refuser = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
+      const rAddr = await refuser.getAddress();
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART", royaltyBps: 0 });
+      await f.studio.grantCredits(f.carol.address, 1);
+      await art.connect(f.carol).airdrop([rAddr]);
+      const seller = await ethers.getImpersonatedSigner(rAddr);
+      await network.provider.send("hardhat_setBalance", [rAddr, ethers.toQuantity(E("10"))]);
+      await art.connect(seller).approve(await f.marketplace.getAddress(), 1);
+      await f.marketplace.connect(seller).listERC721(await art.getAddress(), 1, E("10"), 1000, 1000);
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      expect(await f.marketplace.proceeds(rAddr)).to.equal(E("9.8"));
+
+      const p = await loadPage({ files: NFT_PAGE, contracts: f.contracts, hreProvider: network.provider, account: rAddr });
+      await p.run("connectWallet()");
+      await p.run("loadListings()");
+      expect(p.el("marketListings").innerHTML).to.include("Sale proceeds waiting for you: 9.8 USDC");
+      const before = await ethers.provider.getBalance(f.carol.address);
+      p.answers.prompt.push(f.carol.address);
+      await p.run("withdrawMarketProceeds()");
+      expect((await ethers.provider.getBalance(f.carol.address)) - before).to.equal(E("9.8"));
+      expect(await f.marketplace.proceeds(rAddr)).to.equal(0);
+    });
+
+    it("says where the fee goes, checked against this site's staking contract", async function () {
+      const f = await deployAll();
+      await f.marketplace.setRewardsPool(await f.staking.getAddress());
+      const p = await page(f, NFT_PAGE, f.bob);
+      await p.run("loadListings()");
+      expect(p.el("marketStatus").textContent).to.match(/goes to the \$SDOGE staking reward pool/);
+      await f.marketplace.setRewardsPool(await f.studio.getAddress());
+      const p2 = await page(f, NFT_PAGE, f.bob);
+      await p2.run("loadListings()");
+      expect(p2.el("marketStatus").textContent).to.match(/which is not this site's staking contract/);
+    });
+
+    it("loads a dozen creator listings through Arc's public-RPC rate limit", async function () {
+      this.timeout(120000);
+      const f = await deployAll();
+      for (let i = 0; i < 12; i++) {
+        const art = await newCollection(f.studio, f.carol, { name: `Club ${i}`, symbol: `C${i}`, royaltyBps: 0 });
+        await f.studio.grantCredits(f.carol.address, 1);
+        await art.connect(f.carol).mintBatch(f.carol.address, 1);
+        await art.connect(f.carol).approve(await f.marketplace.getAddress(), 1);
+        await f.marketplace.connect(f.carol).listERC721(await art.getAddress(), 1, E("5"), 1000, 1000);
+      }
+      const p = await page(f, NFT_PAGE, f.bob, { rpc: "limited" });
+      try {
+        await p.run("loadListings()");
+        const html = p.el("marketListings").innerHTML;
+        for (let i = 0; i < 12; i++) expect(html).to.include(`Club ${i} #1`);
+        expect(p.rpcStats.batchSizes.every((n) => n === 1)).to.equal(true); // never batched
+        expect(p.rpcStats.limitedInBatch).to.equal(0);
+      } finally {
+        await p.close();
+      }
     });
 
     it("refuses to run against a marketplace bound to other contracts", async function () {
@@ -356,14 +536,187 @@ describe("front end (assets/js)", function () {
       expect(await f.studio.credits(f.alice.address)).to.equal(5); // 10 - 3 - 2
     });
 
+    async function managedClub(f, { drop } = {}) {
+      await f.studio.connect(f.alice).buyCredits(1, 10, f.alice.address, { value: E("20") });
+      const club = await newCollection(f.studio, f.alice, { name: "Doge Club", symbol: "DCLUB" });
+      await club.connect(f.alice).setBaseURI("ipfs://bafyclub/", ".json");
+      if (drop) await club.connect(f.alice).setDrop(...drop);
+      const p = await page(f, STUDIO_PAGE, f.alice);
+      await p.ready();
+      await p.run("connectWallet()");
+      await p.run("loadMyCollections()");
+      return { club, addr: await club.getAddress(), p };
+    }
+    const act = (p, addr, action, values = {}) => {
+      p.ctx.__card = cardStub(values);
+      return p.run(`collectionAction('${addr}', '${action}', __card, { dataset: {} })`);
+    };
+
+    it("the drop form shows the saved schedule and price, and a one-field edit keeps them", async function () {
+      const f = await deployAll();
+      const now = (await ethers.provider.getBlock("latest")).timestamp;
+      const start = now + 3 * 86400;
+      const end = start + 86400;
+      const { club, addr, p } = await managedClub(f, { drop: [E("1500"), 2, start, end] });
+      const html = p.el("myCollections").innerHTML;
+      const startValue = p.run(`inputFromUnix(${start})`);
+      const endValue = p.run(`inputFromUnix(${end})`);
+      expect(html).to.include(`data-f="price" value="1500"`);
+      expect(html).to.include(`value="${startValue}"`);
+      expect(html).to.include(`value="${endValue}"`);
+      expect(html).to.match(/Drop closed: 1,500 USDC each, 2 per wallet, starts .+, ends /);
+      await act(p, addr, "setDrop", { price: "1500", perWallet: "1", start: startValue, end: endValue });
+      const d = await club.drop();
+      expect([d.priceWei, d.maxPerWallet, d.start, d.end]).to.deep.equal([E("1500"), 1n, BigInt(start), BigInt(end)]);
+      expect(p.confirms.length).to.equal(0); // nothing removed, nothing to confirm
+    });
+
+    it("clearing a drop's schedule asks first", async function () {
+      const f = await deployAll();
+      const now = (await ethers.provider.getBlock("latest")).timestamp;
+      const { club, addr, p } = await managedClub(f, { drop: [E("5"), 0, now + 86400, now + 2 * 86400] });
+      p.answers.confirm.push(false);
+      await act(p, addr, "setDrop", { price: "5", perWallet: "0", start: "", end: "" });
+      expect(p.confirms.at(-1)).to.match(/removes the drop's start time.*removes the drop's end time/);
+      expect((await club.drop()).start).to.equal(BigInt(now + 86400));
+    });
+
+    it("warns when a drop is cheaper than a credit, and a free drop needs a cap", async function () {
+      const f = await deployAll();
+      const { club, addr, p } = await managedClub(f);
+      await act(p, addr, "setDrop", { price: "0", perWallet: "1" });
+      expect(p.alerts.at(-1)).to.match(/A free drop needs a supply cap/);
+      p.answers.confirm.push(false);
+      await act(p, addr, "setDrop", { price: "0.05", perWallet: "1" });
+      expect(p.confirms.at(-1)).to.match(/below what a credit costs you \(0.1 USDC at best\)/);
+      expect(await club.dropConfigured()).to.equal(false);
+    });
+
+    it("opening a drop confirms the SAVED terms and refuses unsaved edits", async function () {
+      const f = await deployAll();
+      const { club, addr, p } = await managedClub(f);
+      await act(p, addr, "toggleDrop", { price: "2", perWallet: "5" });
+      expect(p.alerts.at(-1)).to.match(/Save the drop terms first/);
+      await act(p, addr, "setDrop", { price: "2", perWallet: "5" });
+      await act(p, addr, "toggleDrop", { price: "25", perWallet: "2" }); // typed, not saved
+      expect(p.alerts.at(-1)).to.match(/aren't the saved ones/);
+      expect((await club.drop()).open).to.equal(false);
+      await act(p, addr, "toggleDrop", { price: "2", perWallet: "5" });
+      expect(p.confirms.at(-1)).to.match(/Open the drop with the saved terms\?\n\n2 USDC each, 5 per wallet/);
+      expect(p.confirms.at(-1)).to.match(/No supply cap/);
+      expect((await club.drop()).open).to.equal(true);
+    });
+
+    it("mints and airdrops refuse SDOGE contracts and ask before other contracts", async function () {
+      const f = await deployAll();
+      const { club, addr, p } = await managedClub(f);
+      await act(p, addr, "airdrop", { airdrop: `${f.bob.address}\n${f.contracts.staking}` });
+      expect(p.alerts.at(-1)).to.match(/is one of the SDOGE contracts/);
+      const other = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
+      p.answers.confirm.push(false);
+      await act(p, addr, "mintBatch", { to: await other.getAddress(), qty: "1" });
+      expect(p.confirms.at(-1)).to.match(/This address is a contract/);
+      expect(await club.totalMinted()).to.equal(0);
+      await act(p, addr, "airdrop", { airdrop: `${f.bob.address}\n${f.carol.address}` });
+      expect(await club.totalMinted()).to.equal(2);
+    });
+
+    it("mintWithURIs takes at most 50 URIs and 6,000 characters per transaction", async function () {
+      const f = await deployAll();
+      const { club, addr, p } = await managedClub(f);
+      await act(p, addr, "mintWithURIs", { to: f.alice.address, uris: Array(51).fill("ipfs://x").join("\n") });
+      expect(p.alerts.at(-1)).to.match(/Enter 1-50 URIs/);
+      const long = "ipfs://" + "a".repeat(200);
+      await act(p, addr, "mintWithURIs", { to: f.alice.address, uris: Array(30).fill(long).join("\n") });
+      expect(p.alerts.at(-1)).to.match(/add up to 6,210 characters/);
+      await act(p, addr, "mintWithURIs", { to: f.alice.address, uris: "ipfs://a.json\nipfs://b.json" });
+      expect(await club.totalMinted()).to.equal(2);
+    });
+
+    it("freezing needs a base URI and shows where token 1 points", async function () {
+      const f = await deployAll();
+      await f.studio.connect(f.alice).buyCredits(1, 10, f.alice.address, { value: E("20") });
+      const bare = await newCollection(f.studio, f.alice, { name: "Bare", symbol: "BARE" });
+      const p = await page(f, STUDIO_PAGE, f.alice);
+      await p.ready();
+      await p.run("connectWallet()");
+      await act(p, await bare.getAddress(), "freeze");
+      expect(p.alerts.at(-1)).to.match(/Save a base URI first/);
+      await bare.connect(f.alice).setBaseURI("ipfs://bafybare/", ".json");
+      await act(p, await bare.getAddress(), "freeze");
+      expect(p.confirms.at(-1)).to.match(/Token 1 points at ipfs:\/\/bafybare\/1.json/);
+      expect(await bare.metadataFrozen()).to.equal(true);
+    });
+
+    it("a collection handed over to you can be managed here", async function () {
+      const f = await deployAll();
+      const club = await newCollection(f.studio, f.alice, { name: "Handed Over", symbol: "HAND" });
+      await club.connect(f.alice).transferOwnership(f.bob.address);
+      await club.connect(f.bob).acceptOwnership();
+      const p = await page(f, STUDIO_PAGE, f.bob);
+      await p.ready();
+      await p.run("connectWallet()");
+      await p.run("loadMyCollections()");
+      expect(p.el("myCollections").innerHTML).to.include("No collections yet");
+      p.el("manageAddress").value = await club.getAddress();
+      await p.run("manageCollection()");
+      expect(p.el("myCollections").innerHTML).to.include("Handed Over");
+      expect(p.el("myCollections").innerHTML).to.include('data-act="setDrop"');
+      const alice = await page(f, STUDIO_PAGE, f.alice);
+      await alice.ready();
+      await alice.run("connectWallet()");
+      await alice.run("loadMyCollections()");
+      expect(alice.el("myCollections").innerHTML).to.include("You no longer own this collection");
+    });
+
+    it("a creator's collections all load through Arc's public-RPC rate limit", async function () {
+      this.timeout(120000);
+      const f = await deployAll();
+      for (const [name, symbol] of [["One", "ONE"], ["Two", "TWO"], ["Three", "THREE"]]) {
+        await newCollection(f.studio, f.alice, { name, symbol });
+      }
+      const p = await page(f, STUDIO_PAGE, f.alice, { rpc: "limited" });
+      try {
+        await p.ready();
+        await p.run("connectWallet()");
+        await p.run("loadMyCollections()");
+        const html = p.el("myCollections").innerHTML;
+        for (const name of ["One", "Two", "Three"]) expect(html).to.include(`${name} <span class="studio-note">`);
+        expect(p.rpcStats.batchSizes.every((n) => n === 1)).to.equal(true);
+      } finally {
+        await p.close();
+      }
+    });
+
+    it("shows the live share of credit sales that goes to stakers", async function () {
+      const f = await deployAll();
+      await f.studio.setRewardsPool(await f.staking.getAddress(), 5000);
+      const p = await page(f, STUDIO_PAGE, f.alice);
+      await p.ready();
+      expect(p.el("studioShare").textContent).to.match(/^50% of every USDC credit sale is set aside for the \$SDOGE staking reward pool/);
+    });
+
+    it("the drop page shows the owner, where sales go, and what the owner can still change", async function () {
+      const f = await deployAll();
+      const { addr } = await managedClub(f, { drop: [E("2"), 0, 0, 0] });
+      const p = await page(f, STUDIO_PAGE, f.bob, { search: `?drop=${addr}` });
+      await p.ready();
+      const badge = p.el("dropBadge").innerHTML;
+      expect(badge).to.include(`owner <a href="${"http"}`);
+      expect(badge).to.include("sales go to the owner");
+      expect(badge).to.include("no supply cap: the owner can mint more at any time");
+      expect(badge).to.include("metadata not frozen: the owner can still change it");
+    });
+
     it("a drop shows paused when the creator is out of credits, and refuses non-Studio links", async function () {
       const f = await deployAll();
       const club = await newCollection(f.studio, f.alice, { name: "Empty Club", symbol: "EMPTY" });
       await club.connect(f.alice).setBaseURI("ipfs://bafyclub/", "");
+      await club.connect(f.alice).setDrop(E("1"), 0, 0, 0);
       await club.connect(f.alice).setDropOpen(true);
       const p = await page(f, STUDIO_PAGE, f.bob, { search: `?drop=${await club.getAddress()}` });
       await p.ready();
-      expect(p.el("dropInfo").textContent).to.include("Paused: the creator is out of mint credits.");
+      expect(p.el("dropInfo").textContent).to.include("Stopped for now: the creator is out of mint credits.");
       expect(p.el("dropMintBtn").disabled).to.equal(true);
       const fake = await page(f, STUDIO_PAGE, f.bob, { search: `?drop=${f.contracts.collectibles}` });
       await fake.ready();
@@ -388,17 +741,27 @@ describe("front end (assets/js)", function () {
       expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
     });
 
-    it("refuses to stake if the tier's terms changed after the page loaded", async function () {
+    it("refuses to stake on terms other than the contract's (a stale or wrong page)", async function () {
       const f = await deployAll();
       const p = await page(f, STAKING_PAGE, f.alice);
       await p.ready();
       await p.run("loadTierDataFromChain()");
       await p.run("connectWallet()");
-      await f.staking.setTierDuration(0, 14 * 86400);
+      p.run("tierData[0] = { tier: 0, duration: 14n * 86400n, multiplierBps: 10000n }");
       p.el("stakeAmount").value = "1000";
       await p.run("doStake()");
       expect(p.alerts.at(-1)).to.match(/terms just changed/);
       expect((await f.staking.getStakeIds(f.alice.address)).length).to.equal(0);
+    });
+
+    it("connecting before the first chain read finishes still enables Stake", async function () {
+      const f = await deployAll();
+      const p = await page(f, STAKING_PAGE, f.alice);
+      const loading = p.ready(); // starts the first read; connect without waiting for it
+      expect(await p.run("connectWallet()")).to.equal(true);
+      await loading;
+      expect(p.el("connectOrStakeBtn").textContent).to.equal("Stake");
+      expect(p.el("connectOrStakeBtn").disabled).to.equal(false);
     });
   });
 });

@@ -51,7 +51,7 @@
 
   <div class="container hero__inner">
     <div class="pill">
-      <span class="pill__dot"></span> Contract not deployed yet &middot; preview UI
+      <span class="pill__dot"></span> <span data-preview-copy data-live-copy="Live on Arc">Contract not deployed yet &middot; preview UI</span>
     </div>
 
     <h1 class="hero__title hero__title--gold">
@@ -212,12 +212,9 @@
         </div>
       </div>
 
-      <p class="fine-print">
-        Not deployed yet — this page is a fully working preview against a
-        placeholder contract address. Connect Wallet and every control
-        here will work for real the moment <code>contracts/README.md</code>'s
-        deploy step runs and the real address is dropped into
-        <code>assets/js/staking.js</code>.
+      <p class="fine-print" data-preview-copy>
+        Not deployed yet: this page is a preview. Nothing here sends a
+        transaction until the staking contract is live on Arc.
       </p>
     </div>
   </section>
@@ -232,7 +229,7 @@
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.8L12 15.8 6.4 19.4l2-6.8L3 8.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
           <h3>5 Lock Tiers</h3>
-          <p>7 / 30 / 90 / 180 / 365 days, from 1.0&times; up to 3.0&times; reward weight. A stake's lock, multiplier and penalty are fixed the moment you open it.</p>
+          <p>7 / 30 / 90 / 180 / 365 days, from 1.0&times; up to 3.0&times; reward weight. The tiers, the 15% penalty and the 80% maturity point are fixed in the contract: nobody can change them.</p>
         </div>
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
@@ -273,8 +270,8 @@
           <button class="accordion__trigger">What happens if I withdraw early? <span>+</span></button>
           <div class="accordion__panel">
             <p>Before your stake matures (80% of its lock), leaving costs a
-            principal penalty (15% today, and fixed for your stake the
-            moment you open it) plus 100% of that stake's unclaimed reward.
+            15% principal penalty (fixed in the contract) plus 100% of that
+            stake's unclaimed reward.
             The forfeited reward goes back into the pool for everyone else,
             and the SDOGE penalty goes to the Treasury to be turned into
             rewards. The site shows the exact cost and asks you to confirm
@@ -292,21 +289,27 @@
         <div class="accordion__item">
           <button class="accordion__trigger">Where do rewards actually come from? <span>+</span></button>
           <div class="accordion__panel">
-            <p>From SDOGE NFT profits: the 2% fee on every marketplace
-            resale flows in automatically, and the team adds USDC from NFT
-            sales. Rewards forfeited by early exits go back in, and anyone
-            can top up the pool. The size of the pool depends on NFT
-            volume, so it isn't guaranteed. The Treasury schedules each
-            reward period, and if a week passes without one, anyone can
-            restart it from what's waiting in the pool.</p>
+            <p>From SDOGE NFT profits: once the marketplace and the Studio
+            are connected to the pool, the marketplace fee on every resale
+            and a share of every Studio mint-credit sale flow in on their
+            own (the NFT and Studio pages show where fees go right now),
+            and the team adds USDC from NFT sales. Rewards forfeited by
+            early exits go back in, and anyone can top up the pool. The size
+            of the pool depends on NFT volume, so it isn't guaranteed. The
+            Treasury schedules reward periods, and once the first one has
+            run, if a week passes without a new one, anyone can restart it
+            from what's waiting in the pool.</p>
           </div>
         </div>
         <div class="accordion__item">
           <button class="accordion__trigger">Can I withdraw part of a stake? <span>+</span></button>
           <div class="accordion__panel">
-            <p>Yes. From a matured stake it costs nothing. From a stake that
-            hasn't matured, taking any part out forfeits that stake's whole
-            accrued reward and charges the penalty on the part you take.
+            <p>Yes, with the contract's <code>withdraw</code> function (for
+            example from Arc's explorer); this page exits whole stakes. From
+            a matured stake it costs nothing. From a stake that hasn't
+            matured, taking any part out forfeits that stake's whole accrued
+            reward and charges the penalty on the part you take, and only
+            if you pass <code>allowEarly = true</code>; otherwise it reverts.
             Each stake is its own position, so your other stakes aren't
             touched.</p>
           </div>

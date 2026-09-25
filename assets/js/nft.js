@@ -10,8 +10,9 @@
 // - Reads go to Arc's RPC; every write first checks the wallet is on Arc and is pinned to 5042.
 // - A design is only mintable if its on-chain name matches the roster's name for that id, so a
 //   misnumbered deploy can't sell one design's art under another's terms.
-// - Once the contract is live nothing falls back to the placeholders: a failed read shows
-//   "Unavailable" and disables Mint.
+// - Once the contract is live nothing falls back to the placeholders: a read that still fails
+//   after retries shows "Unavailable" and disables Mint.
+// - Each card says whether the design's cap is locked (it can only ever be raised while it isn't).
 // - The price is re-read right before minting and paid exactly, as a BigInt.
 const COLLECTIBLES_CONTRACT_ADDRESS = SDOGE_CONTRACTS.collectibles;
 
@@ -62,7 +63,7 @@ function designStatus(item, d) {
   if (!d.exists || d.name !== item.name) return { status: 'unavailable' };
   const left = d.maxSupply - d.minted - (d.reserved - d.ownerMinted);
   const status = !d.publicMintOpen || d.priceWei === 0n ? 'closed' : left <= 0n ? 'soldout' : 'open';
-  return { status, minted: d.minted, maxSupply: d.maxSupply, priceWei: d.priceWei, left };
+  return { status, minted: d.minted, maxSupply: d.maxSupply, priceWei: d.priceWei, left, supplyLocked: d.supplyLocked };
 }
 
 function statusOf(item) {
@@ -74,7 +75,7 @@ function cardHtml(item) {
   const s = statusOf(item);
   const live = s.maxSupply !== undefined;
   const supply = live
-    ? `${fmt(s.minted)} / ${fmt(s.maxSupply)} minted`
+    ? `${fmt(s.minted)} / ${fmt(s.maxSupply)} minted &middot; ${s.supplyLocked ? 'cap locked' : 'cap not locked yet'}`
     : s.status === 'preview'
       ? `0 / ${fmt(item.maxSupply)} minted`
       : '&nbsp;';
@@ -126,13 +127,19 @@ function renderGrid() {
 
 async function loadLiveDesignData() {
   if (!collectiblesDeployed()) return;
-  if (!(await hasCodeOnArc(COLLECTIBLES_CONTRACT_ADDRESS))) {
+  let hasCode;
+  try {
+    hasCode = await arcRetry(() => hasCodeOnArc(COLLECTIBLES_CONTRACT_ADDRESS));
+  } catch (err) {
+    console.error('Could not reach Arc:', err);
+  }
+  if (!hasCode) {
     collectiblesUnavailable = true;
-    console.error(`No collectibles contract at ${COLLECTIBLES_CONTRACT_ADDRESS} on Arc.`);
+    if (hasCode === false) console.error(`No collectibles contract at ${COLLECTIBLES_CONTRACT_ADDRESS} on Arc.`);
     renderGrid();
     return;
   }
-  const results = await Promise.allSettled(ROSTER.map((item) => collectiblesRead.designs(item.designId)));
+  const results = await Promise.allSettled(ROSTER.map((item) => arcRetry(() => collectiblesRead.designs(item.designId))));
   results.forEach((r, i) => {
     const item = ROSTER[i];
     if (r.status === 'fulfilled') {
@@ -186,6 +193,7 @@ async function mint(designId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  arcShowLiveCopy(collectiblesDeployed());
   renderGrid();
   loadLiveDesignData();
 

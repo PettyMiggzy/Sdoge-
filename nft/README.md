@@ -26,13 +26,22 @@ ERC-1155: each design is one token id that can be minted many times, up to its c
 - **Minting.**
   - `mint(id, amount)` takes exactly price x amount. A price-0 design can never be minted
     publicly, and prices must be at least 0.01 USDC, in whole micro-USDC.
-  - `reserved` copies are for team and giveaway mints (`ownerMint`, `ownerMintBatch`, which
-    skips recipients that can't take the NFT instead of failing). The reserve can only be
-    released to the public, never grown.
+  - `reserved` copies are for team and giveaway mints (`ownerMint`, `ownerMintBatch`). The
+    reserve can only be released to the public, never grown, so set each design's reserve
+    before the create batch (all 12 are 0 in `nft/designs.json` today).
+  - `ownerMintBatch` gives each recipient a fixed 150,000-gas budget and skips one that can't
+    take the NFT (no receiver hook, or a hook that needs more gas). The owner's own mistakes (a
+    missing design, a zero amount or address, more than the reserve, too little gas for the
+    next recipient) revert the whole batch instead of passing as skips.
+- **Changing a design.** Its price, cap and reserve only change while its sale is closed, so a
+  queued change can't land in front of buyers.
 - **Supply and metadata.**
   - A cap can be raised until `lockSupply(id)`. New designs can be added until
     `lockCollection()`.
-  - `setURI` emits ERC-4906 so marketplaces refresh; `freezeMetadata()` makes it permanent.
+  - `setURI` only takes a folder URI (printable ASCII, no spaces, ending in "/") and emits
+    ERC-4906 so marketplaces refresh. `freezeMetadata()` makes it permanent, and needs
+    `lockCollection()` first so no design can be added after its folder is fixed.
+  - The page shows whether each design's cap is locked.
 - **Revenue.** `withdraw()` (anyone can call it) sends revenue to `treasury`.
 
 ## SDOGE Studio: mint your own
@@ -53,8 +62,12 @@ defaults in `nft/studio.json`; the owner can add or change packages at any time:
   - `expectedMints` and `maxSdoge` mean a package change landing first can't shortchange you.
   - Credits can be bought for any wallet. They can't be transferred or refunded; they only mint.
   - The owner can `grantCredits` (giveaways, partner projects).
-- **Revenue.** `withdraw()` (anyone can call it) sends `poolShareBps` of the USDC to the
-  staking reward pool (`contributeUSDC`) and the rest to the treasury. The launch config is 50%.
+- **Revenue.** Each USDC credit sale sets `poolShareBps` of its price aside for the staking
+  reward pool at the moment of sale (`poolOwed`), so a later change of share or pool never
+  touches it. `withdraw()` (anyone can call it) pays what's owed to the pool (`contributeUSDC`)
+  and the rest to the treasury; if one of them can't take USDC, the other is still paid and the
+  failed share waits for the next call. The launch config is 50%. The Studio also takes plain
+  USDC transfers (for example Community Art's own `withdraw()`), which go to the treasury.
 
 **Community Art (individuals).** `mintCommunity(uri)` spends one credit and mints a 1-of-1 into
 the shared SDOGE Community Art collection.
@@ -62,7 +75,8 @@ the shared SDOGE Community Art collection.
   Single package's SDOGE price.
 - Minting is fully open, with no review, filter or takedown.
 - A token's URI is set once and never changes, and nobody (the team included) can move or
-  change it.
+  change it. The Studio owner can only set the collection-level metadata
+  (`setCommunityContractURI`), never a token's.
 - `studio.html` builds the metadata (name, description, image link) into an on-chain `data:`
   URI, so creators only have to host the image.
 
@@ -72,26 +86,44 @@ creator. Every token minted costs the owner one credit:
 
 - **Owner mints.**
   - `mintBatch(to, n)`: up to 200 per call, using the base URI.
-  - `mintWithURIs(to, uris)`: up to 100 per call, each token with its own permanent URI.
+  - `mintWithURIs(to, uris)`: up to 50 per call and 6,000 URI characters in all, each token
+    with its own permanent URI.
   - `airdrop(addresses)`: up to 200 per call.
-  - Owner mints skip the receiver check, so one bad address can't block an airdrop.
+  - Owner mints skip the receiver check, so one bad address can't block an airdrop. The page
+    refuses SDOGE's own contracts as recipients and asks before sending to any contract.
 - **Public drop.**
-  - `setDrop(price, perWallet, start, end)`, then `setDropOpen(true)`. It needs a base URI.
+  - `setDrop(price, perWallet, start, end)` saves the terms, then `setDropOpen(true)` opens it.
+    Opening needs a base URI and saved terms, and a free drop needs a supply cap (an open paid
+    drop without one can't be made free either).
   - Collectors call `publicMint(1-20)` and pay exactly the drop price, which goes to the
-    creator's `payout` via `withdraw()`.
-  - Each mint also uses one of the owner's credits, so a drop pauses when the creator runs out.
-  - The creator keeps 100% of the sale.
+    creator's `payout` via `withdraw()`. The creator keeps 100% of the sale.
+  - Each mint also uses one of the owner's credits, shared by all the owner's collections.
+    Running out isn't a pause: anyone can add credits to the owner's wallet and minting goes on.
+    Close the drop to stop it.
+  - The per-wallet limit counts every public mint from the collection, across drops.
+  - The page shows the saved terms (schedule included) in the form, asks before a save removes
+    a start or end time or prices a mint below a credit, and opening confirms the saved terms.
 - **Holder protections.**
   - The supply cap can be set once and then only lowered.
-  - The base URI can change until `freezeMetadata()`.
-  - Royalties are capped at 10% (ERC-2981, paid by the SDOGE marketplace).
-- **Ownership** is two-step. After the new owner accepts, their credits pay for mints.
-- **Verified badge.** The owner can mark real projects Verified (`setVerified`). The site labels
-  everything else "unverified creator collection" and escapes the names, since anyone can create
-  a collection called anything.
+  - The base URI can change until `freezeMetadata()`, which needs a base URI first.
+  - Royalties are capped at 10% (ERC-2981, paid by the SDOGE marketplace), and can't point at
+    the collection itself or the Studio.
+  - The drop page shows the owner, where sales go, and whether there's a cap and the metadata
+    is frozen.
+- **Ownership** is two-step. When the new owner accepts, the drop closes, and a payout or
+  royalty that pointed at the old owner moves to the new one; from then on their credits pay.
+  A collection you were handed can be managed from the Studio page by its address.
+- **Verified badge.** The owner can mark real projects Verified (`setVerified`). The badge
+  belongs to the collection's owner at that moment and lapses by itself if the collection
+  changes hands. The site labels everything else "unverified creator collection" and escapes
+  the names, since anyone can create a collection called anything.
+- **Only the Studio can set up a collection.** A clone of the collection code made anywhere
+  else can't be initialized.
 
-Gas on Arc: creating a collection costs about 450k gas, `mintBatch(200)` about 5.1M,
-`mintWithURIs(100)` about 13.6M (of a 30M block) and `publicMint(20)` about 0.6M.
+Gas on Arc, where a transaction can use at most 16,777,216 gas: creating a collection costs
+about 450k, `mintBatch(200)` about 5.2M, `airdrop(200)` to new wallets about 9.6M,
+`mintWithURIs` at its 50-URI, 6,000-character limit about 8.6-9.5M, and `publicMint(20)` about
+0.6M.
 
 ## The Marketplace
 
@@ -104,22 +136,38 @@ Gas on Arc: creating a collection costs about 450k gas, `mintBatch(200)` about 5
     creator collection).
   - All of those are clones of one contract, so a listed NFT always really transfers.
 - **Money.**
-  - The fee is 2% (never more than the rate when listed; capped at 10%) and goes to the staking
-    pool once `setRewardsPool` points there.
-  - The creator royalty is also never more than the rate when listed.
-  - Seller and royalty payments that fail wait in `proceeds` for withdrawal; a sale can't be
-    blocked.
+  - The fee is 2% (capped at 10%) and goes to the staking pool once `setRewardsPool` points
+    there.
+  - A listing records the fee and the creator royalty in force when it's listed or repriced,
+    and a buy never pays more than those. The seller passes the highest fee and royalty they
+    accept (`maxFeeBps`, `maxRoyaltyBps`), so a rate raised just before the listing lands
+    makes it revert instead.
+  - Seller and royalty payments that fail wait in `proceeds`; a sale can't be blocked. The
+    owner of the proceeds withdraws them to any address, and anyone can push them to the
+    account itself with all the gas it needs (`withdrawProceedsFor`), for receivers such as
+    royalty splitters.
+- **Every listing stays reachable.** Besides the full list, the contract keeps each seller's and
+  each collection's active listings (`getActiveListingsBySeller`,
+  `getActiveListingsByCollection`), so no amount of other listings can push one out of view.
+- **Cancelling** returns an ERC-721 with a plain transfer, so a seller contract without the
+  receiver hook still gets it back; `cancelListingTo` sends it elsewhere.
 - **Pause** stops listing and buying; cancelling and withdrawing always work.
 - **The page:**
-  - Shows only SDOGE collections, and every row shows the seller and contract.
+  - Shows only SDOGE collections, and every row shows the seller, contract, fee and royalty.
+  - Mine, Community Art and Collectibles read the indexes; every tab pages to the end with
+    "Load more", and `nft.html?collection=0x...` shows one collection.
+  - Quotes the live fee and royalty with the net amount before listing or repricing, and warns
+    before a big price cut.
   - Re-reads a listing's price before buying.
-  - Lets sellers cancel or reprice from the Mine tab.
-  - Shows waiting proceeds with a Withdraw button.
+  - Shows waiting proceeds with a Withdraw button, and asks for another address if the wallet
+    can't take USDC.
 
 ## How it connects to staking
 
 - **NFT profits fund the USDC side of staking: built.**
-  - Marketplace fees and the Studio's `poolShareBps` go straight to `SDOGEStaking.contributeUSDC()`.
+  - Marketplace fees and the Studio's `poolShareBps` go straight to `SDOGEStaking.contributeUSDC()`
+    once each contract's `setRewardsPool` points at staking. The pages read where fees go and
+    say so.
   - Collectibles revenue goes to the treasury, and the team can add it with `contributeUSDC()`.
 - **Holding an NFT boosts staking rewards: not built,** and no longer claimed on the site. If
   it's ever built, it should only count NFTs escrowed in the staking contract, not a

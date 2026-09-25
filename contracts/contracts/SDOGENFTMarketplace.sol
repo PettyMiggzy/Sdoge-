@@ -38,8 +38,12 @@ interface IStudioRegistry {
 /// - the creator's ERC-2981 royalty (Studio collections, at most 10%) goes to its receiver;
 /// - the rest goes to the seller.
 /// Neither the fee nor the royalty can ever be more than the rate in force when the item was
-/// listed. Seller and royalty payments that fail (a contract that can't receive, a blocklisted
-/// address) wait in `proceeds` for withdrawal, and the sale still goes through.
+/// listed (or last repriced), and a seller can cap both when listing or repricing. Seller and
+/// royalty payments that fail (a contract that can't receive, a blocklisted address) wait in
+/// `proceeds` for withdrawal, and the sale still goes through.
+///
+/// Reads: every active listing can be paged in full, per seller and per collection, so no
+/// listing can be pushed out of view by others.
 contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     enum Standard {
         ERC721,
@@ -84,9 +88,13 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     mapping(address => mapping(uint256 => bool)) private _escrowed721;
     mapping(uint256 => uint256) private _escrowed1155;
 
-    // Active listings, for paginated reads.
+    // Active listings, for paginated reads: all of them, per seller and per collection.
     uint256[] private _active;
     mapping(uint256 => uint256) private _activePos; // listingId => index + 1
+    mapping(address => uint256[]) private _activeBySeller;
+    mapping(uint256 => uint256) private _sellerPos; // listingId => index + 1
+    mapping(address => uint256[]) private _activeByCollection;
+    mapping(uint256 => uint256) private _collectionPos; // listingId => index + 1
 
     address private _receivingFrom; // set only while a list function pulls an NFT in
 
@@ -101,7 +109,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         uint256 feeBps,
         uint256 royaltyBps
     );
-    event PriceUpdated(uint256 indexed listingId, uint256 newPricePerUnit);
+    event PriceUpdated(uint256 indexed listingId, uint256 newPricePerUnit, uint256 feeBps, uint256 royaltyBps);
     event Cancelled(uint256 indexed listingId, uint256 returnedAmount);
     event Sold(
         uint256 indexed listingId,
@@ -133,27 +141,32 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
     // ---------- Listing ----------
 
     /// @notice Lists a token from a SDOGE Studio collection. Approve this contract for it first;
-    ///         it moves into escrow until it sells or you cancel.
-    function listERC721(address nftContract, uint256 tokenId, uint256 pricePerUnit)
-        external
-        whenNotPaused
-        nonReentrant
-        returns (uint256 listingId)
-    {
+    ///         it moves into escrow until it sells or you cancel. Reverts if the marketplace fee
+    ///         or the collection's royalty is above your limits (basis points, 100 = 1%).
+    function listERC721(
+        address nftContract,
+        uint256 tokenId,
+        uint256 pricePerUnit,
+        uint256 maxFeeBps,
+        uint256 maxRoyaltyBps
+    ) external whenNotPaused nonReentrant returns (uint256 listingId) {
         require(studio.isCollection(nftContract), "only SDOGE Studio collections");
         _checkPrice(pricePerUnit);
+        uint256 royaltyBps = _royaltyBpsOf(nftContract, tokenId);
+        _checkLimits(royaltyBps, maxFeeBps, maxRoyaltyBps);
 
         _receivingFrom = nftContract;
         IERC721(nftContract).safeTransferFrom(msg.sender, address(this), tokenId);
         _receivingFrom = address(0);
         _escrowed721[nftContract][tokenId] = true;
 
-        listingId = _create(nftContract, Standard.ERC721, tokenId, 1, pricePerUnit, _royaltyBpsOf(nftContract, tokenId));
+        listingId = _create(nftContract, Standard.ERC721, tokenId, 1, pricePerUnit, royaltyBps);
     }
 
     /// @notice Lists `amount` copies of a SDOGECollectibles design. Call setApprovalForAll for this
-    ///         contract first; the copies move into escrow until they sell or you cancel.
-    function listERC1155(address nftContract, uint256 tokenId, uint256 amount, uint256 pricePerUnit)
+    ///         contract first; the copies move into escrow until they sell or you cancel. Reverts
+    ///         if the marketplace fee is above `maxFeeBps`. Collectibles pay no royalty.
+    function listERC1155(address nftContract, uint256 tokenId, uint256 amount, uint256 pricePerUnit, uint256 maxFeeBps)
         external
         whenNotPaused
         nonReentrant
@@ -162,6 +175,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         require(nftContract == address(collectibles), "only SDOGE Collectibles");
         require(amount > 0, "amount must be > 0");
         _checkPrice(pricePerUnit);
+        _checkLimits(0, maxFeeBps, 0);
 
         _receivingFrom = nftContract;
         collectibles.safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
@@ -171,26 +185,36 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         listingId = _create(nftContract, Standard.ERC1155, tokenId, amount, pricePerUnit, 0);
     }
 
-    function updatePrice(uint256 listingId, uint256 newPricePerUnit) external {
+    /// @notice Changes the price. Like a fresh listing, the listing takes the fee and royalty
+    ///         rates in force now, and reverts if either is above your limits.
+    function updatePrice(uint256 listingId, uint256 newPricePerUnit, uint256 maxFeeBps, uint256 maxRoyaltyBps)
+        external
+        nonReentrant
+    {
         Listing storage l = listings[listingId];
         require(l.active, "not active");
         require(l.seller == msg.sender, "not your listing");
         _checkPrice(newPricePerUnit);
+        uint256 royaltyBps = l.standard == Standard.ERC721 ? _royaltyBpsOf(l.nftContract, l.tokenId) : 0;
+        _checkLimits(royaltyBps, maxFeeBps, maxRoyaltyBps);
+        uint256 fee = feeBps;
         l.pricePerUnit = newPricePerUnit;
-        emit PriceUpdated(listingId, newPricePerUnit);
+        l.feeBps = uint16(fee);
+        l.royaltyBps = uint16(royaltyBps);
+        emit PriceUpdated(listingId, newPricePerUnit, fee, royaltyBps);
     }
 
-    /// @notice Ends the listing and returns whatever hasn't sold. Always available, even while
-    ///         the marketplace is paused.
+    /// @notice Ends the listing and returns whatever hasn't sold to you. Always available, even
+    ///         while the marketplace is paused. An ERC-721 comes back with a plain transfer, so a
+    ///         seller contract without the receiver hook still gets it back.
     function cancelListing(uint256 listingId) external nonReentrant {
-        Listing storage l = listings[listingId];
-        require(l.active, "not active");
-        require(l.seller == msg.sender, "not your listing");
-        uint256 amount = l.amount;
-        l.amount = 0;
-        _deactivate(listingId);
-        _release(l, msg.sender, amount);
-        emit Cancelled(listingId, amount);
+        _cancel(listingId, msg.sender);
+    }
+
+    /// @notice Like cancelListing, but returns what hasn't sold to `to` (with the receiver check).
+    function cancelListingTo(uint256 listingId, address to) external nonReentrant {
+        require(to != address(0), "bad recipient");
+        _cancel(listingId, to);
     }
 
     // ---------- Buying ----------
@@ -212,12 +236,9 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         l.amount -= amount;
         if (l.amount == 0) _deactivate(listingId);
 
-        _release(l, msg.sender, amount);
+        _release(l, msg.sender, amount, true);
         _pay(seller, totalPrice - fee - royalty);
-        if (royalty > 0) {
-            _pay(royaltyTo, royalty);
-            emit RoyaltyPaid(listingId, royaltyTo, royalty);
-        }
+        if (royalty > 0 && _pay(royaltyTo, royalty)) emit RoyaltyPaid(listingId, royaltyTo, royalty);
         _forwardFee(fee);
 
         emit Sold(listingId, msg.sender, amount, totalPrice, fee, royalty);
@@ -233,6 +254,19 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         (bool sent,) = to.call{value: amount}("");
         require(sent, "transfer failed");
         emit ProceedsWithdrawn(msg.sender, to, amount);
+    }
+
+    /// @notice Sends `account`'s waiting proceeds to `account` itself, with all the gas it needs.
+    ///         Anyone can call it: for receivers (e.g. a royalty splitter) that can take USDC but
+    ///         can't call withdrawProceeds.
+    function withdrawProceedsFor(address account) external nonReentrant returns (uint256 amount) {
+        amount = proceeds[account];
+        require(amount > 0, "nothing to withdraw");
+        proceeds[account] = 0;
+        totalProceeds -= amount;
+        (bool sent,) = account.call{value: amount}("");
+        require(sent, "transfer failed");
+        emit ProceedsWithdrawn(account, account, amount);
     }
 
     /// @notice Forwards fees that couldn't be forwarded during a sale. Anyone can call it.
@@ -255,22 +289,40 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         return _active.length;
     }
 
+    function activeListingCountBySeller(address seller) external view returns (uint256) {
+        return _activeBySeller[seller].length;
+    }
+
+    function activeListingCountByCollection(address nftContract) external view returns (uint256) {
+        return _activeByCollection[nftContract].length;
+    }
+
     /// @notice Up to `limit` active listings starting at position `offset` (order changes as
-    ///         listings end).
+    ///         listings end: the last one moves into the freed position).
     function getActiveListings(uint256 offset, uint256 limit)
         external
         view
         returns (uint256[] memory ids, Listing[] memory items)
     {
-        uint256 n = _active.length;
-        if (offset >= n) return (new uint256[](0), new Listing[](0));
-        uint256 end = offset + limit > n ? n : offset + limit;
-        ids = new uint256[](end - offset);
-        items = new Listing[](end - offset);
-        for (uint256 i = offset; i < end; i++) {
-            ids[i - offset] = _active[i];
-            items[i - offset] = listings[_active[i]];
-        }
+        return _page(_active, offset, limit);
+    }
+
+    /// @notice The same, for one seller's active listings.
+    function getActiveListingsBySeller(address seller, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory ids, Listing[] memory items)
+    {
+        return _page(_activeBySeller[seller], offset, limit);
+    }
+
+    /// @notice The same, for one collection's active listings.
+    function getActiveListingsByCollection(address nftContract, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory ids, Listing[] memory items)
+    {
+        return _page(_activeByCollection[nftContract], offset, limit);
     }
 
     // ---------- Admin ----------
@@ -368,6 +420,11 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         require(price % PRICE_UNIT == 0, "price must be whole micro-USDC");
     }
 
+    function _checkLimits(uint256 royaltyBps, uint256 maxFeeBps, uint256 maxRoyaltyBps) private view {
+        require(feeBps <= maxFeeBps, "fee is above your limit");
+        require(royaltyBps <= maxRoyaltyBps, "royalty is above your limit");
+    }
+
     function _create(
         address nftContract,
         Standard standard,
@@ -388,8 +445,9 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
             amount: amount,
             pricePerUnit: price
         });
-        _active.push(listingId);
-        _activePos[listingId] = _active.length;
+        _push(_active, _activePos, listingId);
+        _push(_activeBySeller[msg.sender], _sellerPos, listingId);
+        _push(_activeByCollection[nftContract], _collectionPos, listingId);
         emit Listed(listingId, msg.sender, nftContract, standard, tokenId, amount, price, feeBps, royaltyBps);
     }
 
@@ -413,7 +471,7 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         try IERC2981(l.nftContract).royaltyInfo{gas: ROYALTY_QUERY_GAS}(l.tokenId, price) returns (
             address r, uint256 a
         ) {
-            if (r == address(0)) return (address(0), 0);
+            if (r == address(0) || r == address(this)) return (address(0), 0); // it could never collect
             uint256 cap = (price * capBps) / 10_000;
             return (r, a < cap ? a : cap);
         } catch {
@@ -421,31 +479,75 @@ contract SDOGENFTMarketplace is Ownable2Step, Pausable, ReentrancyGuard, IERC721
         }
     }
 
-    function _deactivate(uint256 listingId) private {
-        listings[listingId].active = false;
-        uint256 pos = _activePos[listingId];
-        uint256 last = _active[_active.length - 1];
-        _active[pos - 1] = last;
-        _activePos[last] = pos;
-        _active.pop();
-        delete _activePos[listingId];
+    function _cancel(uint256 listingId, address to) private {
+        Listing storage l = listings[listingId];
+        require(l.active, "not active");
+        require(l.seller == msg.sender, "not your listing");
+        uint256 amount = l.amount;
+        l.amount = 0;
+        _deactivate(listingId);
+        _release(l, to, amount, to != msg.sender);
+        emit Cancelled(listingId, amount);
     }
 
-    function _release(Listing storage l, address to, uint256 amount) private {
+    function _deactivate(uint256 listingId) private {
+        Listing storage l = listings[listingId];
+        l.active = false;
+        _remove(_active, _activePos, listingId);
+        _remove(_activeBySeller[l.seller], _sellerPos, listingId);
+        _remove(_activeByCollection[l.nftContract], _collectionPos, listingId);
+    }
+
+    function _push(uint256[] storage list, mapping(uint256 => uint256) storage pos, uint256 id) private {
+        list.push(id);
+        pos[id] = list.length;
+    }
+
+    /// Swap-and-pop: the last id moves into the freed position.
+    function _remove(uint256[] storage list, mapping(uint256 => uint256) storage pos, uint256 id) private {
+        uint256 p = pos[id];
+        uint256 last = list[list.length - 1];
+        list[p - 1] = last;
+        pos[last] = p;
+        list.pop();
+        delete pos[id];
+    }
+
+    function _page(uint256[] storage list, uint256 offset, uint256 limit)
+        private
+        view
+        returns (uint256[] memory ids, Listing[] memory items)
+    {
+        uint256 n = list.length;
+        if (offset >= n) return (new uint256[](0), new Listing[](0));
+        uint256 end = limit > n - offset ? n : offset + limit;
+        ids = new uint256[](end - offset);
+        items = new Listing[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            ids[i - offset] = list[i];
+            items[i - offset] = listings[list[i]];
+        }
+    }
+
+    /// Moves escrowed NFTs out. `safe` runs the receiver check (buyers, and cancels to another
+    /// address); a cancel back to the seller uses a plain ERC-721 transfer. ERC-1155 always checks.
+    function _release(Listing storage l, address to, uint256 amount, bool safe) private {
         if (amount == 0) return;
         if (l.standard == Standard.ERC721) {
             _escrowed721[l.nftContract][l.tokenId] = false;
-            IERC721(l.nftContract).safeTransferFrom(address(this), to, l.tokenId);
+            if (safe) IERC721(l.nftContract).safeTransferFrom(address(this), to, l.tokenId);
+            else IERC721(l.nftContract).transferFrom(address(this), to, l.tokenId);
         } else {
             _escrowed1155[l.tokenId] -= amount;
             collectibles.safeTransferFrom(address(this), to, l.tokenId, amount, "");
         }
     }
 
-    /// Pushes a seller or royalty payment, or keeps it in `proceeds` if the push fails.
-    function _pay(address to, uint256 amount) private {
-        if (amount == 0) return;
-        (bool sent,) = to.call{value: amount, gas: SELLER_PUSH_GAS}("");
+    /// Pushes a seller or royalty payment, or keeps it in `proceeds` if the push fails. Returns
+    /// whether it was pushed.
+    function _pay(address to, uint256 amount) private returns (bool sent) {
+        if (amount == 0) return true;
+        (sent,) = to.call{value: amount, gas: SELLER_PUSH_GAS}("");
         if (!sent) {
             proceeds[to] += amount;
             totalProceeds += amount;

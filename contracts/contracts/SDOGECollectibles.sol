@@ -21,12 +21,20 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 ///   the public sale, and the reserve can never grow.
 /// - The cap can be raised until the owner locks it with lockSupply (one-way), and new designs
 ///   can be added until lockCollection (one-way).
+/// - A design's price, cap and reserve can only change while its sale is closed, so a queued
+///   change can't land in front of buyers mid-sale.
+/// - The metadata base URI can be frozen for good once the collection is locked.
 /// - Mint revenue goes to `treasury`; anyone can trigger withdraw().
 contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
     using Strings for uint256;
 
     uint256 public constant MIN_PRICE = 0.01 ether; // 0.01 USDC; rejects 6-decimal-unit mistakes
     uint256 public constant PRICE_UNIT = 1e12; // prices are whole micro-USDC
+    uint256 public constant MAX_URI_BYTES = 512;
+    /// @notice Gas each airdrop recipient gets in ownerMintBatch, receiver hook included. A
+    ///         recipient that needs more is skipped (AirdropSkipped), never the whole batch.
+    uint256 public constant AIRDROP_GAS_PER_RECIPIENT = 150_000;
+    uint256 private constant AIRDROP_GAS_MARGIN = 40_000; // for the loop and the skip event
 
     struct Design {
         string name;
@@ -62,6 +70,7 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
     event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
 
     constructor(address owner_, string memory baseURI_, address treasury_) ERC1155(baseURI_) Ownable(owner_) {
+        _checkBaseUri(bytes(baseURI_));
         require(treasury_ != address(0), "treasury is zero address");
         treasury = treasury_;
         emit TreasuryUpdated(treasury_);
@@ -128,20 +137,18 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
         emit PublicMintSet(designId, open);
     }
 
+    /// @notice Only while the design's sale is closed.
     function setPrice(uint256 designId, uint256 newPriceWei) external onlyOwner {
-        Design storage d = _design(designId);
+        Design storage d = _closedDesign(designId);
         _checkPrice(newPriceWei);
-        if (newPriceWei == 0 && d.publicMintOpen) {
-            d.publicMintOpen = false; // price 0 means no public sale
-            emit PublicMintSet(designId, false);
-        }
         d.priceWei = newPriceWei;
         emit DesignPriceUpdated(designId, newPriceWei);
     }
 
-    /// @notice Raises the cap (public part). Not possible once the design's supply is locked.
+    /// @notice Raises the cap (public part), only while the sale is closed. Not possible once the
+    ///         design's supply is locked.
     function increaseSupply(uint256 designId, uint256 newMaxSupply) external onlyOwner {
-        Design storage d = _design(designId);
+        Design storage d = _closedDesign(designId);
         require(!d.supplyLocked, "supply is locked");
         require(newMaxSupply > d.maxSupply, "can only increase max supply");
         d.maxSupply = newMaxSupply;
@@ -155,9 +162,10 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
         emit DesignSupplyLocked(designId);
     }
 
-    /// @notice Moves unused reserve to the public sale. The reserve can only shrink.
+    /// @notice Moves unused reserve to the public sale, only while the sale is closed. The reserve
+    ///         can only shrink.
     function releaseReserve(uint256 designId, uint256 amount) external onlyOwner {
-        Design storage d = _design(designId);
+        Design storage d = _closedDesign(designId);
         require(amount > 0 && amount <= d.reserved - d.ownerMinted, "more than the unused reserve");
         d.reserved -= amount;
         emit ReserveReleased(designId, amount);
@@ -169,14 +177,18 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
         emit CollectionLocked();
     }
 
+    /// @notice The metadata folder: `<newURI><id>.json`. Printable ASCII with no spaces, ending in "/".
     function setURI(string calldata newURI) external onlyOwner {
         require(!metadataFrozen, "metadata is frozen");
+        _checkBaseUri(bytes(newURI));
         _setURI(newURI);
         if (nextDesignId > 1) emit BatchMetadataUpdate(1, nextDesignId - 1);
     }
 
-    /// @notice Makes the metadata URI permanent (point it at IPFS first).
+    /// @notice Makes the metadata URI permanent (point it at IPFS first). Only once the collection
+    ///         is locked, so no design can be added after its metadata folder is fixed.
     function freezeMetadata() external onlyOwner {
+        require(collectionLocked, "lock the collection first");
         metadataFrozen = true;
         emit MetadataFrozen();
     }
@@ -210,16 +222,30 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
         _ownerMint(designId, to, amount);
     }
 
-    /// @notice An airdrop that skips any recipient that can't take the NFT (e.g. a contract
-    ///         without ERC-1155 receiver hooks) instead of failing the whole batch.
+    /// @notice An airdrop from the design's reserve that skips any recipient that can't take the
+    ///         NFT (a contract without ERC-1155 receiver hooks, or one whose hook needs more than
+    ///         AIRDROP_GAS_PER_RECIPIENT gas) instead of failing the whole batch. Everything else
+    ///         (a missing design, a zero amount or address, more than the reserve, too little gas
+    ///         for the next recipient) reverts the whole batch, so a mistake never passes as success.
     function ownerMintBatch(uint256 designId, address[] calldata to, uint256[] calldata amounts)
         external
         onlyOwner
         returns (uint256 skipped)
     {
         require(to.length == amounts.length, "length mismatch");
+        Design storage d = _design(designId);
+        uint256 total;
         for (uint256 i = 0; i < to.length; i++) {
-            try this.mintForBatch(designId, to[i], amounts[i]) {}
+            require(to[i] != address(0), "recipient is zero address");
+            require(amounts[i] > 0, "cannot mint 0");
+            total += amounts[i];
+        }
+        require(d.ownerMinted + total <= d.reserved, "exceeds the reserve");
+        for (uint256 i = 0; i < to.length; i++) {
+            require(
+                gasleft() > AIRDROP_GAS_PER_RECIPIENT + AIRDROP_GAS_MARGIN, "not enough gas for the next recipient"
+            );
+            try this.mintForBatch{gas: AIRDROP_GAS_PER_RECIPIENT}(designId, to[i], amounts[i]) {}
             catch {
                 skipped++;
                 emit AirdropSkipped(designId, to[i], amounts[i]);
@@ -247,6 +273,20 @@ contract SDOGECollectibles is ERC1155, Ownable2Step, ReentrancyGuard {
     function _design(uint256 designId) private view returns (Design storage d) {
         d = designs[designId];
         require(d.exists, "no such design");
+    }
+
+    function _closedDesign(uint256 designId) private view returns (Design storage d) {
+        d = _design(designId);
+        require(!d.publicMintOpen, "close the sale first");
+    }
+
+    /// A metadata folder: 1-512 printable ASCII characters, no spaces, ending in "/".
+    function _checkBaseUri(bytes memory s) private pure {
+        bool ok = s.length > 0 && s.length <= MAX_URI_BYTES && s[s.length - 1] == "/";
+        for (uint256 i = 0; ok && i < s.length; i++) {
+            if (s[i] < 0x21 || s[i] > 0x7e) ok = false;
+        }
+        require(ok, "base URI must be printable ASCII, no spaces, ending in /");
     }
 
     function _ownerMint(uint256 designId, address to, uint256 amount) private {

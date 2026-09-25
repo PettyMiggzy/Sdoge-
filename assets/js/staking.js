@@ -10,8 +10,9 @@
 // - Reads go to Arc's RPC (arc.js); every write first checks the wallet is on Arc and is pinned
 //   to chain 5042.
 // - Lock status uses chain time, never the browser clock.
-// - Tier terms are re-read right before staking and passed to stake(), which refuses to open a
-//   stake on terms that changed in the meantime.
+// - Tier terms are fixed in the contract; they're still read from it (not from the defaults below)
+//   and passed to stake(), which refuses a stake on any other terms.
+// - Connecting waits for the first chain read, and failed reads are retried.
 // - Leaving early always shows the exact penalty and forfeited reward and needs a confirm.
 // - Approvals are for the exact amount being staked.
 const STAKING_CONTRACT_ADDRESS = SDOGE_CONTRACTS.staking;
@@ -60,6 +61,7 @@ let tierData = DEFAULT_TIER_DAYS.map((days, i) => ({
 }));
 let earlyUnlockBps = DEFAULT_EARLY_UNLOCK_BPS;
 let liveReady = false; // true once the live contract and its terms have been read
+let liveLoad = null; // the first loadTierDataFromChain(), which connecting waits for
 let selectedTier = 0;
 
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { maximumFractionDigits: d });
@@ -119,18 +121,16 @@ async function readTier(i) {
 
 async function loadTierDataFromChain() {
   if (!isDeployed()) return;
-  if (!(await hasCodeOnArc(STAKING_CONTRACT_ADDRESS))) {
-    showUnavailable(`No staking contract at ${STAKING_CONTRACT_ADDRESS} on Arc.`);
-    return;
-  }
   try {
-    tierData = await Promise.all([0, 1, 2, 3, 4].map(readTier));
-    earlyUnlockBps = Number(await stakingRead.earlyUnlockThresholdBps());
-    const [totalStaked, remaining, unallocated] = await Promise.all([
-      stakingRead.totalPrincipalStaked(),
-      stakingRead.rewardsRemaining(),
-      stakingRead.unallocatedUsdc(),
-    ]);
+    if (!(await arcRetry(() => hasCodeOnArc(STAKING_CONTRACT_ADDRESS)))) {
+      showUnavailable(`No staking contract at ${STAKING_CONTRACT_ADDRESS} on Arc.`);
+      return;
+    }
+    tierData = await arcRetry(() => Promise.all([0, 1, 2, 3, 4].map(readTier)));
+    earlyUnlockBps = Number(await arcRetry(() => stakingRead.earlyUnlockThresholdBps()));
+    const [totalStaked, remaining, unallocated] = await arcRetry(() =>
+      Promise.all([stakingRead.totalPrincipalStaked(), stakingRead.rewardsRemaining(), stakingRead.unallocatedUsdc()])
+    );
     document.getElementById('statTotalStaked').textContent = fmt(ethers.formatUnits(totalStaked, 18));
     document.getElementById('statRewardPool').textContent = usdc(remaining + unallocated, 2);
     liveReady = true;
@@ -164,6 +164,7 @@ async function connectWallet() {
   sdogeWrite = new ethers.Contract(SDOGE_TOKEN_ADDRESS, ERC20_ABI, signer);
   if (isDeployed()) stakingWrite = new ethers.Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, signer);
 
+  if (isDeployed()) await (liveLoad ||= loadTierDataFromChain()); // don't judge the page before its first read
   const live = isDeployed() && liveReady;
   document.getElementById('overviewWallet').textContent = short(userAddress);
   const btn = document.getElementById('connectOrStakeBtn');
@@ -318,10 +319,23 @@ async function claimOne(stakeId) {
   }
 }
 
+// Deferred payouts are ones your wallet couldn't take. If it still can't, you're asked where to
+// send them instead.
 async function collectDeferred() {
   if (!(await ready())) return;
+  let to = userAddress;
   try {
-    await (await stakingWrite.claimDeferredRewards(userAddress, arcTx())).wait();
+    await stakingWrite.claimDeferredRewards.staticCall(to);
+  } catch (err) {
+    console.error(err);
+    const other = prompt(`Your wallet can't receive the USDC right now (${reason(err)}). Send the payout to which address instead?`);
+    if (other === null) return;
+    if (!ethers.isAddress(other.trim())) return alert("That isn't an address.");
+    to = ethers.getAddress(other.trim());
+    if (!confirm(`Send your waiting payout to ${to}?`)) return;
+  }
+  try {
+    await (await stakingWrite.claimDeferredRewards(to, arcTx())).wait();
     await refreshOverview();
   } catch (err) {
     console.error(err);
@@ -351,9 +365,10 @@ async function claimAll() {
 
 // ---------- wire up ----------
 document.addEventListener('DOMContentLoaded', () => {
+  arcShowLiveCopy(isDeployed());
   renderTierGrid();
   updateMetaRow();
-  loadTierDataFromChain();
+  liveLoad ||= loadTierDataFromChain();
 
   document.getElementById('connectOrStakeBtn').addEventListener('click', async () => {
     if (!userAddress) {

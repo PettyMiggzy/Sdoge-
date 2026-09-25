@@ -33,13 +33,21 @@ interface ISDOGEStudioCredits {
 /// - The shared base URI (used by drops and batch mints) can change only until the owner freezes it.
 /// - Royalties are capped at 10%.
 ///
+/// Drops: a drop can only open once its terms have been saved with setDrop, and a free drop needs a
+/// supply cap, since every drop mint spends one of the owner's credits. Handing the collection to
+/// a new owner closes the drop and moves the payout and royalty that pointed at the old owner.
+///
 /// Owner mints skip the ERC-721 receiver check, so one recipient can't block an airdrop; only
 /// send them to wallets that can hold NFTs. Public mints do run the check.
+///
+/// Gas: Arc caps a transaction at 2^24 (16,777,216) gas, so batches are bounded to stay well
+/// under it (mintWithURIs by count and by total URI bytes).
 contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, ReentrancyGuard {
     using Strings for uint256;
 
     uint256 public constant MAX_BATCH = 200; // tokens per owner mint or airdrop
-    uint256 public constant MAX_URI_BATCH = 100; // tokens per mintWithURIs call
+    uint256 public constant MAX_URI_BATCH = 50; // tokens per mintWithURIs call
+    uint256 public constant MAX_URI_BATCH_BYTES = 6_000; // total URI bytes per mintWithURIs call
     uint256 public constant MAX_PUBLIC_MINT = 20; // tokens per public mint
     uint96 public constant MAX_ROYALTY_BPS = 1_000; // 10%
     uint256 public constant MIN_PRICE = 0.01 ether; // 0.01 USDC; native USDC has 18 decimals
@@ -55,7 +63,9 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         bool open;
     }
 
-    ISDOGEStudioCredits public studio;
+    /// The Studio that deployed the implementation. Every clone shares it (it lives in the code),
+    /// and only it can initialize a clone, so a look-alike clone can't be set up by anyone else.
+    ISDOGEStudioCredits public immutable studio;
     bool public isCommunity;
     string private _collectionName;
     string private _collectionSymbol;
@@ -67,6 +77,7 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
     uint256 public totalMinted; // token ids run 1..totalMinted; nothing is ever burned
     address public payout;
     Drop public drop;
+    bool public dropConfigured; // set by setDrop: a drop can never open on the zeroed defaults
     mapping(address => uint256) public publicMinted;
     mapping(uint256 => string) private _tokenURIs;
 
@@ -85,13 +96,14 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
     event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
 
     /// @dev The implementation itself is never used directly: no owner, can't be initialized.
+    ///      Its deployer (the Studio) is baked into the code every clone runs.
     constructor() ERC721("", "") Ownable(msg.sender) {
+        studio = ISDOGEStudioCredits(msg.sender);
         _transferOwnership(address(0));
         _disableInitializers();
     }
 
-    /// @notice Called once by the Studio, in the transaction that creates this clone. The caller
-    ///         becomes this collection's credit ledger.
+    /// @notice Called once by the Studio, in the transaction that creates this clone.
     function initialize(
         address owner_,
         string memory name_,
@@ -102,11 +114,11 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         string memory contractURI_,
         bool community
     ) external initializer {
+        require(msg.sender == address(studio), "studio only");
         require(owner_ != address(0), "owner is zero address");
         require(_isText(bytes(name_), 64, true), "name must be 1-64 printable ASCII characters");
         require(_isText(bytes(symbol_), 16, false), "symbol must be 1-16 printable ASCII characters, no spaces");
         if (bytes(contractURI_).length > 0) _checkUri(bytes(contractURI_));
-        studio = ISDOGEStudioCredits(msg.sender);
         isCommunity = community;
         _collectionName = name_;
         _collectionSymbol = symbol_;
@@ -157,10 +169,16 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         }
     }
 
-    /// @notice Mints one token per URI to `to`. Each keeps its URI forever.
+    /// @notice Mints one token per URI to `to` (up to 50, and 6,000 URI bytes in total, per call).
+    ///         Each keeps its URI forever.
     function mintWithURIs(address to, string[] calldata uris) external onlyOwner nonReentrant returns (uint256 firstId) {
         uint256 n = uris.length;
         require(n <= MAX_URI_BATCH, "batch too large");
+        uint256 totalBytes;
+        for (uint256 i = 0; i < n; i++) {
+            totalBytes += bytes(uris[i]).length;
+        }
+        require(totalBytes <= MAX_URI_BATCH_BYTES, "too many URI bytes for one transaction");
         studio.spendCredits(msg.sender, n);
         firstId = _reserve(n);
         for (uint256 i = 0; i < n; i++) {
@@ -183,8 +201,8 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
 
     // ---------- Public drop ----------
 
-    /// @notice Sets the drop's terms (it stays open or closed as it was). Collectors always pay
-    ///         exactly the price in force when their mint lands.
+    /// @notice Sets all of the drop's terms (it stays open or closed as it was). Collectors always
+    ///         pay exactly the price in force when their mint lands.
     function setDrop(uint256 priceWei, uint256 maxPerWallet, uint256 start, uint256 end) external onlyOwner {
         require(
             priceWei == 0 || (priceWei >= MIN_PRICE && priceWei <= MAX_PRICE && priceWei % PRICE_UNIT == 0),
@@ -194,15 +212,23 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         require(start <= type(uint40).max && end <= type(uint40).max, "time out of range");
         require(end == 0 || end > start, "end must be after start");
         Drop storage d = drop;
+        require(!d.open || priceWei > 0 || maxSupply > 0, "a free drop needs a supply cap");
         d.priceWei = uint128(priceWei);
         d.maxPerWallet = uint32(maxPerWallet);
         d.start = uint40(start);
         d.end = uint40(end);
+        dropConfigured = true;
         emit DropUpdated(priceWei, maxPerWallet, start, end);
     }
 
+    /// @notice Opens or closes the drop. Opening needs a base URI and saved terms, and a free drop
+    ///         needs a supply cap: every drop mint spends one of the owner's credits.
     function setDropOpen(bool open) external onlyOwner {
-        if (open) require(bytes(baseURI).length > 0, "set a base URI first");
+        if (open) {
+            require(bytes(baseURI).length > 0, "set a base URI first");
+            require(dropConfigured, "set the drop terms first");
+            require(drop.priceWei > 0 || maxSupply > 0, "a free drop needs a supply cap");
+        }
         drop.open = open;
         emit DropOpened(open);
     }
@@ -241,7 +267,7 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         emit Withdrawn(to, amount);
     }
 
-    // ---------- Community mints (Studio only) ----------
+    // ---------- Community collection (Studio only) ----------
 
     /// @notice The Community collection's only way in: the Studio calls this after taking the
     ///         minter's credit.
@@ -252,6 +278,15 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         _tokenURIs[tokenId] = uri; // set before the receiver hook runs
         _mint(to, tokenId);
         ERC721Utils.checkOnERC721Received(to, address(0), to, tokenId, "");
+    }
+
+    /// @notice The Community collection's collection-level metadata (ERC-7572), set by the Studio
+    ///         owner through the Studio. Never touches any token.
+    function setCommunityContractURI(string calldata newContractURI) external {
+        require(isCommunity && msg.sender == address(studio), "studio only");
+        _checkUri(bytes(newContractURI));
+        contractURI = newContractURI;
+        emit ContractURIUpdated();
     }
 
     // ---------- Owner settings ----------
@@ -280,8 +315,10 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         emit ContractURIUpdated();
     }
 
-    /// @notice Makes the base URI and collection metadata permanent.
+    /// @notice Makes the base URI and collection metadata permanent. Needs a base URI first, so
+    ///         base-URI tokens can't be frozen blank.
     function freezeMetadata() external onlyOwner {
+        require(bytes(baseURI).length > 0, "set a base URI before freezing");
         metadataFrozen = true;
         emit MetadataFrozen();
     }
@@ -305,6 +342,28 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
         revert("renounce disabled");
     }
 
+    /// @dev When the collection changes hands (acceptOwnership), the payout and royalty that
+    ///      pointed at the old owner follow the new one, and an open drop closes: the new owner's
+    ///      credits pay for drop mints, so the new owner decides when it reopens.
+    function _transferOwnership(address newOwner) internal override {
+        address previous = owner();
+        super._transferOwnership(newOwner);
+        if (previous == address(0) || newOwner == address(0)) return; // setup, not a handover
+        if (payout == previous) {
+            payout = newOwner;
+            emit PayoutUpdated(newOwner);
+        }
+        (address receiver, uint256 bps) = royaltyInfo(0, _feeDenominator());
+        if (receiver == previous && bps > 0) {
+            _setDefaultRoyalty(newOwner, uint96(bps));
+            emit RoyaltyUpdated(newOwner, bps);
+        }
+        if (drop.open) {
+            drop.open = false;
+            emit DropOpened(false);
+        }
+    }
+
     // ---------- Internals ----------
 
     function _reserve(uint256 quantity) private returns (uint256 firstId) {
@@ -318,6 +377,8 @@ contract SDOGEStudioCollection is ERC721, ERC2981, Ownable2Step, Initializable, 
 
     function _setRoyalty(address receiver, uint96 bps) private {
         require(bps <= MAX_ROYALTY_BPS, "royalty above 10%");
+        // Neither can ever collect a royalty a marketplace credits to it.
+        require(receiver != address(this) && receiver != address(studio), "bad royalty receiver");
         _setDefaultRoyalty(receiver, bps);
     }
 

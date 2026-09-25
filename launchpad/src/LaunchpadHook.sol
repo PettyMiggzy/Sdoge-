@@ -17,6 +17,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface IFeeRecipientSource {
     function feeRecipient() external view returns (address);
+    function owner() external view returns (address);
 }
 
 /// One hook for every launchpad pool. The factory deploys it (so `factory` is fixed at
@@ -71,6 +72,7 @@ contract LaunchpadHook is BaseHook, IUnlockCallback {
     event CreatorTransferred(PoolId indexed id, address indexed from, address indexed to);
 
     error NotFactory();
+    error NotOwner();
     error UnknownPool();
     error AlreadyRegistered();
     error ZeroAddress();
@@ -251,8 +253,10 @@ contract LaunchpadHook is BaseHook, IUnlockCallback {
         emit Claimed(account, amount);
     }
 
-    /// Pays the platform's accrued fees to the factory's current feeRecipient. Anyone may trigger it.
+    /// Pays the platform's accrued fees to the factory's current feeRecipient. Only the factory's
+    /// owner may trigger it, so a recipient being rotated out (say, a leaked key) can't be raced.
     function claimPlatform() external returns (uint256 amount) {
+        if (msg.sender != IFeeRecipientSource(factory).owner()) revert NotOwner();
         amount = platformOwed;
         if (amount == 0) return 0;
         platformOwed = 0;

@@ -27,7 +27,56 @@ const SDOGE_CONTRACTS = Object.freeze({
   marketplace: '',
 });
 
-const arcReadProvider = new ethers.JsonRpcProvider(ARC_RPC_URL, Number(ARC_CHAIN_ID), { staticNetwork: true });
+// Arc's public RPC allows about 20 eth_calls per second per IP. Over the limit, an item inside a
+// batched request comes back as error -32005 in an HTTP 200 (which ethers never retries), and a
+// lone request gets HTTP 429 (which ethers does retry). So: never batch, stay under the limit on
+// our side, and retry anything that still comes back rate-limited.
+const ARC_RPC_MAX_PER_SECOND = 12;
+const arcSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+class ArcRpcProvider extends ethers.JsonRpcProvider {
+  #sent = []; // send times in the last second
+
+  async #slot() {
+    for (;;) {
+      const now = Date.now();
+      while (this.#sent.length && now - this.#sent[0] >= 1000) this.#sent.shift();
+      if (this.#sent.length < ARC_RPC_MAX_PER_SECOND) break;
+      await arcSleep(1000 - (now - this.#sent[0]) + 5);
+    }
+    this.#sent.push(Date.now());
+  }
+
+  async _send(payload) {
+    for (let attempt = 0; ; attempt++) {
+      await this.#slot();
+      const results = await super._send(payload);
+      if (attempt >= 5 || !results.some((r) => r?.error?.code === -32005)) return results;
+      await arcSleep(1100);
+    }
+  }
+}
+
+const arcReadProvider = new ArcRpcProvider(ARC_RPC_URL, Number(ARC_CHAIN_ID), { staticNetwork: true, batchMaxCount: 1 });
+
+// Retries a read a few times with backoff when the RPC itself failed (network trouble, a
+// rate-limit answer that surfaced as "missing revert data"), so one failed call doesn't leave a
+// page blank until reload. Anything the chain answered for real (a revert, a wrong contract) is
+// thrown at once.
+const arcTransient = (err) =>
+  ['NETWORK_ERROR', 'SERVER_ERROR', 'TIMEOUT', 'UNKNOWN_ERROR', 'BAD_DATA'].includes(err?.code) ||
+  (err?.code === 'CALL_EXCEPTION' && err?.data == null && !err?.reason);
+
+async function arcRetry(fn, tries = 4) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= tries || !arcTransient(err)) throw err;
+      await arcSleep(500 * 2 ** i);
+    }
+  }
+}
 
 const isAddressSet = (a) => typeof a === 'string' && /^0x[0-9a-fA-F]{40}$/.test(a);
 
@@ -64,13 +113,20 @@ async function ensureArcNetwork() {
   return (await walletChainId()) === ARC_CHAIN_ID;
 }
 
-// True if `address` has contract code on Arc. Guards against a wrong or placeholder address.
+// True if `address` has contract code on Arc. Guards against a wrong or placeholder address. An
+// RPC error is thrown, not read as "no contract", so callers can retry.
 async function hasCodeOnArc(address) {
-  try {
-    return (await arcReadProvider.getCode(address)) !== '0x';
-  } catch {
-    return false;
-  }
+  return (await arcReadProvider.getCode(address)) !== '0x';
+}
+
+// Copy that's only true before launch carries data-preview-copy. Once the page's contract is
+// deployed it's replaced by its data-live-copy text, or hidden if it has none.
+function arcShowLiveCopy(live) {
+  if (!live) return;
+  document.querySelectorAll('[data-preview-copy]').forEach((el) => {
+    if (el.dataset.liveCopy !== undefined) el.textContent = el.dataset.liveCopy;
+    else el.style.display = 'none';
+  });
 }
 
 // Chain time, not the browser clock: lock status and deadlines must match what the contract sees.

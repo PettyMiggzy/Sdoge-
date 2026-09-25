@@ -32,4 +32,16 @@ export const addrLink = (explorer, a) => `<a href="${explorer}/address/${a}">${s
 export const tokenLink = (explorer, a) => `<a href="${explorer}/token/${a}">${short(a)}</a>`;
 export const txLink = (explorer, h, label = 'view tx') => `<a href="${explorer}/tx/${h}">${esc(label)}</a>`;
 
+// How a token is identified wherever it's confirmed or alerted: tickers aren't
+// unique, so the name and contract address always come with them.
+export const tokenLine = (l) => `<b>${esc(l.name)}</b> ($${esc(l.symbol)}) · <code>${short(l.token)}</code>`;
+
+export function fmtAge(ms) {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
 export const bpsToPct = (bps) => `${(bps / 100).toFixed(bps % 100 ? 2 : 0)}%`;

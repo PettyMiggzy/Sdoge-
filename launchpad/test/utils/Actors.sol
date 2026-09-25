@@ -93,3 +93,22 @@ contract FlashAttacker is IUnlockCallback {
         return "";
     }
 }
+
+/// Stands in for the Treasury Safe in deploy tests: a contract that answers like a Safe.
+contract SafeLike {
+    uint256 public threshold;
+    address[] internal _owners;
+
+    constructor(uint256 threshold_, address[] memory owners_) {
+        threshold = threshold_;
+        _owners = owners_;
+    }
+
+    function getThreshold() external view returns (uint256) {
+        return threshold;
+    }
+
+    function getOwners() external view returns (address[] memory) {
+        return _owners;
+    }
+}

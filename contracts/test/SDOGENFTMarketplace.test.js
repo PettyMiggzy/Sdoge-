@@ -5,6 +5,8 @@ const { deployStudio, newCollection } = require("./helpers/studio");
 const E = (n) => ethers.parseEther(String(n));
 const ERC721 = 0;
 const ERC1155 = 1;
+const MAXF = 1000; // the highest fee (bps) a seller accepts in these tests
+const MAXR = 1000; // and royalty
 
 async function deployFixture() {
   const [owner, alice, bob, carol, treasury, stranger] = await ethers.getSigners();
@@ -49,18 +51,18 @@ async function listCreator(f, price = E("10"), royaltyTo = null) {
   await f.studio.connect(f.owner).grantCredits(f.carol.address, 10);
   await art.connect(f.carol).mintBatch(f.alice.address, 1);
   await art.connect(f.alice).approve(f.mp, 1);
-  await f.marketplace.connect(f.alice).listERC721(await art.getAddress(), 1, price);
+  await f.marketplace.connect(f.alice).listERC721(await art.getAddress(), 1, price, MAXF, MAXR);
   return art;
 }
 
 async function listAlice721(f, price = E("10")) {
   await f.communityMint.connect(f.alice).approve(f.mp, 1);
-  await f.marketplace.connect(f.alice).listERC721(f.cm, 1, price);
+  await f.marketplace.connect(f.alice).listERC721(f.cm, 1, price, MAXF, MAXR);
 }
 
 async function listBob1155(f, amount = 5, price = E("2")) {
   await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
-  await f.marketplace.connect(f.bob).listERC1155(f.col, 1, amount, price);
+  await f.marketplace.connect(f.bob).listERC1155(f.col, 1, amount, price, MAXF);
 }
 
 const bal = (a) => ethers.provider.getBalance(a);
@@ -94,7 +96,7 @@ describe("SDOGENFTMarketplace", function () {
     it("ERC-721: escrows the token and emits Listed with the fee rate", async function () {
       const f = await deployFixture();
       await f.communityMint.connect(f.alice).approve(f.mp, 1);
-      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10")))
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"), MAXF, MAXR))
         .to.emit(f.marketplace, "Listed")
         .withArgs(1, f.alice.address, f.cm, ERC721, 1, 1, E("10"), 200, 0);
       expect(await f.communityMint.ownerOf(1)).to.equal(f.mp);
@@ -107,7 +109,7 @@ describe("SDOGENFTMarketplace", function () {
     it("ERC-721: the same token can't be listed twice", async function () {
       const f = await deployFixture();
       await listAlice721(f);
-      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("5"))).to.be.reverted;
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("5"), MAXF, MAXR)).to.be.reverted;
     });
 
     it("ERC-1155: escrows exactly the listed copies", async function () {
@@ -116,16 +118,16 @@ describe("SDOGENFTMarketplace", function () {
       expect(await f.collectibles.balanceOf(f.mp, 1)).to.equal(3);
       expect(await f.collectibles.balanceOf(f.bob.address, 1)).to.equal(2);
       // can't list more than is left in the wallet
-      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 3, E("2"))).to.be.reverted;
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 3, E("2"), MAXF)).to.be.reverted;
     });
 
     it("needs the marketplace approved first", async function () {
       const f = await deployFixture();
-      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"))).to.be.revertedWithCustomError(
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"), MAXF, MAXR)).to.be.revertedWithCustomError(
         f.communityMint,
         "ERC721InsufficientApproval"
       );
-      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"))).to.be.revertedWithCustomError(
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"), MAXF)).to.be.revertedWithCustomError(
         f.collectibles,
         "ERC1155MissingApprovalForAll"
       );
@@ -135,16 +137,16 @@ describe("SDOGENFTMarketplace", function () {
       const f = await deployFixture();
       const Fake = await ethers.getContractFactory("MockERC20");
       const fake = await Fake.deploy("Fake", "FAKE");
-      await expect(f.marketplace.connect(f.bob).listERC1155(await fake.getAddress(), 1, 1, E("1"))).to.be.revertedWith(
+      await expect(f.marketplace.connect(f.bob).listERC1155(await fake.getAddress(), 1, 1, E("1"), MAXF)).to.be.revertedWith(
         "only SDOGE Collectibles"
       );
-      await expect(f.marketplace.connect(f.bob).listERC1155(f.cm, 1, 1, E("1"))).to.be.revertedWith(
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.cm, 1, 1, E("1"), MAXF)).to.be.revertedWith(
         "only SDOGE Collectibles"
       );
-      await expect(f.marketplace.connect(f.alice).listERC721(f.col, 1, E("1"))).to.be.revertedWith(
+      await expect(f.marketplace.connect(f.alice).listERC721(f.col, 1, E("1"), MAXF, MAXR)).to.be.revertedWith(
         "only SDOGE Studio collections"
       );
-      await expect(f.marketplace.connect(f.alice).listERC721(await fake.getAddress(), 1, E("1"))).to.be.revertedWith(
+      await expect(f.marketplace.connect(f.alice).listERC721(await fake.getAddress(), 1, E("1"), MAXF, MAXR)).to.be.revertedWith(
         "only SDOGE Studio collections"
       );
       const art = await listCreator(f); // any creator's own Studio collection is fine
@@ -154,7 +156,7 @@ describe("SDOGENFTMarketplace", function () {
     it("rejects prices below 0.01 USDC or in 6-decimal units", async function () {
       const f = await deployFixture();
       await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
-      const list = (p) => f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, p);
+      const list = (p) => f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, p, MAXF);
       await expect(list(0)).to.be.revertedWith("price below 0.01 USDC (prices use 18 decimals)");
       await expect(list(40_000_000n)).to.be.revertedWith("price below 0.01 USDC (prices use 18 decimals)");
       await expect(list(E("1") + 1n)).to.be.revertedWith("price must be whole micro-USDC");
@@ -176,13 +178,97 @@ describe("SDOGENFTMarketplace", function () {
     it("lets only the seller update the price, within the price rules", async function () {
       const f = await deployFixture();
       await listAlice721(f);
-      await expect(f.marketplace.connect(f.bob).updatePrice(1, E("20"))).to.be.revertedWith("not your listing");
-      await expect(f.marketplace.connect(f.alice).updatePrice(1, 35_000_000n)).to.be.revertedWith(
+      await expect(f.marketplace.connect(f.bob).updatePrice(1, E("20"), MAXF, MAXR)).to.be.revertedWith("not your listing");
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, 35_000_000n, MAXF, MAXR)).to.be.revertedWith(
         "price below 0.01 USDC (prices use 18 decimals)"
       );
-      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("20")))
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("20"), MAXF, MAXR))
         .to.emit(f.marketplace, "PriceUpdated")
-        .withArgs(1, E("20"));
+        .withArgs(1, E("20"), 200, 0);
+    });
+
+    it("repricing takes the fee and royalty in force now, within the seller's limits", async function () {
+      const f = await deployFixture();
+      // Carol's collection has no royalty when Alice lists; Carol adds 10% later, the fee goes to 5%
+      const art = await listCreator(f, E("100"));
+      await art.connect(f.carol).setRoyalty(f.carol.address, 0);
+      await f.marketplace.connect(f.alice).updatePrice(1, E("100"), MAXF, MAXR);
+      expect((await f.marketplace.getListing(1)).royaltyBps).to.equal(0);
+      await art.connect(f.carol).setRoyalty(f.carol.address, 1000);
+      await f.marketplace.connect(f.owner).setFeeBps(500);
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("90"), 499, MAXR)).to.be.revertedWith(
+        "fee is above your limit"
+      );
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("90"), 500, 999)).to.be.revertedWith(
+        "royalty is above your limit"
+      );
+      await expect(f.marketplace.connect(f.alice).updatePrice(1, E("90"), 500, 1000))
+        .to.emit(f.marketplace, "PriceUpdated")
+        .withArgs(1, E("90"), 500, 1000);
+      const [a0, c0] = [await bal(f.alice.address), await bal(f.carol.address)];
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("90") });
+      expect((await bal(f.carol.address)) - c0).to.equal(E("9"));
+      expect((await bal(f.alice.address)) - a0).to.equal(E("76.5")); // 90 - 4.5 fee - 9 royalty
+    });
+
+    it("listing reverts when the fee or royalty is above the seller's limits", async function () {
+      const f = await deployFixture();
+      await f.marketplace.connect(f.owner).setFeeBps(300);
+      await f.communityMint.connect(f.alice).approve(f.mp, 1);
+      await expect(f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"), 200, 0)).to.be.revertedWith(
+        "fee is above your limit"
+      );
+      await f.marketplace.connect(f.alice).listERC721(f.cm, 1, E("10"), 300, 0); // Community Art: no royalty
+      await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"), 299)).to.be.revertedWith(
+        "fee is above your limit"
+      );
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART", royaltyBps: 500 });
+      await f.studio.connect(f.owner).grantCredits(f.carol.address, 1);
+      await art.connect(f.carol).mintBatch(f.bob.address, 1);
+      await art.connect(f.bob).approve(f.mp, 1);
+      await expect(f.marketplace.connect(f.bob).listERC721(await art.getAddress(), 1, E("10"), 300, 499)).to.be.revertedWith(
+        "royalty is above your limit"
+      );
+      await f.marketplace.connect(f.bob).listERC721(await art.getAddress(), 1, E("10"), 300, 500);
+    });
+
+    it("a seller contract without the ERC-721 receiver hook can still cancel", async function () {
+      const f = await deployFixture();
+      const seller = await (await ethers.getContractFactory("PlainSeller721")).deploy();
+      const sAddr = await seller.getAddress();
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART" });
+      await f.studio.connect(f.owner).grantCredits(f.carol.address, 2);
+      await art.connect(f.carol).airdrop([sAddr, sAddr]); // owner mints skip the hook
+      await seller.list(f.mp, await art.getAddress(), 1, E("10"));
+      await f.marketplace.connect(f.owner).pause();
+      await seller.cancel(f.mp, 1);
+      expect(await art.ownerOf(1)).to.equal(sAddr);
+      // to another address, the receiver check applies
+      await f.marketplace.connect(f.owner).unpause();
+      await seller.list(f.mp, await art.getAddress(), 2, E("10"));
+      const noHooks = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
+      await expect(seller.cancelTo(f.mp, 2, await noHooks.getAddress())).to.be.revertedWithCustomError(
+        art,
+        "ERC721InvalidReceiver"
+      );
+      await seller.cancelTo(f.mp, 2, f.carol.address);
+      expect(await art.ownerOf(2)).to.equal(f.carol.address);
+    });
+
+    it("cancelListingTo: only the seller, never to the zero address", async function () {
+      const f = await deployFixture();
+      await listBob1155(f, 3, E("1"));
+      await expect(f.marketplace.connect(f.alice).cancelListingTo(1, f.alice.address)).to.be.revertedWith(
+        "not your listing"
+      );
+      await expect(f.marketplace.connect(f.bob).cancelListingTo(1, ethers.ZeroAddress)).to.be.revertedWith(
+        "bad recipient"
+      );
+      await expect(f.marketplace.connect(f.bob).cancelListingTo(1, f.carol.address))
+        .to.emit(f.marketplace, "Cancelled")
+        .withArgs(1, 3);
+      expect(await f.collectibles.balanceOf(f.carol.address, 1)).to.equal(3);
     });
 
     it("cancelling returns the escrowed NFT, even while paused", async function () {
@@ -316,7 +402,7 @@ describe("SDOGENFTMarketplace", function () {
       expect((await bal(f.carol.address)) - c0).to.equal(E("0.5"), "raise ignored");
 
       await art.connect(f.bob).approve(f.mp, 1);
-      await f.marketplace.connect(f.bob).listERC721(await art.getAddress(), 1, E("10")); // listed at 10%
+      await f.marketplace.connect(f.bob).listERC721(await art.getAddress(), 1, E("10"), MAXF, MAXR); // listed at 10%
       expect((await f.marketplace.getListing(2)).royaltyBps).to.equal(1000);
       await art.connect(f.carol).setRoyalty(f.carol.address, 100);
       const c1 = await bal(f.carol.address);
@@ -328,9 +414,40 @@ describe("SDOGENFTMarketplace", function () {
       const f = await deployFixture();
       const refuser = await (await ethers.getContractFactory("RevertingReceiver")).deploy();
       await listCreator(f, E("10"), await refuser.getAddress());
-      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      await expect(f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") }))
+        .to.emit(f.marketplace, "ProceedsCredited")
+        .withArgs(await refuser.getAddress(), E("0.5"))
+        .and.to.not.emit(f.marketplace, "RoyaltyPaid");
       expect(await f.marketplace.proceeds(await refuser.getAddress())).to.equal(E("0.5"));
       expect(await f.marketplace.totalProceeds()).to.equal(E("0.5"));
+      await expect(f.marketplace.withdrawProceedsFor(await refuser.getAddress())).to.be.revertedWith("transfer failed");
+    });
+
+    it("anyone can push waiting proceeds to a receiver that needs more gas than the sale gave it", async function () {
+      const f = await deployFixture();
+      const splitter = await (await ethers.getContractFactory("GasHungryReceiver")).deploy();
+      const sAddr = await splitter.getAddress();
+      await listCreator(f, E("10"), sAddr);
+      await f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") });
+      expect(await f.marketplace.proceeds(sAddr)).to.equal(E("0.5"));
+      await expect(f.marketplace.connect(f.stranger).withdrawProceedsFor(sAddr))
+        .to.emit(f.marketplace, "ProceedsWithdrawn")
+        .withArgs(sAddr, sAddr, E("0.5"));
+      expect(await bal(sAddr)).to.equal(E("0.5"));
+      expect(await f.marketplace.totalProceeds()).to.equal(0);
+      await expect(f.marketplace.withdrawProceedsFor(sAddr)).to.be.revertedWith("nothing to withdraw");
+    });
+
+    it("a royalty pointed at the marketplace itself is never taken from the seller", async function () {
+      const f = await deployFixture();
+      await listCreator(f, E("10"), f.mp);
+      const a0 = await bal(f.alice.address);
+      await expect(f.marketplace.connect(f.bob).buy(1, 1, { value: E("10") }))
+        .to.emit(f.marketplace, "Sold")
+        .withArgs(1, f.bob.address, 1, E("10"), E("0.2"), 0);
+      expect((await bal(f.alice.address)) - a0).to.equal(E("9.8"));
+      expect(await f.marketplace.totalProceeds()).to.equal(0);
+      expect(await bal(f.mp)).to.equal(0);
     });
 
     it("Community Art and the Collectibles carry no royalty", async function () {
@@ -393,7 +510,7 @@ describe("SDOGENFTMarketplace", function () {
       const f = await deployFixture();
       await listAlice721(f);
       await listBob1155(f, 1, E("1"));
-      await f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("2"));
+      await f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("2"), MAXF);
       expect(await f.marketplace.activeListingCount()).to.equal(3);
       await f.marketplace.connect(f.carol).buy(2, 1, { value: E("1") });
       expect(await f.marketplace.activeListingCount()).to.equal(2);
@@ -404,6 +521,82 @@ describe("SDOGENFTMarketplace", function () {
       expect(page2.length).to.equal(1);
       const [none] = await f.marketplace.getActiveListings(5, 10);
       expect(none.length).to.equal(0);
+      const [all] = await f.marketplace.getActiveListings(0, ethers.MaxUint256); // no overflow on a huge limit
+      expect(all.length).to.equal(2);
+    });
+
+    it("per-seller and per-collection indexes always match the active listings", async function () {
+      const f = await deployFixture();
+      const art = await newCollection(f.studio, f.carol, { name: "Carol Art", symbol: "CART", royaltyBps: 0 });
+      await f.studio.connect(f.owner).grantCredits(f.carol.address, 6);
+      await art.connect(f.carol).mintBatch(f.alice.address, 3);
+      await art.connect(f.carol).mintBatch(f.bob.address, 3);
+      await art.connect(f.alice).setApprovalForAll(f.mp, true);
+      await art.connect(f.bob).setApprovalForAll(f.mp, true);
+      await f.communityMint.connect(f.alice).approve(f.mp, 1);
+      await f.collectibles.connect(f.bob).setApprovalForAll(f.mp, true);
+      const artAddr = await art.getAddress();
+      const m = f.marketplace;
+
+      const check = async () => {
+        const [ids, items] = await m.getActiveListings(0, 1000);
+        const active = ids.map((id, i) => ({ id: Number(id), seller: items[i].seller, nft: items[i].nftContract }));
+        for (const who of [f.alice.address, f.bob.address, f.carol.address]) {
+          const [mine] = await m.getActiveListingsBySeller(who, 0, 1000);
+          const want = active.filter((l) => l.seller === who).map((l) => l.id);
+          expect(mine.map(Number).sort()).to.deep.equal(want.sort(), `seller ${who}`);
+          expect(await m.activeListingCountBySeller(who)).to.equal(want.length);
+        }
+        for (const nft of [artAddr, f.cm, f.col]) {
+          const [its] = await m.getActiveListingsByCollection(nft, 0, 1000);
+          const want = active.filter((l) => l.nft === nft).map((l) => l.id);
+          expect(its.map(Number).sort()).to.deep.equal(want.sort(), `collection ${nft}`);
+          expect(await m.activeListingCountByCollection(nft)).to.equal(want.length);
+        }
+      };
+
+      for (const id of [1, 2, 3]) await m.connect(f.alice).listERC721(artAddr, id, E("1"), MAXF, MAXR); // #1-3
+      await m.connect(f.alice).listERC721(f.cm, 1, E("1"), MAXF, MAXR); // #4
+      for (const id of [4, 5]) await m.connect(f.bob).listERC721(artAddr, id, E("2"), MAXF, MAXR); // #5-6
+      await m.connect(f.bob).listERC1155(f.col, 1, 5, E("1"), MAXF); // #7
+      await check();
+      await m.connect(f.carol).buy(1, 1, { value: E("1") }); // first of Alice's
+      await check();
+      await m.connect(f.carol).buy(7, 2, { value: E("2") }); // partial: stays listed
+      await check();
+      await m.connect(f.bob).cancelListing(5);
+      await check();
+      await m.connect(f.alice).cancelListing(4);
+      await check();
+      await m.connect(f.carol).buy(7, 3, { value: E("3") }); // the rest: delisted
+      await check();
+      await m.connect(f.bob).listERC721(artAddr, 6, E("2"), MAXF, MAXR); // #8
+      await m.connect(f.carol).buy(3, 1, { value: E("1") });
+      await check();
+      const [page] = await m.getActiveListingsBySeller(f.alice.address, 1, 5);
+      expect(page.length).to.equal(0); // Alice has just #2 left
+      const [bobs] = await m.getActiveListingsBySeller(f.bob.address, 0, 1);
+      expect(bobs.length).to.equal(1);
+    });
+
+    it("a seller's listing stays reachable however many listings came before it", async function () {
+      const f = await deployFixture();
+      const art = await newCollection(f.studio, f.carol, { name: "Spam", symbol: "SPAM", royaltyBps: 0 });
+      await f.studio.connect(f.owner).grantCredits(f.carol.address, 210);
+      await art.connect(f.carol).mintBatch(f.carol.address, 200);
+      await art.connect(f.carol).setApprovalForAll(f.mp, true);
+      const spam = await art.getAddress();
+      for (let id = 1; id <= 200; id++) {
+        await f.marketplace.connect(f.carol).listERC721(spam, id, E("1000000"), MAXF, MAXR);
+      }
+      await listAlice721(f, E("5")); // listing #201
+      expect(await f.marketplace.activeListingCount()).to.equal(201);
+      const [mine] = await f.marketplace.getActiveListingsBySeller(f.alice.address, 0, 50);
+      expect(mine.map(Number)).to.deep.equal([201]);
+      const [community] = await f.marketplace.getActiveListingsByCollection(f.cm, 0, 50);
+      expect(community.map(Number)).to.deep.equal([201]);
+      await f.marketplace.connect(f.alice).cancelListing(201);
+      expect(await f.communityMint.ownerOf(1)).to.equal(f.alice.address);
     });
   });
 
@@ -420,7 +613,7 @@ describe("SDOGENFTMarketplace", function () {
         f.marketplace,
         "EnforcedPause"
       );
-      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"))).to.be.revertedWithCustomError(
+      await expect(f.marketplace.connect(f.bob).listERC1155(f.col, 1, 1, E("1"), MAXF)).to.be.revertedWithCustomError(
         f.marketplace,
         "EnforcedPause"
       );

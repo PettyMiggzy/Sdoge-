@@ -31,7 +31,8 @@ import {MemeVault} from "./MemeVault.sol";
 /// forever by construction.
 ///
 /// Admin (an Ownable2Step owner, meant to be the Treasury multisig) can only change the launch fee
-/// (bounded) and where platform fees go. It cannot touch pools, tokens, vaults or anyone's funds.
+/// (bounded) and where platform fees go, and pay out the platform's fees. It cannot touch pools,
+/// tokens, vaults or anyone's funds.
 contract LaunchpadFactory is IUnlockCallback, Ownable2Step, ReentrancyGuardTransient {
     using PoolIdLibrary for PoolKey;
     using SafeERC20 for IERC20;
@@ -193,10 +194,11 @@ contract LaunchpadFactory is IUnlockCallback, Ownable2Step, ReentrancyGuardTrans
         feeRecipient = newRecipient;
     }
 
-    /// Sends the collected launch fees to feeRecipient. Anyone may trigger it. Paid through the
-    /// ERC-20 view of USDC, which moves the same native balance but runs no code at the recipient,
-    /// so a recipient contract without a payable receive() (a fee splitter) still gets paid.
-    function withdrawLaunchFees() external nonReentrant returns (uint256 amount) {
+    /// Sends the collected launch fees to feeRecipient. Owner only, so a recipient being rotated
+    /// out (say, a leaked key) can't be raced. Paid through the ERC-20 view of USDC, which moves
+    /// the same native balance but runs no code at the recipient, so a recipient contract without
+    /// a payable receive() (a fee splitter) still gets paid.
+    function withdrawLaunchFees() external onlyOwner nonReentrant returns (uint256 amount) {
         amount = IERC20(USDC).balanceOf(address(this));
         if (amount == 0) return 0;
         address to = feeRecipient;

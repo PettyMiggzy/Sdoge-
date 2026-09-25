@@ -10,12 +10,18 @@
   "launchesChannel": "",
   "allowedGroups": [],
   "pollIntervalMs": 4000,
+  "blockTimeMs": 500,
+  "maintenanceIntervalMs": 15000,
+  "txTimeoutSec": 120,
+  "rpcMaxConcurrent": 8,
   "limits": {
     "launchesPerUserPerDay": 3,
     "launchesPerHourGlobal": 60,
     "commandsPerUserPerMinute": 20,
     "reportsPerUserPerDay": 5,
-    "defaultSlippageBps": 500,
+    "moderationChecksPerUserPerDay": 10,
+    "defaultSlippageBps": 100,
+    "execSlippageBps": 100,
     "maxSlippageBps": 3000,
     "maxImageBytes": 5000000,
     "confirmTtlSec": 120,
@@ -31,6 +37,8 @@
     "enabled": true,
     "minBuyUsdc": 25,
     "perTokenCooldownSec": 60,
-    "channelMaxPerMinute": 15
+    "channelMaxPerMinute": 15,
+    "maxLagBlocks": 120,
+    "indexerBehindBlocks": 3000
   }
 }

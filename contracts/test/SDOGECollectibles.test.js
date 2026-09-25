@@ -87,10 +87,15 @@ describe("SDOGECollectibles", function () {
       await expect(nft.connect(alice).mint(1, 500)).to.be.revertedWith("public mint closed");
     });
 
-    it("setting the price to 0 closes an open sale", async function () {
+    it("price, cap and reserve only change while the sale is closed", async function () {
       const { owner, alice, nft } = await withOpenDesign();
-      await nft.connect(owner).setPrice(1, 0);
-      expect((await nft.designs(1)).publicMintOpen).to.equal(false);
+      const closed = "close the sale first";
+      await expect(nft.connect(owner).setPrice(1, E("45"))).to.be.revertedWith(closed);
+      await expect(nft.connect(owner).increaseSupply(1, 400)).to.be.revertedWith(closed);
+      await expect(nft.connect(owner).releaseReserve(1, 5)).to.be.revertedWith(closed);
+      await nft.connect(owner).setPublicMint(1, false);
+      await nft.connect(owner).setPrice(1, 0); // giveaway-only from now on
+      await expect(nft.connect(owner).setPublicMint(1, true)).to.be.revertedWith("set a price first");
       await expect(nft.connect(alice).mint(1, 1)).to.be.revertedWith("public mint closed");
     });
 
@@ -131,6 +136,7 @@ describe("SDOGECollectibles", function () {
 
     it("unused reserve can be released to the public, never grown", async function () {
       const { owner, nft } = await withOpenDesign();
+      await nft.connect(owner).setPublicMint(1, false);
       await nft.connect(owner).ownerMint(1, owner.address, 5);
       await expect(nft.connect(owner).releaseReserve(1, 16)).to.be.revertedWith("more than the unused reserve");
       await nft.connect(owner).releaseReserve(1, 15);
@@ -149,11 +155,48 @@ describe("SDOGECollectibles", function () {
       expect((await nft.designs(1)).ownerMinted).to.equal(3);
       await expect(nft.connect(owner).mintForBatch(1, owner.address, 1)).to.be.revertedWith("internal");
     });
+
+    it("an airdrop reverts on the owner's own mistakes instead of skipping them", async function () {
+      const { owner, alice, bob, nft } = await withOpenDesign();
+      const batch = (id, to, amounts) => nft.connect(owner).ownerMintBatch(id, to, amounts);
+      await expect(batch(9, [alice.address], [1])).to.be.revertedWith("no such design");
+      await expect(batch(1, [alice.address, bob.address], [1, 0])).to.be.revertedWith("cannot mint 0");
+      await expect(batch(1, [alice.address, ethers.ZeroAddress], [1, 1])).to.be.revertedWith("recipient is zero address");
+      await expect(batch(1, [alice.address, bob.address], [10, 11])).to.be.revertedWith("exceeds the reserve");
+      await expect(batch(1, [alice.address], [1, 2])).to.be.revertedWith("length mismatch");
+      await batch(1, [alice.address, bob.address], [10, 10]);
+      expect((await nft.designs(1)).ownerMinted).to.equal(20);
+    });
+
+    it("an airdrop gives each recipient a fixed gas budget, so one can't sink the batch", async function () {
+      const { owner, alice, bob, nft } = await withOpenDesign();
+      const Burner = await ethers.getContractFactory("GasBurner1155");
+      const greedy = await Burner.deploy(ethers.MaxUint256); // burns all it gets
+      const heavy = await Burner.deploy(200_000); // would succeed with more gas than the budget
+      const light = await Burner.deploy(20_000); // fits in the budget
+      const to = [alice.address, await greedy.getAddress(), await heavy.getAddress(), await light.getAddress(), bob.address];
+      const tx = nft.connect(owner).ownerMintBatch(1, to, [1, 1, 1, 1, 1], { gasLimit: 2_000_000 });
+      await expect(tx)
+        .to.emit(nft, "AirdropSkipped")
+        .withArgs(1, await greedy.getAddress(), 1)
+        .and.to.emit(nft, "AirdropSkipped")
+        .withArgs(1, await heavy.getAddress(), 1);
+      expect(await nft.balanceOf(alice.address, 1)).to.equal(1);
+      expect(await nft.balanceOf(await light.getAddress(), 1)).to.equal(1);
+      expect(await nft.balanceOf(bob.address, 1)).to.equal(1);
+      expect((await nft.designs(1)).ownerMinted).to.equal(3);
+      // too little gas to give the next recipient its full budget: the whole batch reverts
+      const fresh = [ethers.Wallet.createRandom().address, ethers.Wallet.createRandom().address];
+      await expect(nft.connect(owner).ownerMintBatch(1, fresh, [1, 1], { gasLimit: 250_000 })).to.be.revertedWith(
+        "not enough gas for the next recipient"
+      );
+    });
   });
 
   describe("supply and price", function () {
     it("the cap can grow until locked, never shrink", async function () {
       const { owner, nft } = await withOpenDesign();
+      await nft.connect(owner).setPublicMint(1, false);
       await expect(nft.connect(owner).increaseSupply(1, 300)).to.be.revertedWith("can only increase max supply");
       await nft.connect(owner).increaseSupply(1, 400);
       await nft.connect(owner).lockSupply(1);
@@ -163,6 +206,7 @@ describe("SDOGECollectibles", function () {
 
     it("prices follow the same unit rules", async function () {
       const { owner, nft } = await withOpenDesign();
+      await nft.connect(owner).setPublicMint(1, false);
       await expect(nft.connect(owner).setPrice(1, 40_000_000n)).to.be.revertedWith(
         "price below 0.01 USDC (prices use 18 decimals)"
       );
@@ -179,12 +223,25 @@ describe("SDOGECollectibles", function () {
       await expect(nft.uri(2)).to.be.revertedWith("no such design");
     });
 
-    it("tells marketplaces to refresh on a URI change, and can be frozen", async function () {
+    it("tells marketplaces to refresh on a URI change, and can be frozen once the collection is locked", async function () {
       const { owner, nft } = await withOpenDesign();
       await expect(nft.connect(owner).setURI("ipfs://bafy/")).to.emit(nft, "BatchMetadataUpdate").withArgs(1, 1);
       expect(await nft.uri(1)).to.equal("ipfs://bafy/1.json");
-      await nft.connect(owner).freezeMetadata();
+      await expect(nft.connect(owner).freezeMetadata()).to.be.revertedWith("lock the collection first");
+      await nft.connect(owner).lockCollection();
+      await expect(nft.connect(owner).freezeMetadata()).to.emit(nft, "MetadataFrozen");
       await expect(nft.connect(owner).setURI("https://evil.example/")).to.be.revertedWith("metadata is frozen");
+    });
+
+    it("only takes a well-formed metadata folder", async function () {
+      const { owner, treasury, nft } = await withOpenDesign();
+      const bad = "base URI must be printable ASCII, no spaces, ending in /";
+      for (const u of ["", "ipfs://bafy", "ipfs://ba fy/", "ipfs://bäfy/", "ipfs://" + "a".repeat(505) + "/"]) {
+        await expect(nft.connect(owner).setURI(u)).to.be.revertedWith(bad);
+      }
+      await nft.connect(owner).setURI("ipfs://" + "a".repeat(504) + "/");
+      const C = await ethers.getContractFactory("SDOGECollectibles");
+      await expect(C.deploy(owner.address, "ipfs://no-slash", treasury.address)).to.be.revertedWith(bad);
     });
   });
 

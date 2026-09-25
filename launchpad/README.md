@@ -2,7 +2,7 @@
 
 The on-chain half of the Telegram launchpad in `../tgpad/`. Anyone can launch a token in one transaction. Every token gets a **meme vault**: real USDC, fed by its buys, that holders can redeem against.
 
-**Status: rebuilt after the audit, compiled, 61 Foundry tests passing; not deployed yet; re-audit pending.** This is its own [Foundry](https://getfoundry.sh/) project, separate from the Hardhat project in `../contracts/`.
+**Status: rebuilt after the first audit and fixed after the second; 65 Foundry tests passing; not deployed yet.** This is its own [Foundry](https://getfoundry.sh/) project, separate from the Hardhat project in `../contracts/`.
 
 ## How it works
 
@@ -25,7 +25,8 @@ The on-chain half of the Telegram launchpad in `../tgpad/`. Anyone can launch a 
 
 - **The fee is 2% in every swap shape:** exact-in or exact-out, buy or sell.
 - **Fees are never moved during a swap.** They're minted as ERC-6909 USDC claims inside the PoolManager: the vault's share straight to the vault, the rest to the hook.
-- **Creators collect with `hook.claim(creator)`.** The platform's share goes to the factory's `feeRecipient` via `hook.claimPlatform()`. Anyone can trigger either one, and the USDC only ever goes to its owner.
+- **Creators collect with `hook.claim(creator)`.** Anyone can trigger it, and the USDC only ever goes to the creator.
+- **The platform's share goes to the factory's `feeRecipient` via `hook.claimPlatform()`,** which only the factory's owner can call. So when the recipient is rotated (say, after a leaked key), nobody can flush the fees to the old one first.
 
 ### The meme vault
 
@@ -63,7 +64,7 @@ What the Telegram bot trades through:
   - set `launchFee`, either 0 or between 0.01 and 100 USDC. The bounds catch a fee accidentally entered in 6-decimal units.
   - set `feeRecipient`, which can't be `address(0)`.
 - **What it can't do:** touch a pool, a token, a vault or anyone's fees, pause anything, or upgrade anything. `renounceOwnership` is disabled so the fee settings can't get stuck.
-- **Launch fees stay in the factory** until anyone calls `withdrawLaunchFees()`. They're paid through the USDC ERC-20 view, so a fee-splitter contract without a payable `receive()` can be the recipient.
+- **Launch fees stay in the factory** until the owner calls `withdrawLaunchFees()` (owner only, for the same reason as `claimPlatform`). They're paid through the USDC ERC-20 view, so a fee-splitter contract without a payable `receive()` can be the recipient.
 
 ## What the audit found and what changed
 
@@ -88,8 +89,11 @@ What the Telegram bot trades through:
 | **Low:** `setPlatform(0)` and one-step handovers could brick admin. | Two-step owner and a non-zero recipient. |
 | **Low:** `launchFee` was unbounded, silent and overpayable. | Bounded, emits an event, and must be paid exactly. |
 | **Info:** rounding the start tick down set a $5,025 start. | Rounded to the nearest tick instead: $4,995.40. |
+| **Low (round 2):** `Deploy.s.sol` accepted any non-zero owner, set in one step in the constructor. | The script refuses anything but a Safe on Arc with 2+ signers and threshold 2+, an EIP-7702 EOA, the broadcaster, the wrong chain, and a fee recipient that would lose the fees. |
+| **Low (round 2):** anyone could flush platform and launch fees, so a recipient rotation could be raced. | `claimPlatform` and `withdrawLaunchFees` are owner-only. |
 
 **Still true, by design:**
+- **No atomic creator buy (round 2, low).** A creator's first buy is a separate transaction after `launch`, so someone watching for `Launched` can buy first. A `launchAndBuy` would close that; it isn't built yet.
 - **The USDC paid for redeemed tokens stays in the pool for good.** The position can never be withdrawn, and burned tokens can't be sold back, so that USDC is out of reach. It's the price of locked liquidity. It's small unless a large share of the supply is redeemed.
 - **A buy needs full liquidity.** An exact-in buy either fills completely or reverts; a price-limited buy should use exact-out.
 
@@ -116,7 +120,12 @@ LAUNCHPAD_OWNER=0xTreasuryMultisig FEE_RECIPIENT=0xFeeRecipient \
 forge script script/Deploy.s.sol --rpc-url https://rpc.mainnet.arc.io --broadcast --private-key $DEPLOYER_KEY
 ```
 
-The script makes two transactions, the factory (which deploys the hook) and the router. It checks every address and setting, then prints `FACTORY_ADDRESS`, `HOOK_ADDRESS` and `ROUTER_ADDRESS` for `../tgpad/.env`.
+The script makes two transactions, the factory (which deploys the hook) and the router. The factory's owner fixes the launch fee and where platform fees go for every pool it ever launches, and it's set in the constructor, so before sending anything the script refuses:
+- any chain but Arc mainnet (5042);
+- a `LAUNCHPAD_OWNER` that isn't a Safe on Arc with at least 2 signers and a threshold of 2 or more: an address with no code, an EIP-7702-delegated EOA, a contract without `getThreshold`/`getOwners`, or the broadcaster itself;
+- a `FEE_RECIPIENT` that would lose the fees: `0x…dEaD`, the USDC system token, the PoolManager, or a system address.
+
+After deploying it checks every address and setting, then prints `FACTORY_ADDRESS`, `HOOK_ADDRESS` and `ROUTER_ADDRESS` for `../tgpad/.env`.
 
 ## Arc facts this relies on (checked against mainnet)
 

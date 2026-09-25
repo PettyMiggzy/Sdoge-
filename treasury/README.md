@@ -10,21 +10,16 @@ configured and must not be re-enabled as is:
 
 Staking is funded by the team's Safe from NFT profits instead:
 - Studio.withdraw() and marketplace fees go to the staking contract's `contributeUSDC`.
-- The owner (or notifyUnallocated) streams that USDC out.
+- The owner starts reward periods from that USDC. After the first one, anyone can restart an
+  idle pool with `notifyUnallocated()`.
 
 If automation comes back, use a dedicated funding wallet with explicit amounts, idempotent
 runs keyed on chain state, SHA-pinned actions, and `persist-credentials: false`.
 
-**Earlier status note: not the current plan, kept as reference infrastructure.**
-Staking's primary funding source is now the contract's own early-withdrawal
-penalty (self-funded by stakers, zero tax/Treasury involvement) — see
-`../contracts/README.md`. The tax-revenue split this script implements
-(Treasury 50% / Buyback 30% / Staking 20%) was built, then set aside before
-shipping, because it still spends the project's own tax revenue rather than
-funding rewards for free. This script and workflow are left in place,
-inert, in case the tax-revenue path is revisited later — they don't run
-against anything live and don't need to be deleted to build the penalty
-path.
+**Earlier plan, kept as reference only.** The tax-revenue split this script
+implements (Treasury 50% / Buyback 30% / Staking 20%) was built, then set
+aside before shipping. The script and workflow are left in place, inert, in
+case the tax-revenue path is revisited; they don't run against anything live.
 
 Watches the tax wallet, skims Staking's 20% cut off any newly-arrived tax
 revenue, and sends it to the deployed `SDOGEStaking` contract. Runs as a

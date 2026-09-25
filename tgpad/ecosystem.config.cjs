@@ -10,7 +10,11 @@ module.exports = {
       autorestart: true,
       max_restarts: 50,
       restart_delay: 5000,
-      kill_timeout: 10000,
+      // On SIGINT the bot stops taking new work and waits for transactions
+      // already sent (a receipt wait can take up to 120 s, see txTimeoutSec)
+      // before it saves and exits; anything still unconfirmed is saved by hash
+      // and checked after the restart. pm2 must not SIGKILL it before that.
+      kill_timeout: 150000,
       max_memory_restart: '350M',
     },
   ],

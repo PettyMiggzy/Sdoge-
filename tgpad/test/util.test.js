@@ -4,7 +4,7 @@ import { KeyedSerializer, SlidingWindow, parseAmount, parsePercentBps } from '..
 import { esc, fmtPrice, fmtUnits } from '../src/format.js';
 import { redeemValue6, recordSwap, usdPerToken, volume24h } from '../src/market.js';
 import { Sender } from '../src/telegram.js';
-import { friendlyError } from '../src/errors.js';
+import { TxError, decodeRevert, describeFailure, failureReason } from '../src/errors.js';
 
 test('parseAmount is strict', () => {
   assert.equal(parseAmount('10', 6), 10_000_000n);
@@ -103,10 +103,47 @@ test('Sender paces one chat but never blocks other chats behind it', async () =>
   assert.ok(waits.includes(3000), 'second channel message waited ~3s');
 });
 
-test('friendlyError never leaks raw RPC text', () => {
-  assert.match(friendlyError(new Error('insufficient funds for gas * price + value')), /Not enough USDC/);
-  assert.match(friendlyError({ shortMessage: 'execution reverted: TooLittleReceived()' }), /slippage/);
-  assert.match(friendlyError(new Error('Blocked address')), /blocked/);
-  const generic = friendlyError(new Error('rpc https://secret-key@node/ exploded'));
+test('R2-TGPAD-23: a chat waiting out its own gap doesn\'t hold other chats back', async () => {
+  const t0 = Date.now();
+  const sent = [];
+  const tg = { call: async (method, p) => { sent.push({ chat: String(p.chat_id), at: Date.now() - t0 }); return { message_id: 1 }; } };
+  const s = new Sender(tg, { privateGapMs: 400, groupGapMs: 1200, globalGapMs: 8 });
+  const a1 = s.send('111', 'sendMessage', { text: 'A1' });
+  const a2 = s.send('111', 'sendMessage', { text: 'A2' });
+  await a1;
+  await new Promise((r) => setTimeout(r, 20));
+  await Promise.all([s.send('222', 'sendMessage', { text: 'B1' }), s.send('333', 'sendMessage', { text: 'C1' })]);
+  const at = (chat) => sent.find((x) => x.chat === chat).at;
+  assert.ok(at('222') < 200 && at('333') < 200, `B at ${at('222')} ms, C at ${at('333')} ms: not behind A's 400 ms gap`);
+  await a2;
+  assert.ok(sent.filter((x) => x.chat === '111')[1].at >= 390, 'A itself is still paced');
+
+  // Queued channel posts don't delay private replies either.
+  const c1 = s.send('-1001', 'sendMessage', { text: 'alert 1' });
+  const c2 = s.send('-1001', 'sendMessage', { text: 'alert 2' });
+  await c1;
+  const t1 = Date.now() - t0;
+  await s.send('444', 'sendMessage', { text: 'reply' });
+  assert.ok(sent.find((x) => x.chat === '444').at - t1 < 200, 'a private reply is not stuck behind the channel\'s 1.2 s gap');
+  await c2;
+});
+
+test('Sender skips a send whose guard fails at the last moment', async () => {
+  const calls = [];
+  const s = new Sender({ call: async (m, p) => { calls.push(p); return { message_id: 1 }; } }, { privateGapMs: 0, groupGapMs: 0, globalGapMs: 0 });
+  assert.equal(await s.send('-1001', 'sendMessage', { text: 'x' }, { guard: () => false }), null);
+  assert.equal(calls.length, 0);
+});
+
+test('failure messages never leak raw RPC text', () => {
+  const text = (err) => describeFailure(err, { explorerUrl: 'https://explorer.arc.io', kind: 'buy' });
+  const notSent = (err) => new TxError('not_sent', err.message, { cause: err, reason: failureReason(err) });
+  assert.match(text(notSent(new Error('insufficient funds for gas * price + value'))), /Not enough USDC/);
+  // The router's real custom error, not a made-up revert string.
+  const data = '0x2c19b8b8' + '0'.repeat(63) + '1' + '0'.repeat(63) + '2';
+  assert.equal(decodeRevert(data).name, 'InsufficientOutput');
+  assert.match(text(new TxError('not_sent', 'x', { reason: decodeRevert(data) })), /slippage/);
+  assert.match(text(notSent(new Error('Blocked address'))), /blocked/);
+  const generic = text(notSent(new Error('rpc https://secret-key@node/ exploded')));
   assert.doesNotMatch(generic, /secret-key/);
 });

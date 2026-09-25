@@ -111,7 +111,7 @@
         <div class="feature-card">
           <div class="feature-card__icon"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 7H4a1 1 0 0 0-1 1v3a5 5 0 0 0 5 5h1a5 5 0 0 0 5-5V8a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 16v3m-4 2h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
           <h3>Feeds $SDOGE stakers</h3>
-          <p>A share of every credit sale goes to the staking reward pool, on-chain.</p>
+          <p>A share of every USDC credit sale can go to the staking reward pool, set aside on-chain the moment you buy.</p>
         </div>
       </div>
     </div>
@@ -134,6 +134,7 @@
         transferred or refunded, and only mint. Package terms are
         re-checked right before you pay.
       </p>
+      <p class="studio-note" id="studioShare" data-js-managed></p>
     </div>
   </section>
 
@@ -210,15 +211,25 @@
           <div class="panel__head"><span class="panel__title">How a drop works</span></div>
           <p class="studio-note">
             1. Pin your metadata folder (1.json, 2.json, ...) and save its
-            base URI. 2. Set the price, a per-wallet limit and optional
-            start and end times. 3. Open the drop and share its link.
-            Collectors pay your price, which goes to you; each mint uses one
-            of your credits, so keep enough for your supply.
+            base URI. 2. Save the drop terms: price, per-wallet limit and
+            optional start and end times (a free drop needs a supply cap).
+            3. Open the drop, check the saved terms it shows you, and share
+            its link. Collectors pay your price, which goes to you. Each
+            mint uses one of your credits, which all your collections
+            share; anyone can add credits to your wallet, so running out
+            only stops the drop until more are added. Close the drop when
+            you're done. If some tokens are rarer than others, point the
+            base URI at placeholder metadata until the drop sells out, then
+            reveal (and freeze).
           </p>
         </div>
       </div>
 
       <div class="eyebrow" style="margin-top: 48px;">Your collections</div>
+      <div class="studio-row" style="max-width: 640px;">
+        <label class="studio-field">Manage a collection you own (its address)<input class="studio-input" id="manageAddress" placeholder="0x..." /></label>
+      </div>
+      <div class="studio-actions"><button class="chip-btn" id="manageBtn">Show it here</button></div>
       <div id="myCollections" class="stakes-list">
         <p class="empty-state">Connect your wallet to see your collections.</p>
       </div>

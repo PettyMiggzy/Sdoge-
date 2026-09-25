@@ -128,11 +128,15 @@ contract LaunchpadFactoryTest is LaunchpadBase {
         assertEq(address(factory).balance, 6e18, "three launch fees held");
         assertEq(usdc.balanceOf(address(factory)), 6e6);
 
-        vm.prank(carol); // anyone can trigger it
+        vm.prank(carol); // only the owner pays them out, so a recipient being rotated out can't race it
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, carol));
+        factory.withdrawLaunchFees();
+        vm.startPrank(owner);
         assertEq(factory.withdrawLaunchFees(), 6e6);
         assertEq(usdc.balanceOf(address(splitter)), 6e6);
         assertEq(usdc.balanceOf(address(factory)), 0);
         assertEq(factory.withdrawLaunchFees(), 0);
+        vm.stopPrank();
     }
 
     function test_setLaunchFee_boundsCatchTheSixDecimalMistake() public {

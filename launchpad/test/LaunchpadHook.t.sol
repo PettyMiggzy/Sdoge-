@@ -174,6 +174,10 @@ contract LaunchpadHookTest is LaunchpadBase {
         assertEq(hook.owed(creator), 0);
         assertEq(hook.claim(creator), 0);
 
+        vm.prank(carol);
+        vm.expectRevert(LaunchpadHook.NotOwner.selector); // only the factory's owner pays the platform out
+        hook.claimPlatform();
+        vm.prank(owner);
         assertEq(hook.claimPlatform(), 20e6);
         assertEq(usdc.balanceOf(feeRecipient), 20e6);
         assertEq(pm.balanceOf(address(hook), USDC_ID), 0, "every claim was backed");
@@ -183,6 +187,7 @@ contract LaunchpadHookTest is LaunchpadBase {
         buy(alice, 1000e6);
         vm.prank(owner);
         factory.setFeeRecipient(carol);
+        vm.prank(owner);
         hook.claimPlatform();
         assertEq(usdc.balanceOf(carol), 10e6);
         assertEq(usdc.balanceOf(feeRecipient), 0);

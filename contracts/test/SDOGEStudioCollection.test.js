@@ -52,8 +52,36 @@ describe("SDOGEStudioCollection", function () {
         "uri must be 1-512 printable ASCII characters, no spaces"
       );
       await expect(
-        f.club.connect(f.alice).mintWithURIs(f.alice.address, Array(101).fill("ipfs://x"))
+        f.club.connect(f.alice).mintWithURIs(f.alice.address, Array(51).fill("ipfs://x"))
       ).to.be.revertedWith("batch too large");
+    });
+
+    it("the biggest batches fit well inside Arc's 16,777,216 gas per transaction", async function () {
+      const f = await deployFixture();
+      const TX_CAP = 16_777_216n;
+      const c = f.club.connect(f.alice);
+      const uri = (i, len) => "ipfs://" + String(i).padStart(len - 7, "a");
+      // 50 URIs of 120 bytes: the 6,000-byte budget exactly
+      const even = Array.from({ length: 50 }, (_, i) => uri(i, 120));
+      const tooBig = [even[0] + "x", ...even.slice(1)];
+      await expect(c.mintWithURIs(f.bob.address, tooBig)).to.be.revertedWith("too many URI bytes for one transaction");
+      // the same budget split to fill as many storage slots as possible
+      const slotHeavy = [...Array.from({ length: 40 }, (_, i) => uri(i, 97)), ...Array.from({ length: 10 }, (_, i) => uri(i, 212))];
+      expect(slotHeavy.join("").length).to.equal(6000);
+      const recipients = Array.from({ length: 200 }, () => ethers.Wallet.createRandom().address);
+      // (sent with an explicit limit: Hardhat's gas estimator overshoots big batches past the cap)
+      const opts = { gasLimit: TX_CAP - 1n };
+      for (const tx of [
+        () => c.mintWithURIs(f.bob.address, even, opts),
+        () => c.mintWithURIs(f.bob.address, slotHeavy, opts),
+        () => c.mintBatch(f.bob.address, 200, opts),
+        () => c.airdrop(recipients, opts),
+      ]) {
+        const receipt = await (await tx()).wait();
+        expect(receipt.gasUsed).to.be.lessThan((TX_CAP * 2n) / 3n);
+      }
+      expect(await f.club.tokenURI(50)).to.equal(even[49]);
+      expect(await f.club.tokenURI(100)).to.equal(slotHeavy[49]);
     });
 
     it("airdrop sends one token to each recipient, even ones without receiver hooks", async function () {
@@ -127,7 +155,9 @@ describe("SDOGEStudioCollection", function () {
       );
       await expect(f.club.connect(f.alice).setBaseURI("ipfs://x/", "a b")).to.be.revertedWith("bad suffix");
       await expect(f.club.connect(f.alice).setContractURI("ipfs://bafy/c.json")).to.emit(f.club, "ContractURIUpdated");
-      await f.club.connect(f.alice).freezeMetadata();
+      await expect(f.club.connect(f.alice).freezeMetadata()).to.be.revertedWith("set a base URI before freezing");
+      await f.club.connect(f.alice).setBaseURI("ipfs://bafy/club/", ".json");
+      await expect(f.club.connect(f.alice).freezeMetadata()).to.emit(f.club, "MetadataFrozen");
       await expect(f.club.connect(f.alice).setBaseURI("ipfs://y/", "")).to.be.revertedWith("metadata is frozen");
       await expect(f.club.connect(f.alice).setContractURI("ipfs://y")).to.be.revertedWith("metadata is frozen");
       expect(await f.club.metadataFrozen()).to.equal(true);
@@ -194,6 +224,8 @@ describe("SDOGEStudioCollection", function () {
       const f = await deployFixture();
       await expect(f.club.connect(f.alice).setDropOpen(true)).to.be.revertedWith("set a base URI first");
       await f.club.connect(f.alice).setBaseURI("ipfs://bafy/club/", "");
+      await expect(f.club.connect(f.alice).setDropOpen(true)).to.be.revertedWith("set the drop terms first");
+      expect(await f.club.dropConfigured()).to.equal(false);
       const now = await time.latest();
       await f.club.connect(f.alice).setDrop(E("1"), 0, now + 100, now + 200);
       await expect(f.club.connect(f.bob).publicMint(1, { value: E("1") })).to.be.revertedWith("drop is closed");
@@ -225,9 +257,19 @@ describe("SDOGEStudioCollection", function () {
       const f = await deployFixture();
       await f.club.connect(f.alice).setBaseURI("ipfs://bafy/club/", "");
       await f.club.connect(f.alice).setDrop(0, 1, 0, 0);
+      await expect(f.club.connect(f.alice).setDropOpen(true)).to.be.revertedWith("a free drop needs a supply cap");
+      await f.club.connect(f.alice).setMaxSupply(50);
       await f.club.connect(f.alice).setDropOpen(true);
       await f.club.connect(f.bob).publicMint(1);
       expect(await f.studio.credits(f.alice.address)).to.equal(999);
+    });
+
+    it("an open paid drop with no cap can't be made free", async function () {
+      const f = await withDrop();
+      await expect(f.club.connect(f.alice).setDrop(0, 3, 0, 0)).to.be.revertedWith("a free drop needs a supply cap");
+      await f.club.connect(f.alice).setDropOpen(false);
+      await f.club.connect(f.alice).setDrop(0, 3, 0, 0); // closed: fine, it can't open until there's a cap
+      await expect(f.club.connect(f.alice).setDropOpen(true)).to.be.revertedWith("a free drop needs a supply cap");
     });
 
     it("contract minters need the receiver hook, and can't re-enter", async function () {
@@ -280,12 +322,40 @@ describe("SDOGEStudioCollection", function () {
       await f.club.connect(f.alice).transferOwnership(f.bob.address);
       await f.club.connect(f.carol).publicMint(1, { value: E("2") }); // still Alice's credits
       expect(await f.studio.credits(f.alice.address)).to.equal(999);
-      await f.club.connect(f.bob).acceptOwnership();
+      await expect(f.club.connect(f.bob).acceptOwnership()).to.emit(f.club, "DropOpened").withArgs(false);
+      // the drop closed with the handover: the new owner decides when their credits start paying
+      await expect(f.club.connect(f.carol).publicMint(1, { value: E("2") })).to.be.revertedWith("drop is closed");
+      await f.club.connect(f.bob).setDropOpen(true);
       await expect(f.club.connect(f.carol).publicMint(1, { value: E("2") })).to.be.revertedWith("not enough mint credits");
       await f.studio.connect(f.bob).buyCredits(1, 10, f.bob.address, { value: E("20") });
       await f.club.connect(f.carol).publicMint(1, { value: E("2") });
       expect(await f.studio.credits(f.bob.address)).to.equal(9);
+      expect(await f.studio.credits(f.alice.address)).to.equal(999);
       await expect(f.club.connect(f.bob).renounceOwnership()).to.be.revertedWith("renounce disabled");
+    });
+
+    it("the payout and royalty that pointed at the old owner follow the new one", async function () {
+      const f = await deployFixture(); // Alice: payout and 5% royalty to herself
+      await f.club.connect(f.alice).transferOwnership(f.bob.address);
+      await expect(f.club.connect(f.bob).acceptOwnership())
+        .to.emit(f.club, "PayoutUpdated")
+        .withArgs(f.bob.address)
+        .and.to.emit(f.club, "RoyaltyUpdated")
+        .withArgs(f.bob.address, 500);
+      expect(await f.club.payout()).to.equal(f.bob.address);
+      const [to, amount] = await f.club.royaltyInfo(1, E("100"));
+      expect([to, amount]).to.deep.equal([f.bob.address, E("5")]);
+    });
+
+    it("a payout or royalty set to someone else stays where it is", async function () {
+      const f = await deployFixture();
+      await f.club.connect(f.alice).setPayout(f.carol.address);
+      await f.club.connect(f.alice).setRoyalty(f.carol.address, 250);
+      await f.club.connect(f.alice).transferOwnership(f.bob.address);
+      await expect(f.club.connect(f.bob).acceptOwnership()).to.not.emit(f.club, "PayoutUpdated");
+      expect(await f.club.payout()).to.equal(f.carol.address);
+      const [to] = await f.club.royaltyInfo(1, E("100"));
+      expect(to).to.equal(f.carol.address);
     });
   });
 });

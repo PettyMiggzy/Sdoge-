@@ -2,7 +2,13 @@
 // scope across the <script> tags, a stub DOM, alert/confirm/prompt, and an injected wallet
 // (window.ethereum) wired to Hardhat's in-process chain. Arc's chain id and RPC are swapped for
 // the local chain's, and SDOGE_CONTRACTS for the addresses under test.
+//
+// Reads normally go through an unbatched provider on the local chain. With { rpc: "limited" } the
+// page's own ArcRpcProvider is used instead, pointed at a local relay that behaves like Arc's
+// public RPC under load: about 20 calls per second per client, over-limit items inside a batch
+// answered with -32005 in an HTTP 200, and a lone over-limit request answered with HTTP 429.
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const vm = require("vm");
 const ethersLib = require("ethers");
@@ -59,13 +65,73 @@ function makeWallet(hreProvider, state) {
   };
 }
 
+// A JSON-RPC relay to the local chain with Arc's public-RPC rate limit.
+async function startLimitedRpc(hreProvider, { perSecond = 20 } = {}) {
+  const recent = []; // { t, cost } of calls in the last second
+  const stats = { requests: 0, batchSizes: [], limitedInBatch: 0, http429: 0 };
+  const cost = (method) => (method === "eth_chainId" ? 0 : method === "eth_getCode" || method === "eth_getBalance" ? 2 / 3 : 1);
+  const take = (method) => {
+    const now = Date.now();
+    while (recent.length && now - recent[0].t >= 1000) recent.shift();
+    const used = recent.reduce((sum, w) => sum + w.cost, 0);
+    if (used + cost(method) > perSecond) return false;
+    recent.push({ t: now, cost: cost(method) });
+    return true;
+  };
+  const limited = (id) => ({ jsonrpc: "2.0", id, error: { code: -32005, message: "rate limit exceeded" } });
+  const answer = async ({ id, method, params }) => {
+    try {
+      return { jsonrpc: "2.0", id, result: await hreProvider.request({ method, params: params ?? [] }) };
+    } catch (e) {
+      return { jsonrpc: "2.0", id, error: { code: e.code ?? -32000, message: e.message, data: e.data } };
+    }
+  };
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", async () => {
+      const payload = JSON.parse(body);
+      stats.requests += 1;
+      const reply = (status, json) => {
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(JSON.stringify(json));
+      };
+      if (Array.isArray(payload)) {
+        stats.batchSizes.push(payload.length);
+        const out = [];
+        for (const item of payload) {
+          if (take(item.method)) out.push(await answer(item));
+          else {
+            stats.limitedInBatch += 1;
+            out.push(limited(item.id));
+          }
+        }
+        return reply(200, out);
+      }
+      stats.batchSizes.push(1);
+      if (!take(payload.method)) {
+        stats.http429 += 1;
+        return reply(429, limited(payload.id));
+      }
+      return reply(200, await answer(payload));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `http://127.0.0.1:${server.address().port}`,
+    stats,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
 /**
  * files:      e.g. ['arc.js', 'wallet.js', 'nft.js', 'marketplace.js'], loaded in order
  * contracts:  SDOGE_CONTRACTS overrides, e.g. { collectibles: '0x...' }
  * account:    the address the injected wallet exposes
  * search:     location.search (for studio.html?drop=0x...)
+ * rpc:        "limited" to read through the page's own provider and a rate-limited relay
  */
-async function loadPage({ files, contracts = {}, hreProvider, account, search = "" }) {
+async function loadPage({ files, contracts = {}, hreProvider, account, search = "", rpc = "direct" }) {
   const elements = {};
   const alerts = [];
   const confirms = [];
@@ -84,6 +150,7 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
   };
   const wallet = makeWallet(hreProvider, state);
   const { chainId } = await new ethersLib.BrowserProvider(hreProvider).getNetwork();
+  const relay = rpc === "limited" ? await startLimitedRpc(hreProvider) : null;
 
   const sandbox = {
     document,
@@ -130,9 +197,14 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
   for (const f of files) {
     let src = fs.readFileSync(path.join(SITE_JS, f), "utf8");
     if (f === "arc.js") {
-      src = src
-        .replace("const ARC_CHAIN_ID = 5042n;", `const ARC_CHAIN_ID = ${chainId}n;`)
-        .replace(/const arcReadProvider = new ethers\.JsonRpcProvider\([^;]*\);/, "const arcReadProvider = __testReadProvider;");
+      const swap = (from, to) => {
+        const next = src.replace(from, to);
+        if (next === src) throw new Error(`fe-harness: couldn't find ${from} in arc.js; update the harness`);
+        src = next;
+      };
+      swap("const ARC_CHAIN_ID = 5042n;", `const ARC_CHAIN_ID = ${chainId}n;`);
+      if (relay) swap("const ARC_RPC_URL = 'https://rpc.mainnet.arc.io';", `const ARC_RPC_URL = '${relay.url}';`);
+      else swap(/const arcReadProvider = new ArcRpcProvider\([^;]*\);/, "const arcReadProvider = __testReadProvider;");
       for (const [key, value] of Object.entries(contracts)) {
         const re = new RegExp(`^(\\s*${key}: )'[^']*',$`, "m");
         if (!re.test(src)) throw new Error(`no ${key} in SDOGE_CONTRACTS`);
@@ -154,6 +226,10 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
     setAccount: (a) => (state.account = a),
     wallet,
     reloads: () => reloads,
+    rpcStats: relay?.stats,
+    close: async () => {
+      if (relay) await relay.close();
+    },
     async ready() {
       for (const fn of domListeners.DOMContentLoaded || []) await fn();
     },

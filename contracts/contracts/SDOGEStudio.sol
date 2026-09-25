@@ -7,6 +7,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {IERC173Owner} from "./interfaces/IERC173Owner.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SDOGEStudioCollection} from "./SDOGEStudioCollection.sol";
 
@@ -25,10 +26,11 @@ interface IStudioRewardsPool {
 /// Minting is fully open by design: no review, no filter, no takedown. Nothing here or in any
 /// collection lets anyone change or move someone else's token.
 ///
-/// Money: USDC from credit sales stays here until anyone calls withdraw(). That sends
-/// `poolShareBps` of it to the staking reward pool (contributeUSDC) and the rest to the
-/// treasury. $SDOGE payments are burned (sent to 0x...dEaD) on the spot. Credits can't be
-/// transferred or refunded; they only mint.
+/// Money: each USDC credit sale sets aside `poolShareBps` of its price for the staking reward
+/// pool at the moment of sale (`poolOwed`); the rest belongs to the treasury. Anyone can call
+/// withdraw() to pay both out. A recipient that can't take USDC right now doesn't block the
+/// other, and its share stays owed. $SDOGE payments are burned (sent to 0x...dEaD) on the spot.
+/// Credits can't be transferred or refunded; they only mint.
 contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -56,13 +58,16 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public credits;
 
     mapping(address => bool) public isCollection;
-    mapping(address => bool) public verified;
+    /// The owner a collection had when the team verified it. The badge only counts while that
+    /// owner still owns the collection (see verified()).
+    mapping(address => address) public verifiedOwner;
     mapping(address => address[]) private _collectionsOf;
     address[] private _collections;
 
     address public treasury;
     address public rewardsPool; // SDOGEStaking (contributeUSDC); address(0) = everything to the treasury
-    uint256 public poolShareBps; // share of USDC revenue for the pool
+    uint256 public poolShareBps; // share of each USDC credit sale set aside for the pool
+    uint256 public poolOwed; // USDC set aside for the pool and not paid yet
 
     event PackageAdded(uint256 indexed packageId, uint256 mints, uint256 priceWei, uint256 priceSdoge);
     event PackageUpdated(uint256 indexed packageId, uint256 mints, uint256 priceWei, uint256 priceSdoge);
@@ -88,6 +93,7 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
     event TreasuryUpdated(address indexed treasury);
     event RewardsPoolUpdated(address indexed pool, uint256 shareBps);
     event Withdrawn(uint256 toPool, uint256 toTreasury);
+    event PayoutFailed(address indexed to, uint256 amount);
 
     constructor(
         address owner_,
@@ -114,9 +120,13 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
             implementation, address(this), "SDOGE Community Art", "SDOGEART", 0, address(0), 0, communityContractURI, true
         );
         communityCollection = community;
-        verified[community] = true;
+        verifiedOwner[community] = address(this);
         emit VerifiedSet(community, true);
     }
+
+    /// @notice USDC can arrive here outside credit sales (the Community collection's withdraw pays
+    ///         its balance here). It goes to the treasury on the next withdraw().
+    receive() external payable {}
 
     // ---------- Credits ----------
 
@@ -129,6 +139,7 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
         require(msg.value == p.priceWei, "incorrect payment");
         require(to != address(0), "bad recipient");
         credits[to] += p.mints;
+        if (rewardsPool != address(0)) poolOwed += (msg.value * poolShareBps) / 10_000;
         emit CreditsBought(msg.sender, to, packageId, p.mints, msg.value, 0);
     }
 
@@ -199,20 +210,32 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
 
     // ---------- Revenue ----------
 
-    /// @notice Sends USDC revenue out: `poolShareBps` to the staking reward pool, the rest to
-    ///         the treasury. Anyone can call it.
+    /// @notice Pays out USDC revenue: what's owed to the staking pool (set aside at each sale)
+    ///         and everything else to the treasury. Anyone can call it. A recipient that refuses
+    ///         the payment doesn't block the other; its share stays here for the next call.
     function withdraw() external nonReentrant {
-        uint256 amount = address(this).balance;
-        require(amount > 0, "nothing to withdraw");
+        require(address(this).balance > 0, "nothing to withdraw");
+        uint256 paidPool;
+        uint256 owed = poolOwed;
         address pool = rewardsPool;
-        uint256 toPool = pool == address(0) ? 0 : (amount * poolShareBps) / 10_000;
-        uint256 toTreasury = amount - toPool;
-        if (toPool > 0) IStudioRewardsPool(pool).contributeUSDC{value: toPool}();
+        if (owed > 0 && pool != address(0)) {
+            (bool ok,) = pool.call{value: owed}(abi.encodeCall(IStudioRewardsPool.contributeUSDC, ()));
+            if (ok) {
+                poolOwed = 0;
+                paidPool = owed;
+            } else {
+                emit PayoutFailed(pool, owed);
+            }
+        }
+        uint256 paidTreasury;
+        uint256 toTreasury = address(this).balance - poolOwed;
         if (toTreasury > 0) {
             (bool sent,) = treasury.call{value: toTreasury}("");
-            require(sent, "treasury transfer failed");
+            if (sent) paidTreasury = toTreasury;
+            else emit PayoutFailed(treasury, toTreasury);
         }
-        emit Withdrawn(toPool, toTreasury);
+        require(paidPool + paidTreasury > 0, "nothing could be paid");
+        emit Withdrawn(paidPool, paidTreasury);
     }
 
     // ---------- Admin ----------
@@ -242,12 +265,19 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
         emit PackageActiveSet(packageId, active);
     }
 
-    /// @notice The Verified badge the site shows for real projects. Anything else is shown as an
-    ///         unverified creator collection.
+    /// @notice The Verified badge the site shows for real projects, tied to the collection's
+    ///         current owner: it lapses by itself if the collection changes hands. Anything else
+    ///         is shown as an unverified creator collection.
     function setVerified(address collection, bool isVerified) external onlyOwner {
         require(isCollection[collection], "not a Studio collection");
-        verified[collection] = isVerified;
+        verifiedOwner[collection] = isVerified ? IERC173Owner(collection).owner() : address(0);
         emit VerifiedSet(collection, isVerified);
+    }
+
+    /// @notice Collection-level metadata (name, description, image for marketplaces) of the shared
+    ///         Community Art collection.
+    function setCommunityContractURI(string calldata uri) external onlyOwner {
+        SDOGEStudioCollection(communityCollection).setCommunityContractURI(uri);
     }
 
     function setTreasury(address newTreasury) external onlyOwner {
@@ -256,8 +286,9 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
         emit TreasuryUpdated(newTreasury);
     }
 
-    /// @notice Points `shareBps` of USDC revenue at SDOGEStaking (anything with
-    ///         contributeUSDC()). Must be a contract; address(0) with share 0 turns it off.
+    /// @notice Points `shareBps` of each future USDC credit sale at SDOGEStaking (anything with
+    ///         contributeUSDC()). Must be a contract; address(0) with share 0 turns it off. USDC
+    ///         already set aside stays owed to the pool and goes to whichever pool is set.
     function setRewardsPool(address pool, uint256 shareBps) external onlyOwner {
         require(shareBps <= 10_000, "share above 100%");
         if (pool == address(0)) require(shareBps == 0, "no pool to share with");
@@ -272,6 +303,12 @@ contract SDOGEStudio is Ownable2Step, ReentrancyGuard {
     }
 
     // ---------- Views ----------
+
+    /// @notice True while the collection is still owned by whoever owned it when it was verified.
+    function verified(address collection) external view returns (bool) {
+        address o = verifiedOwner[collection];
+        return o != address(0) && o == IERC173Owner(collection).owner();
+    }
 
     function packageCount() external view returns (uint256) {
         return _packages.length;
