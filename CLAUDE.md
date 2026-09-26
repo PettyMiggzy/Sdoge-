@@ -185,8 +185,12 @@ creator-set tax 0–10% per side.
   Studio's collection template `0x9d56156689F7684D275Eb34F5604f8E05D193D95`;
   `scripts/verify-sourcify.js`). Tested on the live site with real transactions
   (stake, split unstake to 2 wallets, early exit, Studio 1-of-1, marketplace sale).
-  All 4 contracts offered to `0x5899…5914` (2026-09-26); until it accepts on
-  `owner.html`, the deploy wallet is still their owner.
+  `0x5899…5914` accepted all 4 on `owner.html` (2026-09-26): the deploy wallet has
+  no power left, and its leftovers went back to `0x5899…5914`. Still up to the owner
+  (owner.html walks it): the seed stake (365-day tier), then starting rewards,
+  then routing Studio sales and marketplace fees to staking. Until then all of that
+  revenue goes to `0x5899…5914`. 15,000 SDOGE of early-exit penalties from the
+  launch test wait in the pool and stream to stakers once rewards start.
 
   Treasury and fee recipient: `0x5899…5914`. There's no Safe, so the launch is
   supervised (owner said go live, 2026-09-26): a throwaway deploy wallet
