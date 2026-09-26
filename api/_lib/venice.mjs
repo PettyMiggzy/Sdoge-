@@ -30,7 +30,7 @@ export async function veniceBalance() {
  * Makes one square image. { bytes, refused } where refused means Venice flagged or blurred it;
  * throws when Venice fails.
  */
-export async function veniceImage(model, prompt, negative) {
+export async function veniceImage(model, prompt, negative, { timeoutMs = 100_000 } = {}) {
   if (fake()) {
     if (process.env.AI_FAKE_FAIL === '1') throw new Error('Venice is down (test)');
     return { bytes: TINY_WEBP, refused: process.env.AI_FAKE_REFUSE === '1' };
@@ -47,14 +47,18 @@ export async function veniceImage(model, prompt, negative) {
     ...(model.resolution ? { resolution: model.resolution } : {}),
     ...(negative ? { negative_prompt: negative } : {}),
   };
-  const r = await fetch(`${API}/image/generate`, { method: 'POST', headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(110_000) });
-  const balance = Number(r.headers.get('x-venice-balance-usd'));
+  const r = await fetch(`${API}/image/generate`, { method: 'POST', headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+  // Only a real number updates the cached balance: a missing header must not read as $0.
+  const balanceHeader = r.headers.get('x-venice-balance-usd');
+  const balance = balanceHeader?.trim() ? Number(balanceHeader) : NaN;
   if (Number.isFinite(balance)) balanceCache = { usd: balance, at: Date.now() };
   if (!r.ok) {
     const detail = (await r.text()).slice(0, 300);
     throw Object.assign(new Error(`Venice answered ${r.status}`), { status: r.status, detail });
   }
-  const refused = r.headers.get('x-venice-is-content-violation') === 'true' || r.headers.get('x-venice-is-blurred') === 'true';
+  const refused = ['x-venice-is-content-violation', 'x-venice-is-adult-model-content-violation', 'x-venice-is-blurred'].some(
+    (h) => r.headers.get(h) === 'true',
+  );
   const b64 = (await r.json())?.images?.[0];
   if (!b64) throw new Error('Venice sent no image');
   return { bytes: Buffer.from(b64, 'base64'), refused };

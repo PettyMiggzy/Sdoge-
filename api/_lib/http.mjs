@@ -22,14 +22,25 @@ export function body(req) {
   return {};
 }
 
-// Off-switch: Studio AI stays closed on the live site, even with VENICE_API_KEY set, until the
-// fixes from the 2026-09-25 audit (prompt screening, credit storage) are in. Test runs use the
-// in-memory store and aren't affected.
-const STUDIO_AI_READY = false;
+// Requests per minute from one address, per endpoint. Kept in the function's memory, so it's a
+// speed bump (each running instance counts on its own), enough to stop one script hammering the
+// store or Arc's RPC.
+const hits = new Map(); // `${key}:${ip}` -> [times]
+export function limited(req, key, perMinute) {
+  const h = req.headers ?? {};
+  const ip = String(h['x-real-ip'] ?? String(h['x-forwarded-for'] ?? '').split(',')[0] ?? '').trim();
+  if (!ip) return false; // Vercel always sets these; only local runs and tests have none
+  const id = `${key}:${ip}`;
+  const now = Date.now();
+  const recent = (hits.get(id) ?? []).filter((t) => now - t < 60_000);
+  recent.push(now);
+  hits.set(id, recent);
+  if (hits.size > 5000) for (const [k, v] of hits) if (now - v[v.length - 1] >= 60_000) hits.delete(k);
+  return recent.length > perMinute;
+}
 
 /** Whether Studio AI can take money right now, and if not, why (in words for the page). */
 export async function availability() {
-  if (!STUDIO_AI_READY && process.env.AI_STORE !== 'memory') return { ok: false, reason: "Studio AI isn't switched on yet." };
   if (!veniceKey()) return { ok: false, reason: "Studio AI isn't switched on yet." };
   if (!blobToken() && process.env.AI_STORE !== 'memory') return { ok: false, reason: "Studio AI isn't switched on yet." };
   const usd = await veniceBalance();

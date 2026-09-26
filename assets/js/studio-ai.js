@@ -64,6 +64,7 @@ function aiStatus(text) {
 function aiSessionMessage(address, expires) {
   return [
     'SDOGE Studio: use my AI credits',
+    'Site: stabledoge.site',
     `Wallet: ${String(address).toLowerCase()}`,
     `Valid until: ${new Date(Number(expires) * 1000).toISOString()}`,
   ].join('\n');
@@ -163,7 +164,8 @@ async function refreshAiCredits(extra = []) {
     return null;
   }
   aiCreditsLeft = r.json.credits;
-  aiWrite('pending', r.json.problems.filter((p) => p.retry).map((p) => p.hash));
+  // Keep what's not on Arc yet, and what the server had no time to check this call.
+  aiWrite('pending', [...r.json.problems.filter((p) => p.retry).map((p) => p.hash), ...(r.json.unchecked || [])]);
   const bad = r.json.problems.filter((p) => !p.retry);
   if (bad.length) aiStatus(bad.map((p) => `Payment ${shortAddr(p.hash)}: ${p.reason}.`).join(' '));
   aiShowCredits();
@@ -225,24 +227,25 @@ async function createAiImage() {
   if (!prompt) return alert('Describe the image you want.');
   if (!aiQuote?.available) return alert(aiQuote?.reason || "Studio AI isn't open right now.");
   if (aiBusy) return;
-  if (!(await walletReady())) return;
-  const m = aiModelInfo();
-  if (aiCreditsLeft === null) await refreshAiCredits();
-  if (aiCreditsLeft !== null && m && aiCreditsLeft < m.credits) {
-    return alert(`${m.label} takes ${m.credits} ${m.credits === 1 ? 'credit' : 'credits'} and you have ${fmt(aiCreditsLeft)}. Buy a pack below.`);
-  }
-  let session;
-  try {
-    session = await aiSession();
-  } catch (err) {
-    console.error(err);
-    if (!userRejected(err)) alert(`Couldn't sign in: ${reason(err)}`);
-    return;
-  }
+  // Busy from the first click, before anything is awaited, so a double click makes one image.
   aiBusy = true;
   aiUpdateButton();
-  aiStatus('');
   try {
+    if (!(await walletReady())) return;
+    const m = aiModelInfo();
+    if (aiCreditsLeft === null) await refreshAiCredits();
+    if (aiCreditsLeft !== null && m && aiCreditsLeft < m.credits) {
+      return alert(`${m.label} takes ${m.credits} ${m.credits === 1 ? 'credit' : 'credits'} and you have ${fmt(aiCreditsLeft)}. Buy a pack below.`);
+    }
+    let session;
+    try {
+      session = await aiSession();
+    } catch (err) {
+      console.error(err);
+      if (!userRejected(err)) alert(`Couldn't sign in: ${reason(err)}`);
+      return;
+    }
+    aiStatus('');
     let r = await aiFetch('generate', { ...session, model: aiModel, prompt });
     if (r.status === 401 && r.json.signIn) {
       session = await aiSession(true); // the sign-in expired or was from another wallet: sign again once
@@ -299,7 +302,8 @@ async function addAiPayment() {
   if (!(await walletReady())) return;
   aiStatus('');
   const r = await refreshAiCredits([hash]);
-  if (r && !r.problems.some((p) => p.hash === hash.toLowerCase())) {
+  const h = hash.toLowerCase();
+  if (r && !r.problems.some((p) => p.hash === h) && !(r.unchecked || []).includes(h)) {
     aiEl('aiTxInput').value = '';
     aiStatus(`Added. You have ${fmt(aiCreditsLeft)} AI ${aiCreditsLeft === 1 ? 'credit' : 'credits'}.`);
   }

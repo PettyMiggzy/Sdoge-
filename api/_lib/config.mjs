@@ -17,6 +17,8 @@ const env = (name, fallback) => {
 
 export const CHAIN_ID = BigInt(env('AI_CHAIN_ID', '5042')); // Arc; tests run on a local chain
 export const ARC_RPC_URL = env('ARC_RPC_URL', 'https://rpc.mainnet.arc.io');
+/** A backup RPC (a paid provider, its key in the URL), tried when Arc's public RPC fails. Vercel env only. */
+export const arcRpcFallbackUrl = () => env('ARC_RPC_FALLBACK_URL', '');
 
 /** Where AI payments go: the owner's wallet. */
 export const PAYEE = env('AI_PAYEE', '0x5899a0576A94327a6316E01190f951edf7645914').toLowerCase();
@@ -62,15 +64,19 @@ export const MAX_PROMPT_CHARS = 1500;
 export const DAILY_LIMIT = Number(env('AI_DAILY_LIMIT', '400'));
 /** Below this Venice balance, the site stops selling credits and making images. */
 export const MIN_VENICE_BALANCE_USD = Number(env('AI_MIN_VENICE_BALANCE_USD', '3'));
-/** How long a signed session lasts at most. */
-export const SESSION_MAX_SECONDS = 7 * 24 * 3600;
+/** How long a signed session lasts at most (the page asks for a day). */
+export const SESSION_MAX_SECONDS = 24 * 3600;
 /** Payments this many blocks deep are final (Arc finalizes in one block; one more for margin). */
 export const MIN_CONFIRMATIONS = 1n;
 
-/** The message a wallet signs to use its credits. The page builds exactly the same text. */
+/**
+ * The message a wallet signs to use its credits. The page builds exactly the same text. It names
+ * the site, so a wallet showing it on any other site is a warning sign.
+ */
 export function sessionMessage(address, expires) {
   return [
     'SDOGE Studio: use my AI credits',
+    'Site: stabledoge.site',
     `Wallet: ${String(address).toLowerCase()}`,
     `Valid until: ${new Date(Number(expires) * 1000).toISOString()}`,
   ].join('\n');

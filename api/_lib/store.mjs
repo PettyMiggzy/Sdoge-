@@ -110,10 +110,10 @@ export async function balances(store, payer) {
 const slotPath = (hash, n) => `ai/credits/${hash}/${String(n).padStart(5, '0')}.json`;
 
 /**
- * Spends `n` credits of one payment: the claimed files, or null if it hasn't `n` left. Each
- * credit is its own file, created without overwriting, so a race can't double-spend one.
+ * Spends up to `n` credits of one payment: the claimed files. Each credit is its own file,
+ * created without overwriting, so a race can't double-spend one.
  */
-export async function claimCredits(store, hash, total, n, note) {
+async function claimUpTo(store, hash, total, n, note) {
   const taken = new Set((await store.list(`ai/credits/${hash}/`)).map((f) => f.pathname));
   const claimed = [];
   for (let i = 0; i < total && claimed.length < n; i++) {
@@ -127,6 +127,30 @@ export async function claimCredits(store, hash, total, n, note) {
       throw err;
     }
   }
+  return claimed;
+}
+
+/** Spends `n` credits of one payment: the claimed files, or null if it hasn't `n` left. */
+export async function claimCredits(store, hash, total, n, note) {
+  return claimFromPayments(store, [{ hash, credits: total }], n, note);
+}
+
+/**
+ * Spends `n` credits from the wallet's payments, oldest first, across as many payments as it
+ * takes (three single credits pay for a 3-credit image): the claimed files, or null (and nothing
+ * spent) if they don't hold `n` in all.
+ */
+export async function claimFromPayments(store, payments, n, note) {
+  const claimed = [];
+  try {
+    for (const p of payments) {
+      if (claimed.length >= n) break;
+      claimed.push(...(await claimUpTo(store, p.hash, p.credits, n - claimed.length, note)));
+    }
+  } catch (err) {
+    await releaseCredits(store, claimed);
+    throw err;
+  }
   if (claimed.length < n) {
     await releaseCredits(store, claimed);
     return null;
@@ -134,9 +158,17 @@ export async function claimCredits(store, hash, total, n, note) {
   return claimed;
 }
 
-/** Gives claimed credits back (the image failed). */
+/** Gives claimed credits back (the image failed). Tries three times, since a lost release is a lost credit. */
 export async function releaseCredits(store, claimed) {
-  if (claimed?.length) await store.remove(claimed.map((c) => c.url));
+  if (!claimed?.length) return;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await store.remove(claimed.map((c) => c.url));
+    } catch (err) {
+      if (attempt >= 3) throw err;
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+  }
 }
 
 // ---------- images, history and the daily count ----------
@@ -147,12 +179,13 @@ export async function imagesToday(store, limit) {
   return (await store.list(`ai/daily/${today()}/`, { limit })).length;
 }
 
-export async function saveImage(store, payer, bytes, note) {
+/** Stores an image and who made it. The prompt isn't kept: this store is public. */
+export async function saveImage(store, payer, bytes, { model }) {
   const sha = createHash('sha256').update(bytes).digest('hex');
   const image = await store.put(`ai/images/${sha}.webp`, bytes, { contentType: 'image/webp', overwrite: true, cacheSeconds: 31536000 });
   const now = Date.now();
   await Promise.allSettled([
-    store.put(`ai/history/${payer}/${now}-${sha}.json`, JSON.stringify({ ...note, image: image.url }), { contentType: 'application/json', overwrite: true }),
+    store.put(`ai/history/${payer}/${now}-${sha}.json`, JSON.stringify({ model, image: image.url }), { contentType: 'application/json', overwrite: true }),
     store.put(`ai/daily/${today(now)}/${now}-${randomBytes(4).toString('hex')}.json`, '{}', { contentType: 'application/json', overwrite: true }),
   ]);
   return image.url;

@@ -7,6 +7,7 @@ import {
   MIN_CONFIRMATIONS,
   PAYEE,
   SESSION_MAX_SECONDS,
+  arcRpcFallbackUrl,
   creditsFor,
   sessionMessage,
 } from './config.mjs';
@@ -14,8 +15,19 @@ import {
 export const isTxHash = (h) => typeof h === 'string' && /^0x[0-9a-fA-F]{64}$/.test(h);
 export const isAddress = (a) => typeof a === 'string' && /^0x[0-9a-fA-F]{40}$/.test(a);
 
+// Arc's public RPC first; if it fails (down, rate-limited), the backup RPC when one is set.
 async function rpc(method, params) {
-  const r = await fetch(ARC_RPC_URL, {
+  try {
+    return await rpcAt(ARC_RPC_URL, method, params);
+  } catch (err) {
+    const backup = arcRpcFallbackUrl();
+    if (!backup) throw err;
+    return rpcAt(backup, method, params);
+  }
+}
+
+async function rpcAt(url, method, params) {
+  const r = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'user-agent': 'sdoge-studio-ai/1.0' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),

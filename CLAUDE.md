@@ -35,8 +35,16 @@ for decisions to live in the repo so nothing depends on chat memory.
   pay USDC on Arc straight to the owner's wallet (0x5899…5914) for credits (0.25 USDC each, 10
   for 2, 50 for 8); every image costs at least 2.5x what Venice charges ("I need profit off
   it"). Uncensored except no sexual content with minors and no sexual images of real people.
-  `VENICE_API_KEY` lives only in the `sdoge` Vercel project's env, added by the owner; images go
-  to the public Blob store `sdoge-studio-ai`.
+  Those two blocks are enforced by three checks (word lists, two Venice text models on every
+  prompt, two vision models on every adult image); they are a hard line, not a setting, and
+  Studio AI stays closed if they can't run. `VENICE_API_KEY` lives only in the `sdoge` Vercel
+  project's env (sensitive; set 2026-09-26 at the owner's request); images go to the public Blob
+  store `sdoge-studio-ai`.
+- **Backup RPC:** `ARC_RPC_FALLBACK_URL` (the owner's Alchemy URL, key included) is set in both
+  Vercel projects (sensitive) and used only when `rpc.mainnet.arc.io` fails. Never in the repo
+  and never sent to a browser.
+- **Vercel plan: Pro** (checked 2026-09-26). Every push rebuilds the pad (build minutes cost real
+  money), so batch pushes.
 - **Staking an NFT boosts the stake**, by the Collectible design's tier
   (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%, placeholders until
   the owner decides). The owner can change them until `lockBoosts()`.

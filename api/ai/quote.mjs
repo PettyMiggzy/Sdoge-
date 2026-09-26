@@ -1,9 +1,10 @@
 // GET /api/ai/quote: what Studio AI sells, where to pay, and whether it's open right now.
 import { CHAIN_ID, CREDIT_PACKS, DAILY_LIMIT, MAX_PROMPT_CHARS, MEMO, MODELS, PAYEE } from '../_lib/config.mjs';
-import { availability, send } from '../_lib/http.mjs';
+import { availability, limited, send } from '../_lib/http.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return send(res, 405, { error: 'Use GET.' });
+  if (limited(req, 'quote', 60)) return send(res, 429, { error: 'Too many requests. Wait a minute and try again.' });
   const open = await availability();
   return send(res, 200, {
     available: open.ok,

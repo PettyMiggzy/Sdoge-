@@ -1,6 +1,15 @@
 // Real people most often targeted by fake sexual images, lowercase. rules.mjs refuses any sexual
-// prompt that names one of them (or any other capitalized full name). Not exhaustive; add names
-// as needed.
+// prompt that names one of them, in any case and at any position; the text models in screen.mjs
+// catch everyone else. Not exhaustive; add names as needed.
+
+/** Surnames and single names that on their own point at one of them ("nude Trump"). */
+export const FAMOUS_SHORT = [
+  'trump', 'obama', 'biden', 'kamala', 'melania', 'ivanka', 'hillary', 'pelosi', 'putin', 'zelensky', 'macron', 'trudeau', 'musk',
+  'zuckerberg', 'bezos', 'kardashian', 'kardashians', 'jenner', 'hadid', 'swift', 'beyonce', 'rihanna', 'zendaya', 'shakira', 'madonna',
+  'adele', 'lizzo', 'eilish', 'ariana', 'bieber', 'ratajkowski', 'pokimane', 'amouranth', 'ronaldo', 'messi', 'lebron', 'kelce',
+  'thunberg', 'markle', 'middleton', 'johansson', 'ortega', 'sweeney', 'robbie', 'gadot', 'jolie', 'aniston', 'minaj', 'cardi',
+];
+
 export const FAMOUS = [
   // music
   'taylor swift', 'beyonce', 'beyoncé', 'rihanna', 'ariana grande', 'billie eilish', 'selena gomez', 'dua lipa', 'lady gaga',
