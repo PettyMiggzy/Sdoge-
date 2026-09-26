@@ -1003,6 +1003,21 @@ describe("front end (assets/js)", function () {
       expect(p.alerts.at(-1)).to.match(/already owns the Staking contract/);
     });
 
+    it("lists the wallet's token approvals to swap apps and removes one", async function () {
+      const f = await deployAll();
+      const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+      await f.sdoge.connect(f.alice).approve(PERMIT2, ethers.MaxUint256);
+      const p = await ownerPage(f, f.alice);
+      await p.run("loadOwnerApprovals()");
+      expect(p.el("ownerApprovals").innerHTML).to.include("SDOGE → Permit2 (used by swap apps)");
+      expect(p.el("ownerApprovals").innerHTML).to.include("Unlimited");
+      await p.run("ownerRevoke(0)");
+      expect(p.confirms.at(-1)).to.include("Remove this wallet's SDOGE approval for Permit2");
+      expect(await f.sdoge.allowance(f.alice.address, PERMIT2)).to.equal(0n);
+      expect(p.el("ownerApprovals").innerHTML).to.include("Nothing to remove");
+      expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
+    });
+
     it("starts rewards only after the owner's seed stake, then sends revenue to the stakers", async function () {
       const f = await deployAll();
       const staking = await f.staking.getAddress();

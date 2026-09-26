@@ -192,6 +192,13 @@ creator-set tax 0–10% per side.
   then routing Studio sales and marketplace fees to staking. Until then all of that
   revenue goes to `0x5899…5914`. 15,000 SDOGE of early-exit penalties from the
   launch test wait in the pool and stream to stakers once rewards start.
+- **Phishing drain (2026-09-26):** a fake website got `0x5899…5914` to confirm a transfer of
+  115.34 USDC (all but 0.031125) to the drainer Safe `0x9245635eBcAD64db53eC189B0ED984151a0a8247`
+  (tx `0x1d224631…cdbd05`); the same kit drained two other wallets that morning. The owner
+  confirmed it was a fake site, so the key is fine and the owner keeps the wallet. It had an old
+  unlimited USDC approval to Permit2; `owner.html` now has a "Wallet safety" card that lists
+  USDC/SDOGE approvals to swap apps with a Remove button. Never tell the owner to connect or
+  sign anywhere but the project's own sites; DexScreener info is ordered from DexScreener itself.
 - **Site wallet rule:** pages build their `BrowserProvider` on
   `arcWalletBridge(window.ethereum)` (`assets/js/arc.js`), never on `window.ethereum`
   directly: the wallet only signs and sends, and every read (block number, gas

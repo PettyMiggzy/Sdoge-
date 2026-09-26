@@ -277,7 +277,73 @@ function ownerRoute(key) {
   });
 }
 
+// ---------- wallet safety: approvals the connected wallet has given ----------
+
+// Contracts that swap apps get token approvals for. An unlimited approval to Permit2 lets any
+// Permit2 signature the wallet ever gave (a phishing site's, say) move that token later.
+const SAFETY_SPENDERS = [
+  { address: '0x000000000022D473030F116dDEE9F6B43aC78BA3', label: 'Permit2 (used by swap apps)' },
+  { address: '0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1', label: 'Uniswap Universal Router' },
+];
+const safetyTokens = () => [
+  { address: '0x3600000000000000000000000000000000000000', symbol: 'USDC', decimals: 6 },
+  { address: SDOGE_CONTRACTS.token, symbol: 'SDOGE', decimals: 18 },
+];
+const SAFETY_ABI = ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'];
+const SAFETY_UNLIMITED = 2n ** 128n; // anything this big reads as "unlimited"
+let ownerApprovals = [];
+
+async function loadOwnerApprovals() {
+  const box = document.getElementById('ownerApprovals');
+  if (!userAddress) {
+    box.innerHTML = '<p class="stk-empty">Connect a wallet to check it.</p>';
+    return [];
+  }
+  const found = [];
+  for (const token of safetyTokens()) {
+    if (!isAddressSet(token.address) || !(await arcRetry(() => hasCodeOnArc(token.address)))) continue;
+    const c = new ethers.Contract(token.address, SAFETY_ABI, arcReadProvider);
+    for (const spender of SAFETY_SPENDERS) {
+      const amount = await arcRetry(() => c.allowance(userAddress, spender.address));
+      if (amount > 0n) found.push({ token, spender, amount });
+    }
+  }
+  ownerApprovals = found;
+  box.innerHTML = found.length
+    ? found
+        .map((a, i) => {
+          const size = a.amount >= SAFETY_UNLIMITED ? 'Unlimited' : `${ethers.formatUnits(a.amount, a.token.decimals)} ${a.token.symbol}`;
+          return (
+            `<div class="own-row"><div class="own-row__main"><div class="own-row__name">${a.token.symbol} → ${escHtml(a.spender.label)}</div>` +
+            `<a class="own-row__addr" href="${ARC_EXPLORER_URL}/address/${a.spender.address}" target="_blank" rel="noopener">${shortAddr(a.spender.address)}</a></div>` +
+            `<div class="own-row__status">${size}</div>` +
+            `<button type="button" class="stk-btn stk-btn--warn" data-revoke="${i}"${ownerBusy ? ' disabled' : ''}>Remove</button></div>`
+          );
+        })
+        .join('')
+    : '<p class="stk-empty">No open USDC or SDOGE approvals to swap apps. Nothing to remove.</p>';
+  return found;
+}
+
+async function ownerRevoke(i) {
+  const done = await ownerAction(async () => {
+    const a = ownerApprovals[i];
+    if (!a) return false;
+    if (!confirm(`Remove this wallet's ${a.token.symbol} approval for ${a.spender.label}?\n\nIt sets the approval to 0. A swap app will simply ask again the next time you use it.`)) {
+      return false;
+    }
+    await (await new ethers.Contract(a.token.address, SAFETY_ABI, signer).approve(a.spender.address, 0n, arcTx())).wait();
+    return true;
+  });
+  await loadOwnerApprovals();
+  return done;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ownerApprovals').addEventListener('click', (e) => {
+    const i = e.target?.closest?.('[data-revoke]')?.dataset.revoke;
+    if (i !== undefined) ownerRevoke(Number(i));
+  });
   document.getElementById('ownerList').addEventListener('click', (e) => {
     const key = e.target?.closest?.('[data-accept]')?.dataset.accept;
     if (key) ownerAccept(key);
@@ -293,4 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('ownerNotice').textContent = `Couldn't read the contracts: ${reason(err)}. Reload to try again.`;
   });
 });
-document.addEventListener('sdoge:wallet-connected', () => renderOwner());
+document.addEventListener('sdoge:wallet-connected', () => {
+  renderOwner();
+  loadOwnerApprovals().catch((err) => console.error(err));
+});
