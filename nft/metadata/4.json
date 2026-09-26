@@ -1,13 +1,32 @@
 {
   "name": "Rich Doge",
   "description": "Good boy, better bag. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/rich-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/rich-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/rich-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Husky" },
-    { "trait_type": "Background", "value": "Orange" },
-    { "trait_type": "Outfit", "value": "Gold Chain" },
-    { "trait_type": "Headwear", "value": "Blue Cap" },
-    { "trait_type": "Accessory", "value": "Sunglasses & Grillz" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Husky"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Orange"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Gold Chain"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Cap"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Sunglasses & Grillz"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

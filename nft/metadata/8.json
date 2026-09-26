@@ -1,13 +1,32 @@
 {
   "name": "Degen Doge",
   "description": "Full send. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/degen-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/degen-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/degen-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Orange" },
-    { "trait_type": "Outfit", "value": "Gold Chain (DEGEN + USDC pendants)" },
-    { "trait_type": "Headwear", "value": "Blue Cap" },
-    { "trait_type": "Accessory", "value": "Sunglasses, Grillz & Cigar" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Orange"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Gold Chain (DEGEN + USDC pendants)"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Cap"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Sunglasses, Grillz & Cigar"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

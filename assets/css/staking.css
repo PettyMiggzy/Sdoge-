@@ -69,42 +69,7 @@ body.stk {
 .stk-btn--lg { font-size: 16px; padding: 14px 38px; }
 .stk-btn--block { width: 100%; }
 
-/* ---------- Nav ---------- */
-.stk-nav { background: rgba(4, 10, 24, 0.86); border-bottom: 1px solid rgba(96, 150, 255, 0.14); }
-.stk-nav__inner { display: flex; align-items: center; gap: 32px; height: 68px; }
-.stk-nav__brand img { height: 40px; width: auto; }
-.stk-nav__links { flex: 1; justify-content: center; gap: 34px; }
-.stk-nav__links a:not(.stk-btn) {
-  position: relative;
-  padding: 6px 0;
-  color: rgba(245, 247, 255, 0.88);
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.stk-nav__links a:not(.stk-btn):hover { color: #fff; }
-.stk-nav__links a.is-active { color: var(--stk-blue-hi); }
-.stk-nav__links a.is-active::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: -2px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--stk-blue-hi);
-  box-shadow: 0 0 10px var(--stk-blue-hi);
-}
-.stk-nav__buy-mobile { display: none; }
-.stk-nav__right { display: flex; align-items: center; gap: 22px; }
-.stk-arc {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 26px;
-  letter-spacing: 0.5px;
-  color: #fff;
-}
-.stk-arc img { height: 22px; width: auto; }
+/* The nav is the site-wide one: assets/css/nav.css. */
 
 /* ---------- Hero ---------- */
 .stk-hero {
@@ -551,7 +516,6 @@ body.stk {
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
-  .stk-nav__links { gap: 22px; }
   .stk-stat { gap: 12px; padding: 4px 14px; }
   .stk-stat__icon { width: 48px; height: 48px; }
   .stk-stat__icon svg { width: 24px; height: 24px; }
@@ -567,26 +531,6 @@ body.stk {
 }
 
 @media (max-width: 900px) {
-  .stk .navbar__toggle { display: flex; margin-left: auto; }
-  .stk-nav__inner { height: 60px; gap: 12px; }
-  .stk-nav__brand img { height: 34px; }
-  .stk-nav__right { display: none; }
-  .stk-nav__links {
-    position: absolute;
-    top: 60px; left: 0; right: 0;
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 14px 20px 20px;
-    background: #071230;
-    border-bottom: 1px solid var(--stk-line-soft);
-  }
-  .stk-nav__links.is-open { display: flex; }
-  .stk-nav__links a:not(.stk-btn) { padding: 10px 4px; font-size: 16px; }
-  .stk-nav__links a.is-active::after { display: none; }
-  .stk-nav__buy-mobile { display: inline-flex; margin-top: 8px; }
-
   .stk-hero { min-height: 0; padding: 92px 0 170px; }
   .stk-hero__art { background-position: 72% 50%; }
   .stk-hero__art::after {

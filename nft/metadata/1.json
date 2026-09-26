@@ -1,12 +1,28 @@
 {
   "name": "SWAT Doge",
   "description": "$SDOGE goes tactical. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/swat-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/swat-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/swat-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Husky" },
-    { "trait_type": "Background", "value": "Orange" },
-    { "trait_type": "Outfit", "value": "SWAT Gear" },
-    { "trait_type": "Headwear", "value": "SWAT Helmet" },
-    { "trait_type": "USDC Branding", "value": "No" }
+    {
+      "trait_type": "Character",
+      "value": "Husky"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Orange"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "SWAT Gear"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "SWAT Helmet"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "No"
+    }
   ]
 }

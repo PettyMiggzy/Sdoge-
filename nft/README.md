@@ -204,11 +204,14 @@ than folded into `Outfit`. `degen-doge` is the shiba counterpart to
 cigar, black sunglasses instead of pink, and an added "DEGEN" pendant
 alongside the USDC one.
 
-The `image` field in each metadata file is a placeholder
-(`ipfs://REPLACE_ME/...`) - these haven't been pinned to permanent
-storage yet. Do that (nft.storage, Pinata, or similar) and update all 12
-files before deploying for real; a metadata `image` pointing at nothing
-is a broken collection the moment someone opens it in a wallet.
+The metadata and art are served from the site itself (owner's call for the
+2026-09-26 launch, no pinning service yet): the collection's base URI is
+`https://www.stabledoge.site/nft/metadata/`, each `image` is the design's
+file under `https://www.stabledoge.site/nft/reference/`, and the 8
+animated designs add an `animation_url` to their mp4. The `www` address,
+because the bare domain answers with a redirect. The owner can move them
+to IPFS later with `setURI` (until `freezeMetadata()`); until then,
+never rename or delete these files: every wallet reads them.
 
 Two base characters run through the full-outfit designs (a grey/silver
 husky, an orange/tan shiba); `cap-doge` and `blazed-doge` are noticeably

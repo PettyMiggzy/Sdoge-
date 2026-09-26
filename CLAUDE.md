@@ -21,8 +21,10 @@ for decisions to live in the repo so nothing depends on chat memory.
 - **SDOGE's own brand only.** Code, comments, docs, images and commit messages name
   only SDOGE's own projects, contracts, wallets, domains and socials (above). Don't
   bring in names, addresses, links or wording from anywhere else.
-- **Hidden pages.** `staking.html`, `nft.html` and `studio.html` stay unlinked from
-  `index.html` until the owner says they're ready ("I don't want people peeking").
+- **One nav, every page, everything linked** (owner, 2026-09-26: "link all now"; this lifts the
+  earlier hidden-pages rule). Home, About, Tokenomics, Staking, NFT, Studio, Pad, Roadmap,
+  Community, the ARC badge and Buy SDOGE, identical on every page (`assets/css/nav.css`; only the
+  `is-active` link differs). The pad's nav links the same products (Staking, NFT, Studio).
 - **Tokenomics are fixed.** Staking tiers 7/30/90/180/365 days, multipliers
   1.0/1.2/1.5/2.0/3.0x, 15% early-exit penalty, 80% maturity point, per-stake
   forfeiture. They are constants in `SDOGEStaking.sol`. Don't edit the tokenomics
@@ -84,7 +86,7 @@ creator-set tax 0–10% per side.
   glow, and the "SDOGE LAUNCHPAD" name on the site. The art was redrawn from it
   with Venice (`pad-web/design/generate-art.py`). Keep numbers on the site real:
   where the mockup shows sample data, the site shows chain/DexScreener/indexer
-  data or "—". "Staking" in its nav shows "soon" until the owner opens staking.
+  data or "—". Its nav links the main site's Staking, NFT and Studio pages.
 - **Deployed 2026-09-25 on Arc mainnet** (source verified on Sourcify, exact
   match): treasury `0x5B2A7f99b3Bd79211b2154dC997f2F8c3CAaF3Aa`, hook
   `0x10dE365Cc583bA953a9e6C36658A138082d9e8cc`, portal

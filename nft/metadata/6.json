@@ -1,12 +1,28 @@
 {
   "name": "Cap Doge",
   "description": "Keeping it simple. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/cap-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/cap-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/cap-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Blue" },
-    { "trait_type": "Outfit", "value": "None (Plain)" },
-    { "trait_type": "Headwear", "value": "Blue Cap" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Blue"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "None (Plain)"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Cap"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

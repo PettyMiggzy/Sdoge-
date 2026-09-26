@@ -1,12 +1,27 @@
 {
   "name": "Viking Doge",
   "description": "Raiding, not trading. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/viking-doge.png",
+  "image": "https://www.stabledoge.site/nft/reference/viking-doge.png",
   "attributes": [
-    { "trait_type": "Character", "value": "Husky" },
-    { "trait_type": "Background", "value": "Icy Blue" },
-    { "trait_type": "Outfit", "value": "Fur Cloak & Horned Helmet" },
-    { "trait_type": "Accessory", "value": "Battle Axe & Shield" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Husky"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Icy Blue"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Fur Cloak & Horned Helmet"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Battle Axe & Shield"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

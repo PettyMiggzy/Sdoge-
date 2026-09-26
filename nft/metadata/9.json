@@ -1,12 +1,27 @@
 {
   "name": "Samurai Doge",
   "description": "Honor, discipline, stability. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/samurai-doge.png",
+  "image": "https://www.stabledoge.site/nft/reference/samurai-doge.png",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Red" },
-    { "trait_type": "Outfit", "value": "Samurai Armor" },
-    { "trait_type": "Accessory", "value": "Katana" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Red"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Samurai Armor"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Katana"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

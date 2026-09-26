@@ -1,13 +1,32 @@
 {
   "name": "Blazed Doge",
   "description": "Feeling stable, looking blazed. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/blazed-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/blazed-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/blazed-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Orange" },
-    { "trait_type": "Outfit", "value": "None (Plain)" },
-    { "trait_type": "Headwear", "value": "Blue Cap" },
-    { "trait_type": "Expression", "value": "Bloodshot Eyes" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Orange"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "None (Plain)"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Cap"
+    },
+    {
+      "trait_type": "Expression",
+      "value": "Bloodshot Eyes"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

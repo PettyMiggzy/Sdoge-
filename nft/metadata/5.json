@@ -1,12 +1,28 @@
 {
   "name": "Hoodie Doge",
   "description": "Same good boy, more stability. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/hoodie-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/hoodie-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/hoodie-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Grey" },
-    { "trait_type": "Outfit", "value": "Blue Hoodie" },
-    { "trait_type": "Headwear", "value": "Blue Cap" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Grey"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Blue Hoodie"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Blue Cap"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

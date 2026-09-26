@@ -16,13 +16,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
 <link rel="stylesheet" href="assets/css/staking.css" />
+<link rel="stylesheet" href="assets/css/nav.css" />
 </head>
 <body class="stk">
 
-<!-- ===== NAV ===== -->
-<nav class="navbar stk-nav" id="navbar">
-  <div class="stk-wrap stk-nav__inner">
-    <a href="index.html" class="stk-nav__brand" aria-label="SDOGE home">
+<!-- ===== NAV (the same on every page: assets/css/nav.css) ===== -->
+<nav class="navbar site-nav" id="navbar">
+  <div class="site-nav__inner">
+    <a href="/" class="site-nav__brand" aria-label="SDOGE home">
       <img src="assets/img/wordmark.webp" alt="SDOGE" width="480" height="121" />
     </a>
 
@@ -30,19 +31,22 @@
       <span></span><span></span><span></span>
     </button>
 
-    <div class="navbar__links stk-nav__links" id="navLinks">
-      <a href="index.html">Home</a>
-      <a href="index.html#about">About</a>
-      <a href="index.html#tokenomics">Tokenomics</a>
-      <a href="staking.html" class="is-active" aria-current="page">Staking</a>
-      <a href="index.html#roadmap">Roadmap</a>
-      <a href="index.html#community">Community</a>
-      <a href="index.html#buy" class="stk-btn stk-btn--primary stk-nav__buy-mobile">Buy SDOGE</a>
+    <div class="navbar__links site-nav__links" id="navLinks">
+      <a href="/">Home</a>
+      <a href="/#about">About</a>
+      <a href="/#tokenomics">Tokenomics</a>
+      <a href="/staking.html" class="is-active" aria-current="page">Staking</a>
+      <a href="/nft.html">NFT</a>
+      <a href="/studio.html">Studio</a>
+      <a href="https://pad.stabledoge.site" data-pad-link>Pad</a>
+      <a href="/#roadmap">Roadmap</a>
+      <a href="/#community">Community</a>
+      <a href="/#buy" class="site-nav__cta site-nav__cta--mobile">Buy SDOGE</a>
     </div>
 
-    <div class="stk-nav__right">
-      <span class="stk-arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
-      <a href="index.html#buy" class="stk-btn stk-btn--primary">Buy SDOGE</a>
+    <div class="site-nav__right">
+      <span class="site-nav__arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
+      <a href="/#buy" class="site-nav__cta">Buy SDOGE</a>
     </div>
   </div>
 </nav>

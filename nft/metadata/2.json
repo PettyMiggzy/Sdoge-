@@ -1,12 +1,28 @@
 {
   "name": "Space Doge",
   "description": "To the moon, literally. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/astronaut-doge.jpg",
+  "image": "https://www.stabledoge.site/nft/reference/astronaut-doge.jpg",
+  "animation_url": "https://www.stabledoge.site/nft/reference/animated/astronaut-doge.mp4",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Blue" },
-    { "trait_type": "Outfit", "value": "Space Suit" },
-    { "trait_type": "Headwear", "value": "Astronaut Helmet" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Blue"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Space Suit"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Astronaut Helmet"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

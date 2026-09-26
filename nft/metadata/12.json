@@ -1,12 +1,27 @@
 {
   "name": "Champion Doge",
   "description": "Undefeated, undiluted. Part of the Stable Doge collection.",
-  "image": "ipfs://REPLACE_ME/champion-doge.png",
+  "image": "https://www.stabledoge.site/nft/reference/champion-doge.png",
   "attributes": [
-    { "trait_type": "Character", "value": "Shiba" },
-    { "trait_type": "Background", "value": "Gold" },
-    { "trait_type": "Outfit", "value": "Boxing Gloves" },
-    { "trait_type": "Accessory", "value": "Championship Belt" },
-    { "trait_type": "USDC Branding", "value": "Yes" }
+    {
+      "trait_type": "Character",
+      "value": "Shiba"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Boxing Gloves"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Championship Belt"
+    },
+    {
+      "trait_type": "USDC Branding",
+      "value": "Yes"
+    }
   ]
 }

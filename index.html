@@ -23,6 +23,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css" />
+<link rel="stylesheet" href="assets/css/nav.css" />
 </head>
 <body class="has-market-bar">
 
@@ -38,31 +39,33 @@
   </div>
 </div>
 
-<!-- ===== NAV ===== -->
-<nav class="navbar" id="navbar">
-  <div class="container navbar__inner">
-    <a href="#top" class="brand">
-      <img src="assets/img/logo.jpg" alt="SDOGE logo" class="brand__logo" />
-      <span class="brand__name">$SDOGE</span>
+<!-- ===== NAV (the same on every page: assets/css/nav.css) ===== -->
+<nav class="navbar site-nav" id="navbar">
+  <div class="site-nav__inner">
+    <a href="/" class="site-nav__brand" aria-label="SDOGE home">
+      <img src="assets/img/wordmark.webp" alt="SDOGE" width="480" height="121" />
     </a>
 
     <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
 
-    <div class="navbar__links" id="navLinks">
-      <a href="#top">Home</a>
-      <a href="#about">About</a>
-      <a href="#tokenomics">Tokenomics</a>
-      <a href="#roadmap">Roadmap</a>
-      <a href="#community">Community</a>
-      <a href="https://pad.stabledoge.site" class="nav-pad" data-pad-link>Pad</a>
-      <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    <div class="navbar__links site-nav__links" id="navLinks">
+      <a href="/" class="is-active" aria-current="page">Home</a>
+      <a href="/#about">About</a>
+      <a href="/#tokenomics">Tokenomics</a>
+      <a href="/staking.html">Staking</a>
+      <a href="/nft.html">NFT</a>
+      <a href="/studio.html">Studio</a>
+      <a href="https://pad.stabledoge.site" data-pad-link>Pad</a>
+      <a href="/#roadmap">Roadmap</a>
+      <a href="/#community">Community</a>
+      <a href="/#buy" class="site-nav__cta site-nav__cta--mobile">Buy SDOGE</a>
     </div>
 
-    <div class="navbar__chain">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 20v-6a7 7 0 0 1 14 0v6M8.5 20v-6a3.5 3.5 0 0 1 7 0v6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>ARC</span>
+    <div class="site-nav__right">
+      <span class="site-nav__arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
+      <a href="/#buy" class="site-nav__cta">Buy SDOGE</a>
     </div>
   </div>
 </nav>

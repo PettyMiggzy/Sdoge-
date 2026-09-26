@@ -7,16 +7,22 @@ import { clsx } from 'clsx';
 import { ConnectButton } from './ConnectButton';
 import { CONFIG } from '@/lib/config';
 
-type Item = { label: string; href?: string; external?: boolean; soon?: boolean };
+type Item = { label: string; href: string; external?: boolean };
 
-// Staking stays unlinked until the owner opens the staking page; it shows
-// as "soon" so the nav matches the design without leading anywhere.
+// The main site's products sit next to the pad's own pages, like the main site's nav does.
+const home = CONFIG.homeUrl.replace(/\/+$/, '');
 const ITEMS: Item[] = [
-  ...(CONFIG.homeUrl ? [{ label: 'Home', href: CONFIG.homeUrl, external: true }] : []),
+  ...(home ? [{ label: 'Home', href: home, external: true }] : []),
   { label: 'Launchpad', href: '/' },
   { label: 'Create', href: '/create' },
   { label: 'How it works', href: '/#how-it-works' },
-  { label: 'Staking', soon: true },
+  ...(home
+    ? [
+        { label: 'Staking', href: `${home}/staking.html`, external: true },
+        { label: 'NFT', href: `${home}/nft.html`, external: true },
+        { label: 'Studio', href: `${home}/studio.html`, external: true },
+      ]
+    : []),
   { label: 'Leaderboard', href: '/leaderboard' },
 ];
 
@@ -48,17 +54,10 @@ function NavLink({ item, active, onClick, mobile }: { item: Item; active: boolea
   const base = mobile
     ? 'rounded-lg px-2 py-2.5 text-base font-semibold'
     : 'whitespace-nowrap border-b-2 pb-1 text-[15px] font-semibold';
-  if (item.soon) {
-    return (
-      <span className={clsx(base, 'flex cursor-default items-center gap-1.5 border-transparent text-text/45')} title="Coming soon">
-        {item.label}<span className="rounded bg-panel2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted">soon</span>
-      </span>
-    );
-  }
   const cls = clsx(base, 'text-text/85 hover:text-brand-hi', mobile ? active && 'bg-panel2 text-brand-hi' : active ? 'border-brand-hi text-brand-hi' : 'border-transparent');
   return item.external
     ? <a href={item.href} className={cls} onClick={onClick}>{item.label}</a>
-    : <Link href={item.href!} className={cls} onClick={onClick}>{item.label}</Link>;
+    : <Link href={item.href} className={cls} onClick={onClick}>{item.label}</Link>;
 }
 
 export function Nav() {
@@ -68,7 +67,7 @@ export function Nav() {
     <header className="sticky top-0 z-40 border-b border-line/60 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-6 px-4 sm:px-6 lg:gap-10">
         <Logo />
-        <nav className="hidden items-center gap-7 lg:flex">
+        <nav className="hidden items-center gap-6 xl:flex 2xl:gap-7">
           {ITEMS.map((it) => <NavLink key={it.label} item={it} active={!!it.href && !it.external && path === it.href} />)}
         </nav>
         <div className="ml-auto flex items-center gap-3 sm:gap-5">
@@ -76,7 +75,7 @@ export function Nav() {
           <ConnectButton />
           <button
             type="button"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line2 text-text lg:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line2 text-text xl:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? 'Close menu' : 'Open menu'}
           >
@@ -85,7 +84,7 @@ export function Nav() {
         </div>
       </div>
       {open && (
-        <nav className="flex flex-col gap-1 border-t border-line2 bg-bg px-4 py-3 lg:hidden">
+        <nav className="flex flex-col gap-1 border-t border-line2 bg-bg px-4 py-3 xl:hidden">
           {ITEMS.map((it) => <NavLink key={it.label} item={it} mobile active={!!it.href && path === it.href} onClick={() => setOpen(false)} />)}
           <Link href="/explore" onClick={() => setOpen(false)} className="rounded-lg px-2 py-2.5 text-base font-semibold text-text/85 hover:text-brand-hi">Explore</Link>
         </nav>

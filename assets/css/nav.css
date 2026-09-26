@@ -1,0 +1,99 @@
+/* The site-wide nav: the same bar on every page of stabledoge.site (index, staking, nft,
+   studio), after the owner's mockups. The markup is identical on every page except which link
+   carries is-active. Loaded after style.css; main.js runs the menu button on phones. */
+
+.site-nav { background: rgba(4, 10, 24, 0.86); border-bottom: 1px solid rgba(96, 150, 255, 0.14); }
+.site-nav__inner {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 1220px;
+  height: 68px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.site-nav__brand { flex-shrink: 0; line-height: 0; }
+.site-nav__brand img { height: 38px; width: auto; }
+.site-nav__links { flex: 1; justify-content: center; gap: 22px; }
+.site-nav__links a:not(.site-nav__cta) {
+  position: relative;
+  padding: 6px 0;
+  color: rgba(245, 247, 255, 0.88);
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.site-nav__links a:not(.site-nav__cta):hover { color: #fff; }
+.site-nav__links a.is-active { color: #43a4ff; }
+.site-nav__links a.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: #43a4ff;
+  box-shadow: 0 0 10px #43a4ff;
+}
+.site-nav__right { display: flex; flex-shrink: 0; align-items: center; gap: 20px; }
+.site-nav__arc {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+  color: #fff;
+}
+.site-nav__arc img { height: 20px; width: auto; }
+.site-nav__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #3d9bff 0%, #1f7bff 55%, #1664e6 100%);
+  box-shadow: 0 0 0 1px rgba(120, 190, 255, 0.35) inset, 0 10px 28px -10px rgba(31, 123, 255, 0.9);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.site-nav__cta:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(150, 205, 255, 0.5) inset, 0 12px 34px -10px rgba(31, 123, 255, 1); }
+.site-nav__cta--mobile { display: none; }
+.site-nav__links a.site-nav__cta { color: #fff; } /* beats style.css's muted .navbar__links a */
+
+@media (max-width: 1180px) {
+  .site-nav__inner { gap: 18px; }
+  .site-nav__links { gap: 18px; }
+  .site-nav__arc { font-size: 20px; }
+}
+
+/* Phones and small laptops: the links fold into the menu button. */
+@media (max-width: 1120px) {
+  .site-nav .navbar__toggle { display: flex; margin-left: auto; }
+  .site-nav__inner { height: 60px; gap: 12px; }
+  .site-nav__brand img { height: 33px; }
+  .site-nav__right { display: none; }
+  .site-nav__links {
+    position: absolute;
+    top: 60px; left: 0; right: 0;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 14px 20px 20px;
+    background: #071230;
+    border-bottom: 1px solid rgba(96, 150, 255, 0.2);
+  }
+  .site-nav__links.is-open { display: flex; }
+  .site-nav__links a:not(.site-nav__cta) { padding: 10px 4px; font-size: 16px; }
+  .site-nav__links a.is-active::after { display: none; }
+  .site-nav__cta--mobile { display: inline-flex; margin-top: 8px; }
+}
+@media (max-width: 600px) {
+  .site-nav__inner { padding: 0 16px; }
+}
