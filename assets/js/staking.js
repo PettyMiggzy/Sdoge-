@@ -113,7 +113,7 @@ const fmtPct = (x) => {
 const bpsPct = (bps) => fmtNum(Number(bps) / 100, 2);
 const multText = (bps) => `${(Number(bps) / 10000).toFixed(1)}×`;
 const tierDays = (t) => Number(t.duration) / 86400;
-const errText = (err) => err?.shortMessage || err?.reason || err?.message || 'unknown error';
+const errText = arcErrorText;
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 const shortAddress = (a) => `${a.slice(0, 6)}...${a.slice(-4)}`;
@@ -364,7 +364,7 @@ async function connectWallet() {
   }
   try {
     if (!(await ensureArcNetwork())) return false;
-    provider = new ethers.BrowserProvider(window.ethereum);
+    provider = new ethers.BrowserProvider(arcWalletBridge(window.ethereum));
     await provider.send('eth_requestAccounts', []);
     signer = await provider.getSigner();
     userAddress = await signer.getAddress();
@@ -881,6 +881,12 @@ async function fillPercent(pct) {
 // ---------- wire up ----------
 document.addEventListener('DOMContentLoaded', () => {
   arcShowLiveCopy(isDeployed());
+  // The FAQ's "unstake without this site" link: straight to the contract's Write tab.
+  if (isDeployed()) {
+    document.querySelectorAll('[data-staking-explorer]').forEach((a) => {
+      a.href = `${ARC_EXPLORER_URL}/address/${STAKING_CONTRACT_ADDRESS}?tab=write_contract`;
+    });
+  }
   renderTiers();
   renderNftPicker();
   updateEstimates();

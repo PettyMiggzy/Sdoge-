@@ -80,6 +80,60 @@ class ArcRpcProvider extends ethers.JsonRpcProvider {
 
 const arcReadProvider = new ArcRpcProvider(ARC_RPC_URL, Number(ARC_CHAIN_ID), { staticNetwork: true, batchMaxCount: 1 });
 
+// The wallet only signs and sends. Everything else ethers would ask the wallet's own RPC (the
+// block number before a send, the gas estimate, the transaction and its receipt while waiting)
+// goes through arcReadProvider: paced, retried, with the backup relay. A wallet's RPC for Arc is
+// often Arc's public one, shared with everything else the wallet polls, and when it hiccups
+// ethers can only say "could not coalesce error". Pages build their BrowserProvider on this.
+const ARC_WALLET_METHODS = new Set([
+  'eth_requestAccounts',
+  'eth_accounts',
+  'eth_chainId',
+  'net_version',
+  'eth_coinbase',
+  'eth_sendTransaction',
+  'eth_sign',
+  'personal_sign',
+  'eth_signTypedData',
+  'eth_signTypedData_v3',
+  'eth_signTypedData_v4',
+]);
+
+function arcWalletBridge(ethereum) {
+  return {
+    async request({ method, params }) {
+      if (ARC_WALLET_METHODS.has(method) || method.startsWith('wallet_')) return ethereum.request({ method, params });
+      try {
+        return await arcReadProvider.send(method, params ?? []);
+      } catch (err) {
+        // The chain's own answer, back in EIP-1193 form, so ethers still reads a revert as one.
+        const inner = err?.info?.error || err?.error || {};
+        const out = new Error(inner.message || err?.shortMessage || err?.message || 'RPC error');
+        out.code = inner.code ?? -32603;
+        out.data = inner.data ?? err?.data;
+        throw out;
+      }
+    },
+    on: (...args) => ethereum.on?.(...args),
+    removeListener: (...args) => ethereum.removeListener?.(...args),
+  };
+}
+
+// The words that explain a failure best: the revert reason, else what the wallet itself said
+// (ethers labels a wallet error it can't classify "could not coalesce error"), else ethers'
+// summary. A busy RPC gets a plain "try again".
+function arcErrorText(err) {
+  if (err?.reason) return err.reason;
+  const inner = err?.info?.error || err?.error;
+  const said = inner?.data?.message || inner?.message;
+  const summary = err?.shortMessage || err?.message || '';
+  const generic = err?.code === 'UNKNOWN_ERROR' || /could not coalesce/i.test(summary);
+  const text = (generic && said) || summary || said || 'unknown error';
+  return /rate limit|too many requests|-32005/i.test(`${text} ${said || ''}`)
+    ? `${text}. Arc's connection was busy: wait a few seconds and try again`
+    : text;
+}
+
 // Retries a read a few times with backoff when the RPC itself failed (network trouble, a
 // rate-limit answer that surfaced as "missing revert data"), so one failed call doesn't leave a
 // page blank until reload. Anything the chain answered for real (a revert, a wrong contract) is

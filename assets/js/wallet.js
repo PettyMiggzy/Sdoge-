@@ -7,7 +7,7 @@ let provider, signer, userAddress;
 
 const fmt = (n) => Number(n).toLocaleString('en-US');
 const shortAddr = (a) => `${a.slice(0, 6)}...${a.slice(-4)}`;
-const reason = (err) => err?.shortMessage || err?.reason || err?.message || 'unknown error';
+const reason = arcErrorText;
 const sameAddr = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const escHtml = (s) =>
   String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
@@ -35,7 +35,7 @@ async function connectWallet() {
   }
   try {
     if (!(await ensureArcNetwork())) return false;
-    provider = new ethers.BrowserProvider(window.ethereum);
+    provider = new ethers.BrowserProvider(arcWalletBridge(window.ethereum));
     await provider.send('eth_requestAccounts', []);
     signer = await provider.getSigner();
     userAddress = await signer.getAddress();

@@ -191,6 +191,14 @@ creator-set tax 0–10% per side.
   then routing Studio sales and marketplace fees to staking. Until then all of that
   revenue goes to `0x5899…5914`. 15,000 SDOGE of early-exit penalties from the
   launch test wait in the pool and stream to stakers once rewards start.
+- **Site wallet rule:** pages build their `BrowserProvider` on
+  `arcWalletBridge(window.ethereum)` (`assets/js/arc.js`), never on `window.ethereum`
+  directly: the wallet only signs and sends, and every read (block number, gas
+  estimate, receipts) goes through the site's own paced, retried RPC with the backup
+  relay. The owner's first stake failed with "could not coalesce error" when the
+  wallet's own Arc RPC hiccuped (2026-09-26). Error alerts use `arcErrorText`, which
+  shows what the wallet actually said. Unstaking never depends on the site: the
+  staking FAQ links the contract's Write tab on the explorer.
 
   Treasury and fee recipient: `0x5899…5914`. There's no Safe, so the launch is
   supervised (owner said go live, 2026-09-26): a throwaway deploy wallet

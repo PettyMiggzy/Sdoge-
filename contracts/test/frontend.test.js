@@ -769,6 +769,53 @@ describe("front end (assets/js)", function () {
       expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
     });
 
+    // A wallet whose own RPC for Arc is failing: every read ethers would send it errors out.
+    const flakyWallet = (wallet, sendError) => ({
+      async request({ method, params }) {
+        if (method === "eth_sendTransaction" && sendError) throw sendError;
+        if (["eth_requestAccounts", "eth_accounts", "eth_chainId", "eth_sendTransaction", "wallet_switchEthereumChain"].includes(method)) {
+          return wallet.request({ method, params });
+        }
+        const err = new Error("Internal JSON-RPC error.");
+        err.code = -32603;
+        err.data = { code: -32005, message: "rate limit exceeded" };
+        throw err;
+      },
+      on() {},
+      removeListener() {},
+    });
+
+    it("stakes even when the wallet's own RPC is failing: the wallet only signs and sends", async function () {
+      const f = await deployAll();
+      const p = await page(f, STAKING_PAGE, f.alice);
+      p.ctx.ethereum = flakyWallet(p.wallet);
+      await p.ready();
+      await p.run("loadTierDataFromChain()");
+      expect(await p.run("connectWallet()")).to.equal(true);
+      p.el("stakeAmount").value = "1000";
+      await p.run("doStake()");
+      expect(p.alerts).to.deep.equal([]);
+      const [id] = await f.staking.getStakeIds(f.alice.address);
+      expect((await f.staking.getStake(id)).amount).to.equal(E("1000"));
+    });
+
+    it("a wallet error it can't classify shows what the wallet said, not ethers' label", async function () {
+      const f = await deployAll();
+      const p = await page(f, STAKING_PAGE, f.alice);
+      const refusal = new Error("Internal JSON-RPC error.");
+      refusal.code = -32603;
+      refusal.data = { code: -32000, message: "the wallet's node refused this transaction" };
+      p.ctx.ethereum = flakyWallet(p.wallet, refusal);
+      await p.ready();
+      await p.run("loadTierDataFromChain()");
+      expect(await p.run("connectWallet()")).to.equal(true);
+      p.el("stakeAmount").value = "1000";
+      await p.run("doStake()");
+      expect(p.alerts.at(-1)).to.equal("Stake failed: the wallet's node refused this transaction");
+      expect(p.run("arcErrorText({ code: 'UNKNOWN_ERROR', shortMessage: 'could not coalesce error', error: { message: 'rate limit exceeded' } })"))
+        .to.equal("rate limit exceeded. Arc's connection was busy: wait a few seconds and try again");
+    });
+
     it("refuses to stake on terms other than the contract's (a stale or wrong page)", async function () {
       const f = await deployAll();
       const p = await page(f, STAKING_PAGE, f.alice);
