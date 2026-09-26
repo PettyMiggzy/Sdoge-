@@ -159,9 +159,10 @@ creator-set tax 0–10% per side.
   the pad site, and a live market bar across the top shows pad launches
   (`assets/js/pad-ticker.js`, fed by `/api/v1/market`). The pad home shows the
   dev wallet's and the treasury's balances so anyone can see what's in them.
-- **Still needed:** `0x5899…5914` accepting the three TEST creator roles; publishing
-  `pad-sdk` to npm (needs the owner's account). Optional: host `pad-indexer`
-  (volume, holders and candles on token pages show "—" until it runs).
+- **Still needed:** publishing `pad-sdk` to npm (needs the owner's account).
+  Optional: host `pad-indexer` (volume, holders and candles on token pages show "—"
+  until it runs). The three TEST tokens' creator roles stay unclaimed: the owner
+  doesn't need them (2026-09-26), so don't remind them.
 - **Domain:** the pad lives at https://pad.stabledoge.site (GoDaddy CNAME `pad` →
   `cname.vercel-dns.com`, added by the owner 2026-09-25; `stabledoge.site` itself is
   on Vercel with GoDaddy DNS). https://sdoge-launchpad.vercel.app serves the same
