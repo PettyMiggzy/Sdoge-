@@ -172,11 +172,19 @@ creator-set tax 0–10% per side.
 ## Other parts
 
 - `contracts/` (Hardhat): staking, NFT collection, SDOGE Studio, marketplace.
-  Not deployed yet; runbook in `contracts/README.md`.
+  Not deployed yet; runbook in `contracts/README.md`. There's no Safe, so the launch
+  is supervised (owner said go live, 2026-09-26): a throwaway deploy wallet the
+  owner funds deploys with `ALLOW_DEPLOYER_OWNER=1`, sends the setup batches itself
+  (`scripts/run-batch.js`), then offers all 4 contracts to `0x5899…5914`
+  (`scripts/handover.js`). The owner accepts on `owner.html` (not in the nav,
+  noindex), which also walks the seed stake → start rewards → route revenue
+  steps in that order. The deploy key lives only in a session scratchpad, so
+  the handover must go out before the session ends and leftovers go back to
+  `0x5899…5914`.
 - `launchpad/` (Foundry): the earlier meme launchpad with the meme vault.
   `tgpad/`: the Telegram bot for it. The owner may later point the Telegram
   launchpad at SDOGE Pad instead.
 - `bot/`: the Telegram buy-alert bot (live in the Stable Doge group).
 - CI (`.github/workflows/ci.yml`) runs every suite on each push. Tests at last
-  count: Hardhat 262, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
+  count: Hardhat 270, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
   SDOGE Pad 36 (+1 fork test).

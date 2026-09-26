@@ -2,7 +2,8 @@
 // - every recorded contract has code and was created by the recorded transaction, in the
 //   recorded block (a record written on a fork of Arc fails here: its transactions never
 //   reached Arc);
-// - each one is owned by the recorded Safe (2+ signers), with no ownership transfer pending;
+// - each one is owned by the recorded Safe (2+ signers), with no ownership transfer pending
+//   (after scripts/handover.js: by the owner it was handed to, once it has accepted);
 // - the wiring: staking's token, NFT collection, notifier and design boosts; the collectibles'
 //   treasury and metadata URI;
 //   the Studio's treasury, token and revenue routing; the marketplace's Studio, collectibles,
@@ -56,6 +57,7 @@ const ABI = {
 };
 // Where each contract's recorded constructor args hold its owner.
 const OWNER_ARG = { SDOGEStaking: 2, SDOGECollectibles: 0, SDOGEStudio: 0, SDOGENFTMarketplace: 0 };
+const OWNER_PAGE = "https://www.stabledoge.site/owner.html";
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 const same = (a, b) =>
@@ -165,9 +167,23 @@ async function verify(opts = {}) {
 
   const accounts = new Map();
   const checkOwnership = async (name, contract) => {
-    const expected = recorded[name].args?.[OWNER_ARG[name]];
+    // The owner it was deployed with, or the one scripts/handover.js offered it to.
+    const { handoverTo } = recorded[name];
+    const deployedOwner = recorded[name].args?.[OWNER_ARG[name]];
+    const expected = handoverTo || deployedOwner;
     const owner = await read(name, "owner", () => contract.owner());
     if (owner === undefined) return;
+    if (handoverTo && !same(owner, handoverTo) && same(owner, deployedOwner)) {
+      const pending = await read(name, "owner", () => contract.pendingOwner());
+      if (pending === undefined) return;
+      return fail(
+        name,
+        "owner",
+        same(pending, handoverTo)
+          ? `still ${owner}: waiting for ${handoverTo} to accept ownership (on ${OWNER_PAGE})`
+          : `still ${owner}, and the offer to ${handoverTo} isn't pending (pendingOwner ${pending}): run scripts/handover.js again`
+      );
+    }
     if (!same(owner, expected)) return fail(name, "owner", `${owner} on-chain, but the record says ${expected}`);
     if (opts.expectedOwner && !same(owner, opts.expectedOwner)) {
       return fail(name, "owner", `${owner}, not the Safe ${opts.expectedOwner} (SAFE_ADDRESS)`);

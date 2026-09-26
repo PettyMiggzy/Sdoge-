@@ -1,0 +1,40 @@
+/* The owner's page (owner.html), on top of staking.css's cards, buttons and inputs. */
+
+.own { padding-top: 112px; padding-bottom: 60px; } /* clears the fixed nav */
+.own__title { text-align: left; margin-bottom: 8px; }
+.own__lead { max-width: 720px; margin-bottom: 18px; color: var(--stk-muted); }
+.own__card { margin-top: 22px; }
+.own a:not(.stk-btn) { color: var(--stk-blue-hi); }
+
+.own-list { display: grid; gap: 10px; margin-top: 14px; }
+.own-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 2fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--stk-line);
+  border-radius: 12px;
+  background: rgba(4, 10, 24, 0.45);
+}
+.own-row.is-yours { border-color: rgba(67, 164, 255, 0.6); }
+.own-row__name { font-weight: 700; }
+.own-row__addr { font-size: 13px; }
+.own-row__status { color: var(--stk-muted); font-size: 14px; }
+.own-row.is-yours .own-row__status { color: #7fd1a5; }
+
+.own-step { padding: 16px 0; border-top: 1px solid var(--stk-line); }
+.own-step:first-of-type { border-top: 0; }
+.own-step__head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.own-step__head span { color: var(--stk-muted); font-size: 14px; }
+.own-step__row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.own-step__row .stk-input { flex: 1 1 220px; padding: 8px 14px; }
+.own-step__row .stk-input__row { margin-top: 0; }
+.own-step__row .stk-input__row input { font-size: 18px; }
+.own-step__row .stk-input__token { font-size: 16px; }
+.own-step__row .stk-btn { min-width: 150px; }
+
+@media (max-width: 700px) {
+  .own { padding-top: 92px; }
+  .own-row { grid-template-columns: 1fr; gap: 8px; }
+}

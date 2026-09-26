@@ -12,6 +12,8 @@ const deployCollectibles = require("../scripts/deploy-collectibles");
 const setupDesigns = require("../scripts/setup-designs");
 const deployStudio = require("../scripts/deploy-studio");
 const deployMarketplace = require("../scripts/deploy-marketplace");
+const runBatch = require("../scripts/run-batch");
+const handover = require("../scripts/handover");
 const { verify, arcProvider } = require("../scripts/verify-deployment");
 const { sync } = require("../scripts/sync-frontend");
 
@@ -781,6 +783,124 @@ describe("deploy scripts", function () {
 
       const changed = await quiet(() => sync(recordFile(), arcJs, { expectedChainId: LOCAL, skipVerify: true }));
       expect(changed).to.deep.equal([`staking = ${await staking.getAddress()}`]);
+    });
+  });
+
+  // No Safe yet: the deployer owns the contracts while it sends their setup batches itself
+  // (run-batch.js), then offers them to the owner wallet (handover.js), which accepts on owner.html.
+  describe("supervised launch", function () {
+    const OWNABLE = ["function owner() view returns (address)", "function pendingOwner() view returns (address)", "function acceptOwnership()"];
+    const NAMES = ["SDOGECollectibles", "SDOGEStaking", "SDOGEStudio", "SDOGENFTMarketplace"];
+    const ownable = (name, runner = ethers.provider) => new ethers.Contract(readRecord().contracts[name].address, OWNABLE, runner);
+    const send = (batch) => quiet(() => runBatch.run({ expectedChainId: LOCAL, batch }));
+
+    async function deploySupervised(f) {
+      const me = { ...f.base, owner: f.deployer.address, allowDeployer: true };
+      await quiet(() => deployCollectibles.run({ ...me, treasury: f.treasury.address, baseUri: "ipfs://bafymeta/", fetchImpl: okFetch }));
+      await quiet(() => setupDesigns.run({ expectedChainId: LOCAL }));
+      await send("collectibles-create-designs");
+      const { staking } = await quiet(() => deployStaking.run({ ...me, collection: undefined }));
+      await send("staking-setup");
+      const { studio } = await quiet(() => deployStudio.run({ ...me, treasury: f.treasury.address, ...pinnedStudio }));
+      const { marketplace } = await quiet(() => deployMarketplace.run({ ...me, feeRecipient: f.treasury.address }));
+      return { staking, studio, marketplace };
+    }
+
+    it("the deployer owns the contracts only with ALLOW_DEPLOYER_OWNER=1, and sends the setup batches itself", async function () {
+      const f = await fixture();
+      await expect(quiet(() => deployStaking.run({ ...f.base, owner: f.deployer.address, allowEoa: true }))).to.be.rejectedWith(
+        "is the deployer key"
+      );
+      const { out } = await capture(() => deployStaking.run({ ...f.base, owner: f.deployer.address, allowDeployer: true }));
+      expect(out).to.include("ALLOW_DEPLOYER_OWNER=1: STAKING_OWNER_ADDRESS is the deployer");
+
+      const g = await fixture();
+      const d = await deploySupervised(g);
+      const nft = await ethers.getContractAt("SDOGECollectibles", readRecord().contracts.SDOGECollectibles.address);
+      expect(await nft.nextDesignId()).to.equal(BigInt(designs.length + 1));
+      const boosts = readRecord().contracts.SDOGEStaking.settings.designBoosts;
+      expect(await d.staking.designBoostBps(1)).to.equal(BigInt(boosts[1]));
+      await send("studio-setup");
+      await send("marketplace-setup");
+      expect(await d.studio.rewardsPool()).to.equal(d.staking.target);
+      expect(await d.marketplace.rewardsPool()).to.equal(d.staking.target);
+      // A single-key owner passes verification only when that's allowed.
+      expect(await check(g)).to.have.length(4);
+      expect(await check(g, { allowEoa: true })).to.deep.equal([]);
+    });
+
+    it("hands everything over; nothing changes until the owner accepts, and verify follows along", async function () {
+      const f = await fixture();
+      const d = await deploySupervised(f);
+      const owner = f.treasury; // the owner's wallet
+      const { result } = await capture(() => handover.run({ expectedChainId: LOCAL, newOwner: owner.address, allowEoa: true }));
+      expect(result.sent).to.deep.equal(NAMES);
+      for (const name of NAMES) {
+        expect(await ownable(name).owner()).to.equal(f.deployer.address);
+        expect(await ownable(name).pendingOwner()).to.equal(owner.address);
+        expect(readRecord().contracts[name].handoverTo).to.equal(owner.address);
+      }
+      const waiting = await check(f, { allowEoa: true });
+      expect(waiting).to.have.length(4);
+      expect(waiting).to.include(
+        `SDOGEStaking owner: still ${f.deployer.address}: waiting for ${owner.address} to accept ownership (on ${handover.OWNER_PAGE})`
+      );
+
+      // Until then the deployer is still the owner and can finish the setup.
+      await send("studio-setup");
+      expect(await d.studio.rewardsPool()).to.equal(d.staking.target);
+      const again = await capture(() => handover.run({ expectedChainId: LOCAL, newOwner: owner.address, allowEoa: true }));
+      expect(again.result.sent).to.deep.equal([]);
+      expect(again.out).to.include("already offered");
+
+      for (const name of NAMES) await (await ownable(name, owner).acceptOwnership()).wait();
+      expect(await check(f, { allowEoa: true })).to.deep.equal([]);
+      const nonce = await nonceOf(f.deployer);
+      const done = await capture(() => handover.run({ expectedChainId: LOCAL, newOwner: owner.address, allowEoa: true }));
+      expect(done.result.sent).to.deep.equal([]);
+      expect(done.out).to.include("already owned");
+      // The deployer can't send owner batches any more, and tries nothing.
+      await expect(send("marketplace-setup")).to.be.rejectedWith(`is owned by ${owner.address}, not the deployer`);
+      expect(await nonceOf(f.deployer)).to.equal(nonce);
+    });
+
+    it("a replaced offer or a withdrawn one shows up in verify", async function () {
+      const f = await fixture();
+      await deploySupervised(f);
+      await quiet(() => handover.run({ expectedChainId: LOCAL, newOwner: f.other.address, allowEoa: true }));
+      // A wrong address: running it again with the right one replaces every offer.
+      const { out } = await capture(() => handover.run({ expectedChainId: LOCAL, newOwner: f.treasury.address, allowEoa: true }));
+      expect(out).to.include(`replaces the offer to ${f.other.address}`);
+      expect(await ownable("SDOGEStudio").pendingOwner()).to.equal(f.treasury.address);
+      // The record says it was handed over, but the offer was withdrawn on-chain.
+      const studio = new ethers.Contract(readRecord().contracts.SDOGEStudio.address, ["function transferOwnership(address)"], f.deployer);
+      await (await studio.transferOwnership(ethers.ZeroAddress)).wait();
+      expect((await check(f, { allowEoa: true })).join("\n")).to.include(
+        `SDOGEStudio owner: still ${f.deployer.address}, and the offer to ${f.treasury.address} isn't pending ` +
+          `(pendingOwner ${ethers.ZeroAddress}): run scripts/handover.js again`
+      );
+    });
+
+    it("refuses the deployer, a single key unless allowed, or a contract the deployer doesn't own, before sending anything", async function () {
+      const f = await fixture();
+      const d = await deploySupervised(f);
+      const nonce = await nonceOf(f.deployer);
+      const offer = (newOwner, extra = {}) => quiet(() => handover.run({ expectedChainId: LOCAL, newOwner, ...extra }));
+      await expect(offer(f.deployer.address, { allowEoa: true, allowDeployer: true })).to.be.rejectedWith("is the deployer key");
+      await expect(offer(f.treasury.address)).to.be.rejectedWith("ALLOW_EOA_OWNER=1");
+      await expect(offer(DEAD, { allowEoa: true })).to.be.rejectedWith("the burn address");
+      expect(await nonceOf(f.deployer)).to.equal(nonce);
+
+      // The marketplace already belongs to someone else: the whole handover stops before sending.
+      await (await d.marketplace.transferOwnership(f.other.address)).wait();
+      await (await d.marketplace.connect(f.other).acceptOwnership()).wait();
+      const before = await nonceOf(f.deployer);
+      await expect(offer(f.safe.target)).to.be.rejectedWith(`is owned by ${f.other.address}, not the deployer`);
+      expect(await nonceOf(f.deployer)).to.equal(before);
+      expect(await ownable("SDOGEStaking").pendingOwner()).to.equal(ethers.ZeroAddress);
+      // run-batch checks every target the same way.
+      await expect(send("marketplace-setup")).to.be.rejectedWith("Nothing was sent.");
+      expect(await nonceOf(f.deployer)).to.equal(before);
     });
   });
 });

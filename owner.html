@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SDOGE Owner</title>
+<meta name="description" content="For the SDOGE team: accept ownership of the contracts and finish the launch steps." />
+<meta name="robots" content="noindex, nofollow" />
+
+<link rel="icon" type="image/jpeg" href="assets/img/logo.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css" />
+<link rel="stylesheet" href="assets/css/staking.css" />
+<link rel="stylesheet" href="assets/css/owner.css" />
+<link rel="stylesheet" href="assets/css/nav.css" />
+</head>
+<body class="stk">
+
+<!-- ===== NAV (the same on every page: assets/css/nav.css) ===== -->
+<nav class="navbar site-nav" id="navbar">
+  <div class="site-nav__inner">
+    <a href="/" class="site-nav__brand" aria-label="SDOGE home">
+      <img src="assets/img/wordmark.webp" alt="SDOGE" width="480" height="121" />
+    </a>
+
+    <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+
+    <div class="navbar__links site-nav__links" id="navLinks">
+      <a href="/">Home</a>
+      <a href="/#about">About</a>
+      <a href="/#tokenomics">Tokenomics</a>
+      <a href="/staking.html">Staking</a>
+      <a href="/nft.html">NFT</a>
+      <a href="/studio.html">Studio</a>
+      <a href="https://pad.stabledoge.site" data-pad-link>Pad</a>
+      <a href="/#roadmap">Roadmap</a>
+      <a href="/#community">Community</a>
+      <a href="/#buy" class="site-nav__cta site-nav__cta--mobile">Buy SDOGE</a>
+    </div>
+
+    <div class="site-nav__right">
+      <span class="site-nav__arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
+      <a href="/#buy" class="site-nav__cta">Buy SDOGE</a>
+    </div>
+  </div>
+</nav>
+
+<main class="stk-wrap own">
+  <h1 class="stk-h2 own__title">Owner</h1>
+  <p class="own__lead">For the SDOGE team. Connect the owner wallet, accept each contract, then finish the launch steps in order. Everyone else can only look.</p>
+  <button type="button" class="stk-btn stk-btn--primary js-connect-wallet">Connect Wallet</button>
+  <p class="stk-notice" data-preview-copy>The contracts are not deployed on Arc yet.</p>
+  <p class="stk-notice" id="ownerNotice"></p>
+
+  <section class="stk-card own__card" aria-labelledby="ownTitle">
+    <h2 class="stk-card__title stk-card__title--sm" id="ownTitle">1. Accept ownership</h2>
+    <p class="stk-field__hint">The deploy wallet set everything up and offered each contract to the owner wallet. Nothing changes until that wallet accepts, one contract at a time.</p>
+    <div class="own-list" id="ownerList"><p class="stk-empty">Loading…</p></div>
+  </section>
+
+  <section class="stk-card own__card" aria-labelledby="launchTitle">
+    <h2 class="stk-card__title stk-card__title--sm" id="launchTitle">2. Launch steps (in this order)</h2>
+
+    <div class="own-step">
+      <div class="own-step__head"><strong>Seed stake</strong><span id="stepSeedState"></span></div>
+      <p class="stk-field__hint">From the owner wallet, stake SDOGE you will never unstake, in the 365-day tier, on the <a href="/staking.html">staking page</a>. It has to come before rewards start.</p>
+    </div>
+
+    <div class="own-step">
+      <div class="own-step__head"><strong>Start rewards</strong><span id="stepRewardsState"></span></div>
+      <p class="stk-field__hint">Streams to the stakers over 7 days. After the first one, early-exit penalties stream on their own, and anyone can restart the USDC stream from revenue once a period is over.</p>
+      <div class="own-step__row">
+        <div class="stk-input"><div class="stk-input__row">
+          <input type="text" inputmode="decimal" autocomplete="off" id="ownerSdogeAmount" placeholder="100000" aria-label="SDOGE to stream to stakers" />
+          <span class="stk-input__token">SDOGE</span>
+        </div></div>
+        <button type="button" class="stk-btn stk-btn--soft" id="ownerStartSdoge" disabled>Stream SDOGE</button>
+      </div>
+      <div class="own-step__row">
+        <div class="stk-input"><div class="stk-input__row">
+          <input type="text" inputmode="decimal" autocomplete="off" id="ownerUsdcAmount" placeholder="1" aria-label="USDC to stream to stakers" />
+          <span class="stk-input__token">USDC</span>
+        </div></div>
+        <button type="button" class="stk-btn stk-btn--soft" id="ownerStartUsdc" disabled>Stream USDC</button>
+      </div>
+    </div>
+
+    <div class="own-step">
+      <div class="own-step__head"><strong>Revenue to stakers</strong><span id="stepRevenueState"></span></div>
+      <p class="stk-field__hint">Half of Studio credit sales and all marketplace fees go to the staking pool, once rewards have started.</p>
+      <div class="own-step__row">
+        <button type="button" class="stk-btn stk-btn--soft" id="ownerRouteStudio" disabled>Studio sales to stakers</button>
+        <button type="button" class="stk-btn stk-btn--soft" id="ownerRouteMarket" disabled>Marketplace fees to stakers</button>
+      </div>
+    </div>
+
+    <p class="stk-field__hint">Anything else (prices, pausing, treasury): each contract’s page on <a href="https://explorer.arc.io" target="_blank" rel="noopener">explorer.arc.io</a>, “Write contract”, connected with the owner wallet.</p>
+  </section>
+</main>
+
+<footer class="footer stk-footer">
+  <div class="container">
+    <p class="copyright">© <span id="year"></span> $SDOGE. Stable. Simple. On Arc.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/arc.js"></script>
+<script src="assets/js/wallet.js"></script>
+<script src="assets/js/owner.js"></script>
+</body>
+</html>

@@ -907,4 +907,91 @@ describe("front end (assets/js)", function () {
       expect(p.el("estApr").textContent).to.equal("182.5%");
     });
   });
+
+  describe("owner.js", function () {
+    const OWNER_PAGE = ["arc.js", "wallet.js", "owner.js"];
+    const KEYS = ["collectibles", "staking", "studio", "marketplace"];
+    const short = (a) => `${a.slice(0, 6)}...${a.slice(-4)}`;
+    const ownerPage = async (f, who) => {
+      const p = await page(f, OWNER_PAGE, who);
+      await p.ready();
+      expect(await p.run("connectWallet()")).to.equal(true);
+      await p.run("loadOwnerState()");
+      return p;
+    };
+
+    it("its Studio revenue share matches nft/studio.json", async function () {
+      const [a] = await ethers.getSigners();
+      const p = await loadPage({ files: OWNER_PAGE, hreProvider: network.provider, account: a.address });
+      expect(p.run("OWNER_STUDIO_POOL_SHARE_BPS")).to.equal(BigInt(studioManifest.poolShareBps));
+    });
+
+    it("shows who owns each contract, and only the wallet it was offered to can accept it", async function () {
+      const f = await deployAll();
+      for (const c of [f.collectibles, f.staking, f.studio, f.marketplace]) await c.transferOwnership(f.alice.address);
+
+      const bob = await ownerPage(f, f.bob);
+      expect(bob.el("ownerList").innerHTML).to.include(`Offered to ${short(f.alice.address)}, waiting for that wallet to accept`);
+      expect(bob.el("ownerList").innerHTML).to.not.include("data-accept");
+      await bob.run("ownerAccept('staking')");
+      expect(bob.alerts.at(-1)).to.match(/hasn't been offered to this wallet/);
+      expect(bob.sent.length).to.equal(0);
+
+      const p = await ownerPage(f, f.alice);
+      for (const key of KEYS) expect(p.el("ownerList").innerHTML).to.include(`data-accept="${key}"`);
+      for (const key of KEYS) await p.run(`ownerAccept('${key}')`);
+      expect(p.confirms[0]).to.include("Accept ownership of the NFT collection contract");
+      for (const c of [f.collectibles, f.staking, f.studio, f.marketplace]) expect(await c.owner()).to.equal(f.alice.address);
+      expect(p.el("ownerList").innerHTML.match(/You own it/g)).to.have.length(4);
+      expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
+      await p.run("ownerAccept('staking')");
+      expect(p.alerts.at(-1)).to.match(/already owns the Staking contract/);
+    });
+
+    it("starts rewards only after the owner's seed stake, then sends revenue to the stakers", async function () {
+      const f = await deployAll();
+      const staking = await f.staking.getAddress();
+      const p = await ownerPage(f, f.owner);
+      expect(p.el("ownerStartSdoge").disabled).to.equal(true);
+      p.el("ownerSdogeAmount").value = "70";
+      await p.run("ownerStartSdogeRewards()");
+      expect(p.alerts.at(-1)).to.match(/Make the seed stake first/);
+      await p.run("ownerRoute('studio')");
+      expect(p.alerts.at(-1)).to.match(/Start rewards first/);
+      expect(p.sent.length).to.equal(0);
+
+      // The seed stake: 365 days, from the owner.
+      await f.sdoge.mint(f.owner.address, E("1070"));
+      await f.sdoge.connect(f.owner).approve(staking, E("1000"));
+      await f.staking.connect(f.owner).stake(4, E("1000"), 365 * 86400, 30000);
+      await p.run("loadOwnerState()");
+      expect(p.el("stepSeedState").textContent).to.equal(`Done: 1 open stake(s) from ${short(f.owner.address)}`);
+      expect(p.el("ownerStartSdoge").disabled).to.equal(false);
+      await p.run("ownerStartSdogeRewards()");
+      expect(p.confirms.at(-1)).to.equal("Stream 70 SDOGE to the stakers over the next 7 days? This starts rewards.");
+      expect(await f.staking.rewardsStarted()).to.equal(true);
+      expect(await f.sdoge.allowance(f.owner.address, staking)).to.equal(0);
+      p.el("ownerUsdcAmount").value = "1.5";
+      await p.run("ownerStartUsdcRewards()");
+      expect(p.confirms.at(-1)).to.include("It adds to the stream that is running.");
+      expect(await f.staking.periodFinish()).to.be.greaterThan(0n);
+      expect(await ethers.provider.getBalance(staking)).to.equal(E("1.5"));
+
+      await p.run("ownerRoute('studio')");
+      await p.run("ownerRoute('marketplace')");
+      expect(await f.studio.rewardsPool()).to.equal(staking);
+      expect(await f.studio.poolShareBps()).to.equal(5000n);
+      expect(await f.marketplace.rewardsPool()).to.equal(staking);
+      expect(p.el("stepRevenueState").textContent).to.equal("Studio: 50% of credit sales · Marketplace fees: to the stakers");
+      expect([p.el("ownerRouteStudio").disabled, p.el("ownerRouteMarket").disabled]).to.deep.equal([true, true]);
+      expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
+
+      // Anyone else can look, not act.
+      const bob = await ownerPage(f, f.bob);
+      bob.el("ownerSdogeAmount").value = "1";
+      await bob.run("ownerStartSdogeRewards()");
+      expect(bob.alerts.at(-1)).to.match(/Only the staking contract.s owner can start rewards/);
+      expect(bob.sent.length).to.equal(0);
+    });
+  });
 });

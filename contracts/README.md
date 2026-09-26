@@ -105,8 +105,8 @@ close to zero. Say so wherever staking is promoted.
 
 ```bash
 npm install
-npx hardhat test   # 262 tests:
-                   #  54 staking         (fixed terms, terms guard, penalty streamed to stakers,
+npx hardhat test   # 270 tests:
+                   #  56 staking         (fixed terms, terms guard, penalty streamed to stakers,
                    #                      USDC + SDOGE rewards and forfeiture, maturity, allowEarly,
                    #                      splits, NFT boosts and returns, deferred payouts and NFTs,
                    #                      first period, exact two-currency accounting fuzz)
@@ -120,10 +120,10 @@ npx hardhat test   # 262 tests:
                    #                      ownership handover, cap, royalties)
                    #  39 marketplace     (escrow, per-seller/per-collection indexes, fee and
                    #                      royalty limits, cancel paths, proceeds, pause)
-                   #  31 deploy scripts  (run for real on the local chain with a mock Safe,
-                   #                      verify-deployment, sync-frontend)
-                   #  46 front end       (the site's real assets/js files against these contracts)
-                   #   4 studio AI       (studio-ai.js against the api/ai handlers on this chain)
+                   #  36 deploy scripts  (run for real on the local chain with a mock Safe,
+                   #                      verify-deployment, sync-frontend, run-batch, handover)
+                   #  53 front end       (the site's real assets/js files against these contracts)
+                   #   5 studio AI       (studio-ai.js against the api/ai handlers on this chain)
 ```
 
 `test/helpers/fe-harness.js` loads the site's scripts the way a browser page does, with an
@@ -205,8 +205,45 @@ OPEN=1 npx hardhat run scripts/setup-designs.js --network arc
 npx hardhat verify --network arc <address> <constructor args...>
 ```
 
+### Supervised launch (no Safe yet)
+
+When there is no Safe yet, the deployer can own the contracts for the setup only, then hand
+them to the owner's wallet. The deploy key must not keep anything: everything ends with the
+owner.
+
+```bash
+ME=0x...      # the deployer's address
+OWNER=0x...   # the owner's wallet: treasury, fee recipient, and owner after the handover
+
+# Deploy as in the runbook, with the deployer as owner:
+export ALLOW_DEPLOYER_OWNER=1
+COLLECTIBLES_OWNER_ADDRESS=$ME TREASURY_ADDRESS=$OWNER COLLECTIBLES_BASE_URI=https://www.stabledoge.site/nft/metadata/ \
+  npx hardhat run scripts/deploy-collectibles.js --network arc
+# ...then setup-designs, deploy-staking, deploy-studio, deploy-marketplace the same way.
+
+# The deployer sends each owner batch itself. It checks that it owns every contract the batch
+# calls, or sends nothing.
+BATCH=collectibles-create-designs npx hardhat run scripts/run-batch.js --network arc
+BATCH=staking-setup npx hardhat run scripts/run-batch.js --network arc
+
+# Verify and sync the site with ALLOW_EOA_OWNER=1 (a single key owns everything for now).
+
+# Offer every contract to the owner. Nothing changes until the owner accepts, so the deployer
+# can still finish the setup (the seed-stake order below still holds).
+NEW_OWNER_ADDRESS=$OWNER ALLOW_EOA_OWNER=1 npx hardhat run scripts/handover.js --network arc
+```
+
+Then the owner opens `https://www.stabledoge.site/owner.html` with that wallet:
+1. **Accept ownership** of each of the 4 contracts.
+2. Make the seed stake: 365-day tier, on the staking page.
+3. Start rewards.
+4. Send Studio sales and marketplace fees to the stakers.
+
+The page won't start rewards before the seed stake, and won't route revenue before rewards have
+started. `verify-deployment.js` knows the handover: it fails until the owner has accepted, and
+then expects the new owner.
+
 Before launch:
-- Replace the `ipfs://REPLACE_ME` images in `nft/metadata`.
 - Settle the design prices and reserves in `nft/designs.json` and the boosts in
   `nft/staking-boosts.json` (placeholders today).
 - Check the packages, `poolShareBps` and `communityContractURI` in `nft/studio.json`.

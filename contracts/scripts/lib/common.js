@@ -50,6 +50,7 @@ function overrides() {
     allowEoa: flag("ALLOW_EOA_OWNER"),
     allowLowThreshold: flag("ALLOW_LOW_THRESHOLD"),
     allowNonSafeOwner: flag("ALLOW_NON_SAFE_OWNER"),
+    allowDeployer: flag("ALLOW_DEPLOYER_OWNER"),
     force: flag("FORCE_REDEPLOY"),
   };
 }
@@ -115,12 +116,23 @@ async function inspectAccount(rpc, address) {
 }
 
 // The owner of every contract should be the team's Safe on Arc: a contract, with 2+ signers.
-async function checkOwner(label, address, { deployer, allowEoa = false, allowLowThreshold = false, allowNonSafeOwner = false } = {}) {
+// ALLOW_DEPLOYER_OWNER=1 is for a supervised launch without a Safe: the deployer owns the
+// contracts only while it runs their setup (scripts/run-batch.js), then scripts/handover.js
+// offers ownership to the real owner, who accepts it.
+async function checkOwner(
+  label,
+  address,
+  { deployer, allowEoa = false, allowLowThreshold = false, allowNonSafeOwner = false, allowDeployer = false } = {}
+) {
   const owner = parseAddress(label, address);
   const reserved = reservedAddress(owner);
   if (reserved) throw new Error(`${label} ${owner} is ${reserved}; nobody could ever act as owner.`);
   if (deployer && owner === ethers.getAddress(deployer)) {
-    throw new Error(`${label} ${owner} is the deployer key. The deployer only pays gas; make the team's Safe the owner.`);
+    if (!allowDeployer) {
+      throw new Error(`${label} ${owner} is the deployer key. The deployer only pays gas; make the team's Safe the owner.`);
+    }
+    console.warn(`  WARNING: ALLOW_DEPLOYER_OWNER=1: ${label} is the deployer ${owner} until scripts/handover.js hands it over.`);
+    return owner;
   }
   const account = await inspectAccount(provider(), owner);
   if (account.kind === "eoa") {
@@ -248,6 +260,12 @@ function loadDeployments(name = recordName()) {
   return data;
 }
 
+function saveDeployments(data, name = recordName()) {
+  fs.mkdirSync(deploymentsDir(), { recursive: true });
+  const json = JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2);
+  fs.writeFileSync(deploymentsFile(name), json + "\n");
+}
+
 function deployedAddress(contractName, name = recordName()) {
   return loadDeployments(name).contracts[contractName]?.address;
 }
@@ -301,9 +319,7 @@ async function recordDeployment(name, contract, args, extra = {}) {
   const previous = data.contracts[name];
   if (previous) (data.replaced ||= []).push({ name, ...previous, replacedBy: address });
   data.contracts[name] = { address, txHash: receipt.hash, block: receipt.blockNumber, args, ...extra };
-  fs.mkdirSync(deploymentsDir(), { recursive: true });
-  const json = JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2);
-  fs.writeFileSync(file, json + "\n");
+  saveDeployments(data);
   console.log(`  recorded in ${rel(file)}`);
   return data.contracts[name];
 }
@@ -418,6 +434,7 @@ module.exports = {
   deploymentsFile,
   safeBatchFile,
   loadDeployments,
+  saveDeployments,
   deployedAddress,
   checkRecord,
   recordDeployment,
