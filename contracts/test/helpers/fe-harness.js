@@ -207,7 +207,10 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
       swap("const ARC_CHAIN_ID = 5042n;", `const ARC_CHAIN_ID = ${chainId}n;`);
       if (relay) swap("const ARC_RPC_URL = 'https://rpc.mainnet.arc.io';", `const ARC_RPC_URL = '${relay.url}';`);
       else swap(/const arcReadProvider = new ArcRpcProvider\([^;]*\);/, "const arcReadProvider = __testReadProvider;");
-      for (const [key, value] of Object.entries(contracts)) {
+      // Every contract starts unset (preview mode), whatever arc.js has deployed; a test sets
+      // the ones it deploys.
+      const all = { staking: "", collectibles: "", studio: "", marketplace: "", ...contracts };
+      for (const [key, value] of Object.entries(all)) {
         const re = new RegExp(`^(\\s*${key}: )'[^']*',$`, "m");
         if (!re.test(src)) throw new Error(`no ${key} in SDOGE_CONTRACTS`);
         src = src.replace(re, `$1'${value}',`);

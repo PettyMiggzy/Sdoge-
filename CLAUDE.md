@@ -172,15 +172,23 @@ creator-set tax 0–10% per side.
 ## Other parts
 
 - `contracts/` (Hardhat): staking, NFT collection, SDOGE Studio, marketplace.
-  Not deployed yet; runbook in `contracts/README.md`. There's no Safe, so the launch
-  is supervised (owner said go live, 2026-09-26): a throwaway deploy wallet the
-  owner funds deploys with `ALLOW_DEPLOYER_OWNER=1`, sends the setup batches itself
-  (`scripts/run-batch.js`), then offers all 4 contracts to `0x5899…5914`
-  (`scripts/handover.js`). The owner accepts on `owner.html` (not in the nav,
-  noindex), which also walks the seed stake → start rewards → route revenue
-  steps in that order. The deploy key lives only in a session scratchpad, so
-  the handover must go out before the session ends and leftovers go back to
-  `0x5899…5914`.
+  Runbook in `contracts/README.md`. **Deployed on Arc mainnet 2026-09-26**
+  (record `contracts/deployments/arc.json`, the site reads them from
+  `assets/js/arc.js`):
+  - SDOGECollectibles `0x400A80B98CDF6999bE92A002799adBEE6807d9b5`
+  - SDOGEStaking `0x320a128A7cf45804a8Af15FE786AAD9d1eA401f6`
+  - SDOGEStudio `0x7A99AE8d0E808a850342a73303748E7326BA317c` (Community Art
+    `0xd5092ffBfDc1Afd541fa72787B42A7E95BEb48Db`)
+  - SDOGENFTMarketplace `0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a`
+
+  Treasury and fee recipient: `0x5899…5914`. There's no Safe, so the launch is
+  supervised (owner said go live, 2026-09-26): a throwaway deploy wallet
+  `0x91dD28FDCc337eEf15238d0Faa256e994b727D11` (funded by the owner; key only in
+  that session's scratchpad) deployed with `ALLOW_DEPLOYER_OWNER=1`, sent the setup
+  batches itself (`scripts/run-batch.js`), then offers all 4 contracts to
+  `0x5899…5914` (`scripts/handover.js`). The owner accepts on `owner.html` (not in
+  the nav, noindex), which also walks the seed stake → start rewards → route
+  revenue steps in that order. Leftovers go back to `0x5899…5914`.
 - `launchpad/` (Foundry): the earlier meme launchpad with the meme vault.
   `tgpad/`: the Telegram bot for it. The owner may later point the Telegram
   launchpad at SDOGE Pad instead.

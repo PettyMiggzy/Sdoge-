@@ -21,10 +21,10 @@ const ARC_CHAIN_PARAMS = {
 // contracts/deployments/arc.json; an empty string means "not deployed yet".
 const SDOGE_CONTRACTS = Object.freeze({
   token: '0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405',
-  staking: '',
-  collectibles: '',
-  studio: '',
-  marketplace: '',
+  staking: '0x320a128A7cf45804a8Af15FE786AAD9d1eA401f6',
+  collectibles: '0x400A80B98CDF6999bE92A002799adBEE6807d9b5',
+  studio: '0x7A99AE8d0E808a850342a73303748E7326BA317c',
+  marketplace: '0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a',
 });
 
 // Arc's public RPC allows about 20 eth_calls per second per IP. Over the limit, an item inside a

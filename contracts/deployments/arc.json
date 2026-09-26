@@ -1,0 +1,90 @@
+{
+  "chainId": 5042,
+  "contracts": {
+    "SDOGECollectibles": {
+      "address": "0x400A80B98CDF6999bE92A002799adBEE6807d9b5",
+      "txHash": "0x607f683232568bf7a06369ba75f1e269d5b528f800cd159aa09aa8294283a49d",
+      "block": 22827415,
+      "args": [
+        "0x91dD28FDCc337eEf15238d0Faa256e994b727D11",
+        "https://www.stabledoge.site/nft/metadata/",
+        "0x5899a0576A94327a6316E01190f951edf7645914"
+      ]
+    },
+    "SDOGEStaking": {
+      "address": "0x320a128A7cf45804a8Af15FE786AAD9d1eA401f6",
+      "txHash": "0x88bc2a40a42d25e6f0289e7884bee157e5405bdc8851e2123a6a52968d9c82e3",
+      "block": 22827472,
+      "args": [
+        "0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405",
+        "0x400A80B98CDF6999bE92A002799adBEE6807d9b5",
+        "0x91dD28FDCc337eEf15238d0Faa256e994b727D11"
+      ],
+      "settings": {
+        "notifier": "0x0000000000000000000000000000000000000000",
+        "designBoosts": {
+          "1": 3000,
+          "2": 5000,
+          "3": 2000,
+          "4": 3000,
+          "5": 2000,
+          "6": 1000,
+          "7": 1000,
+          "8": 2000,
+          "9": 3000,
+          "10": 5000,
+          "11": 3000,
+          "12": 5000
+        }
+      }
+    },
+    "SDOGEStudio": {
+      "address": "0x7A99AE8d0E808a850342a73303748E7326BA317c",
+      "txHash": "0x02812397dc3ca241bc2e4caf2c7ddd997fc99e6352ca8a797006389f13247699",
+      "block": 22827488,
+      "args": [
+        "0x91dD28FDCc337eEf15238d0Faa256e994b727D11",
+        "0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405",
+        "0x5899a0576A94327a6316E01190f951edf7645914",
+        [
+          {
+            "mints": 1,
+            "active": true,
+            "priceWei": "5000000000000000000",
+            "priceSdoge": "1000000000000000000000000"
+          },
+          {
+            "mints": 10,
+            "active": true,
+            "priceWei": "20000000000000000000",
+            "priceSdoge": "0"
+          },
+          {
+            "mints": 100,
+            "active": true,
+            "priceWei": "50000000000000000000",
+            "priceSdoge": "0"
+          },
+          {
+            "mints": 1000,
+            "active": true,
+            "priceWei": "100000000000000000000",
+            "priceSdoge": "0"
+          }
+        ],
+        "https://www.stabledoge.site/nft/community/collection.json"
+      ]
+    },
+    "SDOGENFTMarketplace": {
+      "address": "0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a",
+      "txHash": "0x93e04531d0bad7d16e9199f432919b3335c1a9416d62d7187d6639673eed7cdf",
+      "block": 22827496,
+      "args": [
+        "0x91dD28FDCc337eEf15238d0Faa256e994b727D11",
+        "0x7A99AE8d0E808a850342a73303748E7326BA317c",
+        "0x400A80B98CDF6999bE92A002799adBEE6807d9b5",
+        "0x5899a0576A94327a6316E01190f951edf7645914"
+      ]
+    }
+  }
+}

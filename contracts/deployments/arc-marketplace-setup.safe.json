@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "chainId": "5042",
+  "createdAt": 1790410231422,
+  "meta": {
+    "name": "marketplace-setup",
+    "description": "send marketplace fees to staking",
+    "createdFromSafeAddress": "0x91dD28FDCc337eEf15238d0Faa256e994b727D11"
+  },
+  "transactions": [
+    {
+      "to": "0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a",
+      "value": "0",
+      "data": "0x7c000293000000000000000000000000320a128a7cf45804a8af15fe786aad9d1ea401f6",
+      "contractMethod": null,
+      "contractInputsValues": null
+    }
+  ]
+}

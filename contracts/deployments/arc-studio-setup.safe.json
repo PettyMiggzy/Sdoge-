@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "chainId": "5042",
+  "createdAt": 1790410227537,
+  "meta": {
+    "name": "studio-setup",
+    "description": "route Studio revenue to staking",
+    "createdFromSafeAddress": "0x91dD28FDCc337eEf15238d0Faa256e994b727D11"
+  },
+  "transactions": [
+    {
+      "to": "0x7A99AE8d0E808a850342a73303748E7326BA317c",
+      "value": "0",
+      "data": "0x1138b376000000000000000000000000320a128a7cf45804a8af15fe786aad9d1ea401f60000000000000000000000000000000000000000000000000000000000001388",
+      "contractMethod": null,
+      "contractInputsValues": null
+    }
+  ]
+}
