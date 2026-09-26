@@ -173,3 +173,32 @@ if (window.ethereum?.on) {
     if (arcSignerAddress && String(accounts?.[0] ?? '').toLowerCase() !== arcSignerAddress) window.location.reload();
   });
 }
+
+// The contracts' source is verified on Sourcify, but Arc's explorer only shows it once someone
+// asks it for that contract: each visit asks once for this site's contracts (like pad-ticker.js
+// does for pad tokens).
+(function arcAskExplorer() {
+  if (typeof fetch !== 'function') return;
+  let seen = [];
+  try {
+    seen = JSON.parse(sessionStorage.getItem('explorer-asked') || '[]');
+  } catch {
+    // private mode
+  }
+  const done = new Set(seen);
+  for (const [key, address] of Object.entries(SDOGE_CONTRACTS)) {
+    const k = String(address).toLowerCase();
+    if (key === 'token' || !isAddressSet(address) || done.has(k)) continue;
+    done.add(k);
+    try {
+      Promise.resolve(fetch(`${ARC_EXPLORER_URL}/api/v2/smart-contracts/${k}`, { mode: 'no-cors', cache: 'no-store' })).catch(() => {});
+    } catch {
+      // never let this stop the page
+    }
+  }
+  try {
+    sessionStorage.setItem('explorer-asked', JSON.stringify([...done].slice(-500)));
+  } catch {
+    // private mode
+  }
+})();

@@ -181,6 +181,13 @@ creator-set tax 0–10% per side.
     `0xd5092ffBfDc1Afd541fa72787B42A7E95BEb48Db`)
   - SDOGENFTMarketplace `0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a`
 
+  All 12 designs open for mint. Source verified on Sourcify (exact match, all 4 plus the
+  Studio's collection template `0x9d56156689F7684D275Eb34F5604f8E05D193D95`;
+  `scripts/verify-sourcify.js`). Tested on the live site with real transactions
+  (stake, split unstake to 2 wallets, early exit, Studio 1-of-1, marketplace sale).
+  All 4 contracts offered to `0x5899…5914` (2026-09-26); until it accepts on
+  `owner.html`, the deploy wallet is still their owner.
+
   Treasury and fee recipient: `0x5899…5914`. There's no Safe, so the launch is
   supervised (owner said go live, 2026-09-26): a throwaway deploy wallet
   `0x91dD28FDCc337eEf15238d0Faa256e994b727D11` (funded by the owner; key only in

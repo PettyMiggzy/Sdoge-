@@ -9,7 +9,8 @@
         "0x91dD28FDCc337eEf15238d0Faa256e994b727D11",
         "https://www.stabledoge.site/nft/metadata/",
         "0x5899a0576A94327a6316E01190f951edf7645914"
-      ]
+      ],
+      "handoverTo": "0x5899a0576A94327a6316E01190f951edf7645914"
     },
     "SDOGEStaking": {
       "address": "0x320a128A7cf45804a8Af15FE786AAD9d1eA401f6",
@@ -36,7 +37,8 @@
           "11": 3000,
           "12": 5000
         }
-      }
+      },
+      "handoverTo": "0x5899a0576A94327a6316E01190f951edf7645914"
     },
     "SDOGEStudio": {
       "address": "0x7A99AE8d0E808a850342a73303748E7326BA317c",
@@ -73,7 +75,8 @@
           }
         ],
         "https://www.stabledoge.site/nft/community/collection.json"
-      ]
+      ],
+      "handoverTo": "0x5899a0576A94327a6316E01190f951edf7645914"
     },
     "SDOGENFTMarketplace": {
       "address": "0xC36154c5d7038A419CF3E8802Bf41B08B0e1BF6a",
@@ -84,7 +87,8 @@
         "0x7A99AE8d0E808a850342a73303748E7326BA317c",
         "0x400A80B98CDF6999bE92A002799adBEE6807d9b5",
         "0x5899a0576A94327a6316E01190f951edf7645914"
-      ]
+      ],
+      "handoverTo": "0x5899a0576A94327a6316E01190f951edf7645914"
     }
   }
 }

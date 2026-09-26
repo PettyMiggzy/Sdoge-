@@ -201,8 +201,10 @@ SAFE_ADDRESS=$SAFE node scripts/sync-frontend.js
 OPEN=1 npx hardhat run scripts/setup-designs.js --network arc
 #    Optional and one-way: LOCK=1 writes lockSupply x12, lockCollection and freezeMetadata.
 
-# 8. Verify the source on explorer.arc.io (Blockscout)
-npx hardhat verify --network arc <address> <constructor args...>
+# 8. Verify the source on Sourcify (supports Arc; hardhat-verify still calls Sourcify's retired
+#    v1 API, and explorer.arc.io's API turns servers away). Arc's explorer shows the source once
+#    someone asks it for the contract; the site's arc.js does, once per visit.
+node scripts/verify-sourcify.js
 ```
 
 ### Supervised launch (no Safe yet)
