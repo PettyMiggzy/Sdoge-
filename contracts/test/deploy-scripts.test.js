@@ -106,6 +106,7 @@ async function deployAll(f) {
     deployStaking.run({ ...f.base, collection: undefined, notifier: f.notifier.address })
   );
   await execBatch(f.safe, readBatch("staking-setup"));
+  await execBatch(f.safe, readBatch("staking-notifier"));
   const { studio } = await quiet(() => deployStudio.run({ ...f.base, treasury: f.treasury.address, ...pinnedStudio }));
   const { marketplace } = await quiet(() => deployMarketplace.run({ ...f.base, feeRecipient: f.treasury.address }));
   return { staking, collectibles, studio, marketplace };
@@ -209,10 +210,10 @@ describe("deploy scripts", function () {
       try {
         const { out } = await capture(() => deployStaking.run({ ...f.base, notifier: f.notifier.address }));
         expect(out).to.include("counts as a rehearsal");
-        expect(files()).to.deep.equal(["arc-rehearsal-staking-setup.safe.json", "arc-rehearsal.json"]);
+        expect(files()).to.deep.equal(["arc-rehearsal-staking-notifier.safe.json", "arc-rehearsal-staking-setup.safe.json", "arc-rehearsal.json"]);
         process.env.ARC_RECORD_MAINNET = "1";
         await quiet(() => deployStaking.run({ ...f.base, notifier: f.notifier.address }));
-        expect(files()).to.include.members(["arc.json", "arc-staking-setup.safe.json"]);
+        expect(files()).to.include.members(["arc.json", "arc-staking-setup.safe.json", "arc-staking-notifier.safe.json"]);
       } finally {
         delete process.env.ARC_RECORD_MAINNET;
         network.name = saved.name;
@@ -284,7 +285,7 @@ describe("deploy scripts", function () {
       expect(await nonceOf(f.deployer)).to.equal(nonce);
       // The notifier only needs to be usable: it never receives USDC.
       const { staking } = await bad({ notifier: await refuser.getAddress() });
-      expect(readBatch("staking-setup").transactions[1].data).to.equal(encode(staking, "setNotifier", [await refuser.getAddress()]));
+      expect(readBatch("staking-notifier").transactions[0].data).to.equal(encode(staking, "setNotifier", [await refuser.getAddress()]));
     });
 
     it("treasuries and fee recipients: nothing that would lose or refuse native USDC", async function () {
@@ -367,9 +368,11 @@ describe("deploy scripts", function () {
       const expected = Object.fromEntries(designs.map((d) => [String(d.id), tierBoostBps[d.tier]]));
       expect(rec.contracts.SDOGEStaking.settings).to.deep.equal({ notifier: f.notifier.address, designBoosts: expected });
       const batch = readBatch("staking-setup");
-      expect(batch.transactions.length).to.equal(2);
+      expect(batch.transactions.length).to.equal(1); // the notifier waits in its own batch
       expect(await staking.designBoostBps(2)).to.equal(0);
       await execBatch(f.safe, batch);
+      expect(await staking.notifier()).to.equal(ethers.ZeroAddress);
+      await execBatch(f.safe, readBatch("staking-notifier"));
       expect(await staking.notifier()).to.equal(f.notifier.address);
       for (const d of designs) expect(await staking.designBoostBps(d.id)).to.equal(tierBoostBps[d.tier]);
       expect(await staking.designBoostBps(2)).to.equal(5000); // Space Doge, legendary
@@ -599,6 +602,24 @@ describe("deploy scripts", function () {
       expect(out).to.include("All checks passed.");
     });
 
+    it("flags rewards started before the owner's seed stake", async function () {
+      const f = await fixture();
+      const d = await deployAll(f);
+      await execBatch(f.safe, readBatch("studio-setup"));
+      await execBatch(f.safe, readBatch("marketplace-setup"));
+      expect(await check(f)).to.deep.equal([]);
+      await f.safe.exec(d.staking.target, encode(d.staking, "notifyRewardAmount", []), { value: ethers.parseEther("7") });
+      expect(await check(f)).to.deep.equal([
+        "SDOGEStaking seed stake: rewards have started, but the owner has no open stake: the seed stake must come first",
+      ]);
+      // the Safe's seed stake: then it's fine
+      const amount = ethers.parseEther("1000");
+      await f.sdoge.mint(f.safe.target, amount);
+      await f.safe.exec(f.sdoge.target, encode(f.sdoge, "approve", [d.staking.target, amount]));
+      await f.safe.exec(d.staking.target, encode(d.staking, "stake", [4, amount, 365 * 86400, 30000]));
+      expect(await check(f)).to.deep.equal([]);
+    });
+
     it("flags a contract wired to the wrong thing", async function () {
       const f = await fixture();
       const d = await deployAll(f);
@@ -625,7 +646,7 @@ describe("deploy scripts", function () {
       );
       expect(problems.join("\n")).to.include(`${await strayPool.getAddress()} on-chain, but the recorded SDOGEStaking is`);
       expect(problems).to.include(
-        `SDOGEStaking notifier: ${ethers.ZeroAddress} on-chain, but the record says ${f.notifier.address} (the staking-setup Safe batch sets it)`
+        `SDOGEStaking notifier: ${ethers.ZeroAddress} on-chain, but the record says ${f.notifier.address} (the staking-notifier Safe batch sets it, after the seed stake and the first rewards)`
       );
       // A fee the Safe changed on purpose passes once it's expected.
       expect((await check(f, { feeBps: 300 })).join("\n")).to.not.include("feeBps");

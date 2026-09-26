@@ -105,7 +105,7 @@ close to zero. Say so wherever staking is promoted.
 
 ```bash
 npm install
-npx hardhat test   # 255 tests:
+npx hardhat test   # 262 tests:
                    #  54 staking         (fixed terms, terms guard, penalty streamed to stakers,
                    #                      USDC + SDOGE rewards and forfeiture, maturity, allowEarly,
                    #                      splits, NFT boosts and returns, deferred payouts and NFTs,

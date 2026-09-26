@@ -4,10 +4,12 @@
 //
 // Deploy SDOGECollectibles first: its NFTs boost stakes, and the staking contract is tied to it
 // for good (STAKING_BOOST_COLLECTION overrides the recorded one). The owner settings are written
-// as a Safe batch (staking-setup), never sent by the deployer: each design's boost, from
-// nft/staking-boosts.json by the design's tier in nft/designs.json, and the notifier if
-// STAKING_NOTIFIER_ADDRESS is set (a wallet allowed to start reward periods). The record keeps
-// them, so verify-deployment.js can check the Safe applied them.
+// as Safe batches, never sent by the deployer: staking-setup sets each design's boost, from
+// nft/staking-boosts.json by the design's tier in nft/designs.json; staking-notifier (only if
+// STAKING_NOTIFIER_ADDRESS is set) lets that wallet start reward periods. The notifier batch is
+// separate because it must wait until the Safe's seed stake is in and rewards have started: a
+// notifier could otherwise start rewards first. The record keeps both, so verify-deployment.js
+// can check the Safe applied them.
 const { ethers } = require("hardhat");
 const c = require("./lib/common");
 
@@ -31,7 +33,9 @@ function loadBoosts(manifest = c.readRepoJson("nft/staking-boosts.json")) {
   });
 }
 
-// The recorded SDOGECollectibles (or STAKING_BOOST_COLLECTION): an ERC-1155 with designs.
+// The recorded SDOGECollectibles (or STAKING_BOOST_COLLECTION): an ERC-1155 that answers
+// nextDesignId() (so SDOGECollectibles, not some other ERC-1155). Its designs may still be waiting
+// in the Safe's setup batch.
 async function checkCollection(address) {
   if (!address) {
     throw new Error(
@@ -51,7 +55,7 @@ async function checkCollection(address) {
   } catch {
     ok = false;
   }
-  if (!ok) throw new Error(`${a} isn't SDOGECollectibles (an ERC-1155 with designs); check the record.`);
+  if (!ok) throw new Error(`${a} isn't SDOGECollectibles (an ERC-1155 with nextDesignId); check the record.`);
   return a;
 }
 
@@ -76,29 +80,36 @@ async function run(opts) {
   });
 
   const summary = boosts.map((b) => `${b.id}:+${b.bps / 100}%`).join(" ");
-  const calls = [
+  await c.writeSafeBatch("staking-setup", owner, "SDOGEStaking NFT boosts", [
     c.call(staking, `setDesignBoosts  # ${summary}`, "setDesignBoosts", [boosts.map((b) => b.id), boosts.map((b) => b.bps)]),
-  ];
-  if (notifier) calls.push(c.call(staking, `setNotifier(${notifier})`, "setNotifier", [notifier]));
-  await c.writeSafeBatch("staking-setup", owner, "SDOGEStaking settings", calls);
+  ]);
   console.log("\nNFT boosts in that batch (nft/staking-boosts.json):");
   for (const b of boosts) console.log(`  design ${b.id} ${b.name} (${b.tier}): +${b.bps / 100}%`);
+  if (notifier) {
+    await c.writeSafeBatch("staking-notifier", owner, "SDOGEStaking notifier (after the seed stake and the first rewards)", [
+      c.call(staking, `setNotifier(${notifier})`, "setNotifier", [notifier]),
+    ]);
+  }
 
   const duration = await staking.tierDuration(SEED_TIER);
   const multiplier = await staking.tierMultiplierBps(SEED_TIER);
   console.log(
     "\nStaking is open, with no rewards yet. While nobody else is staked, even a 1-wei stake would earn the " +
       "whole first reward stream, so the Safe goes first, in this order:\n" +
-      `  1. Execute the staking-setup batch (the NFT boosts${notifier ? " and the notifier" : ""}).\n` +
+      "  1. Execute the staking-setup batch (the NFT boosts).\n" +
       "  2. Seed: before any revenue is routed to staking and before any reward period starts, the Safe approves " +
       "its own SDOGE and opens a seed stake it never exits, e.g. in the 365-day tier: " +
       `stake(${SEED_TIER}, <amount>, ${duration}, ${multiplier}).\n` +
-      "  3. Only then start rewards, from the Safe or the notifier: notifyRewardAmount() with native USDC, and " +
+      "  3. Only then start rewards, from the Safe: notifyRewardAmount() with native USDC, and " +
       "notifySdogeRewards(<amount>) with SDOGE (approve it first). From then on early-exit penalties stream to " +
       "the stakers on their own.\n" +
-      "  4. Then route revenue: execute the setRewardsPool batches that deploy-studio.js and " +
+      (notifier
+        ? "  4. Now execute the staking-notifier batch, so the notifier can top rewards up from here on (never earlier: " +
+          "it could start rewards before the seed stake).\n"
+        : "") +
+      `  ${notifier ? 5 : 4}. Then route revenue: execute the setRewardsPool batches that deploy-studio.js and ` +
       "deploy-marketplace.js write (studio-setup, marketplace-setup).\n" +
-      "  5. Once the boosts are final, lockBoosts() fixes them for good.\n" +
+      `  ${notifier ? 6 : 5}. Once the boosts are final, lockBoosts() fixes them for good.\n` +
       "Check the result with scripts/verify-deployment.js before scripts/sync-frontend.js."
   );
   return { staking };

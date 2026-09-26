@@ -1152,5 +1152,59 @@ describe("SDOGEStaking", function () {
       expect(await staking.pendingReward(await attacker.stakeId())).to.equal(0);
       await expectBooks(f);
     });
+
+    // The 2026-09-25 audit: the last staker's NFT return pokes a keeper that notifies rewards. With
+    // the pool empty, notifying would treat that stake's unpaid reward as leftover and promise it
+    // again, bricking later exits. notifyRewardAmount is nonReentrant, so the poke fails instead.
+    it("an exit's NFT return can't trigger a reward notification that re-promises its reward", async function () {
+      const f = await deployFixture();
+      const { owner, bob, stranger, sdoge, collectibles, staking } = f;
+      const addr = await staking.getAddress();
+      const keeper = await (await ethers.getContractFactory("PokeableNotifier")).deploy(addr);
+      await staking.connect(owner).setNotifier(await keeper.getAddress());
+      const w = await (await ethers.getContractFactory("HookWallet")).deploy();
+      const wa = await w.getAddress();
+      await sdoge.mint(wa, E("100"));
+      await w.exec(await sdoge.getAddress(), 0, sdoge.interface.encodeFunctionData("approve", [addr, E("100")]));
+      await w.exec(await collectibles.getAddress(), E("20"), collectibles.interface.encodeFunctionData("mint", [1, 1]), { value: E("20") });
+      const terms = ethers.AbiCoder.defaultAbiCoder().encode(TERMS, [TIER.SEVEN_DAY, E("100"), 7 * DAY, 10000, 1000]);
+      await w.exec(await collectibles.getAddress(), 0, collectibles.interface.encodeFunctionData("safeTransferFrom", [wa, addr, 1, 1, terms]));
+      const id = (await staking.nextStakeId()) - 1n;
+      await fund(staking, owner, "7");
+      await staking.connect(stranger).contributeUSDC({ value: E("1") }); // e.g. marketplace fees waiting
+      await time.increase(8 * DAY); // the period is over and the stake has matured
+
+      const reward = await staking.pendingReward(id);
+      await w.setHook(await keeper.getAddress(), keeper.interface.encodeFunctionData("poke"));
+      const before = await ethers.provider.getBalance(wa);
+      await w.exec(addr, 0, staking.interface.encodeFunctionData("exitStake", [id, false]));
+      expect(await w.hookOk()).to.equal(false); // the re-entrant notify was refused
+      expect((await ethers.provider.getBalance(wa)) - before).to.equal(reward);
+      await expectBooks(f);
+
+      // the next staker's exit and claims work
+      const next = await stakeAndGetId(staking, bob, TIER.SEVEN_DAY, "1000");
+      await fund(staking, owner, "7");
+      await time.increase(8 * DAY);
+      await staking.connect(bob).claimReward(next);
+      await staking.connect(bob).exitStake(next, false);
+      await expectBooks(f);
+    });
+  });
+
+  describe("the SDOGE token", function () {
+    it("refuses a token that takes a fee on transfer, instead of counting SDOGE it never got", async function () {
+      const [owner, alice] = await ethers.getSigners();
+      const fee = await (await ethers.getContractFactory("FeeOnTransferERC20")).deploy();
+      const staking = await (await ethers.getContractFactory("SDOGEStaking")).deploy(await fee.getAddress(), ethers.ZeroAddress, owner.address);
+      const addr = await staking.getAddress();
+      await fee.mint(alice.address, E("1000"));
+      await fee.connect(alice).approve(addr, E("1000"));
+      await expect(staking.connect(alice).stake(TIER.SEVEN_DAY, E("100"), 7 * DAY, 10000)).to.be.revertedWith("SDOGE arrived short (transfer fee?)");
+      await expect(staking.connect(alice).contributeTokens(E("100"))).to.be.revertedWith("SDOGE arrived short (transfer fee?)");
+      await fee.mint(owner.address, E("100"));
+      await fee.connect(owner).approve(addr, E("100"));
+      await expect(staking.connect(owner).notifySdogeRewards(E("100"))).to.be.revertedWith("SDOGE arrived short (transfer fee?)");
+    });
   });
 });

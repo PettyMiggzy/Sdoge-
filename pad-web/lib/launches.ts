@@ -1,7 +1,8 @@
 import 'server-only';
-import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
+import { createPublicClient, parseAbiItem, type Address } from 'viem';
 import { arc } from './chain';
 import { CONFIG } from './config';
+import { arcTransport } from './rpc';
 import { readJson, storeConfigured, writeJson } from './store';
 
 // The launch list, built from the portal's LaunchCreated events. Launches
@@ -19,7 +20,7 @@ const MAX_CHUNKS_PER_SYNC = 40; // bounds one request's work; a long backlog fin
 const MIN_RESYNC_MS = 2_000;
 const PERSIST_EVERY_BLOCKS = 200_000n; // about a day on Arc
 
-export const chainClient = createPublicClient({ chain: arc, transport: http(CONFIG.rpcUrl) });
+export const chainClient = createPublicClient({ chain: arc, transport: arcTransport() });
 const portal = CONFIG.portal.toLowerCase();
 const snapshotPath = `index/launches-${CONFIG.chainId}-${portal}.json`;
 

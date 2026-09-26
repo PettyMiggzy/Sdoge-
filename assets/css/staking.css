@@ -435,6 +435,52 @@ body.stk {
 .stk-row span:last-child { font-weight: 600; color: #fff; text-align: right; }
 .stk-card--overview .stk-btn--block { margin-top: 16px; padding: 13px 16px; }
 
+/* Unstake to other wallets */
+.stk-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(2, 6, 16, 0.78);
+  backdrop-filter: blur(4px);
+}
+.stk-modal[hidden] { display: none; }
+.stk-modal__box { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.stk-modal .stk-card__head { flex-wrap: nowrap; align-items: flex-start; }
+.stk-modal__close {
+  width: 34px; height: 34px;
+  border: 1px solid var(--stk-line-soft);
+  border-radius: 8px;
+  background: #0b1a3d;
+  color: #dce8ff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.stk-modal__close:hover { border-color: var(--stk-blue-hi); color: #fff; }
+.stk-split { display: flex; flex-direction: column; gap: 8px; }
+.stk-split__row { display: grid; grid-template-columns: minmax(0, 1fr) 84px 34px; gap: 8px; align-items: center; }
+.stk-split__row input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--stk-line-soft);
+  border-radius: 8px;
+  background: #0a1733;
+  color: #fff;
+  font: 500 14px var(--font-body);
+}
+.stk-split__row input:focus { outline: 0; border-color: var(--stk-blue-hi); }
+.stk-split__row .stk-chip { width: 34px; height: 38px; padding: 0; }
+.stk-split__pct { position: relative; }
+.stk-split__pct input { padding-right: 26px; text-align: right; }
+.stk-split__pct::after { content: "%"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--stk-muted); font-size: 13px; }
+.stk-split__add { margin-top: 10px; }
+.stk-split__summary { margin: 16px 0 14px; font-size: 13.5px; line-height: 1.55; color: #dfe9ff; }
+.stk-split__summary .is-bad { color: #ffb1a9; }
+
 .stk-notice { margin-top: 16px; text-align: center; font-size: 13px; color: var(--stk-muted); }
 
 /* ---------- Why stake ---------- */

@@ -34,6 +34,20 @@ const SDOGE_CONTRACTS = Object.freeze({
 const ARC_RPC_MAX_PER_SECOND = 12;
 const arcSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// When Arc's public RPC doesn't answer at all (down, an HTTP error), reads go to this site's
+// /api/rpc instead: a read-only relay to a backup RPC whose key stays on the server
+// (api/rpc.mjs). Only on the site itself (http or https), never from a file or a test.
+let arcBackupProvider;
+function arcBackup() {
+  if (arcBackupProvider === undefined) {
+    const origin = typeof location !== 'undefined' ? String(location.origin || '') : '';
+    arcBackupProvider = /^https?:\/\//.test(origin) && typeof window !== 'undefined' && window.fetch
+      ? new ethers.JsonRpcProvider(`${origin}/api/rpc`, Number(ARC_CHAIN_ID), { staticNetwork: true, batchMaxCount: 1 })
+      : null;
+  }
+  return arcBackupProvider;
+}
+
 class ArcRpcProvider extends ethers.JsonRpcProvider {
   #sent = []; // send times in the last second
 
@@ -50,7 +64,14 @@ class ArcRpcProvider extends ethers.JsonRpcProvider {
   async _send(payload) {
     for (let attempt = 0; ; attempt++) {
       await this.#slot();
-      const results = await super._send(payload);
+      let results;
+      try {
+        results = await super._send(payload);
+      } catch (err) {
+        const backup = arcBackup();
+        if (!backup) throw err;
+        return backup._send(payload);
+      }
       if (attempt >= 5 || !results.some((r) => r?.error?.code === -32005)) return results;
       await arcSleep(1100);
     }

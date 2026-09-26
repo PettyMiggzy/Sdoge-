@@ -29,6 +29,8 @@ const ABI = {
     "function boostCollection() view returns (address)",
     "function notifier() view returns (address)",
     "function designBoostBps(uint256) view returns (uint256)",
+    "function rewardsStarted() view returns (bool)",
+    "function openStakeCount(address) view returns (uint256)",
   ],
   SDOGECollectibles: [
     ...OWNABLE,
@@ -195,7 +197,22 @@ async function verify(opts = {}) {
         expectAddress(name, "boostCollection", collection, recorded[name].args?.[1], "the record says");
       }
       const notifier = settings.notifier || ethers.ZeroAddress;
-      expectAddress(name, "notifier", await read(name, "notifier", () => staking.notifier()), notifier, "the record says", batch);
+      expectAddress(
+        name,
+        "notifier",
+        await read(name, "notifier", () => staking.notifier()),
+        notifier,
+        "the record says",
+        " (the staking-notifier Safe batch sets it, after the seed stake and the first rewards)"
+      );
+      // Rewards must start only after the owner's seed stake, or the first stakers split a stream
+      // meant for a pool that can't empty.
+      const started = await read(name, "seed stake", () => staking.rewardsStarted());
+      const owner = await read(name, "seed stake", () => staking.owner());
+      const seeds = started && owner !== undefined ? await read(name, "seed stake", () => staking.openStakeCount(owner)) : undefined;
+      if (started === false) note(name, "seed stake", "rewards haven't started yet");
+      else if (seeds > 0n) pass(name, "seed stake", `the owner has ${seeds} open stake(s)`);
+      else if (seeds === 0n) fail(name, "seed stake", "rewards have started, but the owner has no open stake: the seed stake must come first");
       const boosts = Object.entries(settings.designBoosts || {});
       if (!boosts.length) return note(name, "designBoostBps", "none recorded");
       const wrong = [];

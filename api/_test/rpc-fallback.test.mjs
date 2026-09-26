@@ -31,9 +31,18 @@ const deadUrl = `http://127.0.0.1:${dead.address().port}`;
 await new Promise((r) => dead.close(r));
 
 process.env.ARC_RPC_URL = deadUrl;
-process.env.ARC_RPC_FALLBACK_URL = `http://127.0.0.1:${backup.address().port}`;
+const backupUrl = `http://127.0.0.1:${backup.address().port}`;
+process.env.ARC_RPC_FALLBACK_URL = backupUrl;
 const { verifyPayment } = await import('../_lib/chain.mjs');
+const relay = (await import('../rpc.mjs')).default;
 test.after(() => backup.close());
+
+async function callRelay(body, method = 'POST') {
+  const out = { status: 0, body: '' };
+  const res = { set statusCode(v) { out.status = v; }, setHeader() {}, end: (b) => (out.body = b) };
+  await relay({ method, body, headers: {} }, res);
+  return { status: out.status, json: JSON.parse(out.body) };
+}
 
 test('a payment is checked on the backup RPC when the public one is down', async () => {
   const p = await verifyPayment(hash, payer);
@@ -42,7 +51,28 @@ test('a payment is checked on the backup RPC when the public one is down', async
   assert.equal(backupCalls, 3);
 });
 
+test('/api/rpc relays read calls to the backup, and nothing else', async () => {
+  const read = await callRelay({ jsonrpc: '2.0', id: 7, method: 'eth_blockNumber', params: [] });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.json, { jsonrpc: '2.0', id: 7, result: '0x100' });
+  const batch = await callRelay([{ jsonrpc: '2.0', id: 1, method: 'eth_chainId' }, { jsonrpc: '2.0', id: 2, method: 'eth_blockNumber' }]);
+  assert.equal(batch.status, 200);
+  const calls = backupCalls;
+  for (const bad of [
+    { jsonrpc: '2.0', id: 1, method: 'eth_sendRawTransaction', params: ['0x00'] },
+    { jsonrpc: '2.0', id: 1, method: 'eth_sign', params: [] },
+    { jsonrpc: '2.0', id: 1, method: 'eth_call', params: 'x' },
+    [],
+    Array.from({ length: 101 }, (_, i) => ({ jsonrpc: '2.0', id: i, method: 'eth_chainId' })),
+  ]) {
+    assert.equal((await callRelay(bad)).status, 400, JSON.stringify(bad).slice(0, 80));
+  }
+  assert.equal((await callRelay({}, 'GET')).status, 405);
+  assert.equal(backupCalls, calls); // none of those reached the backup
+});
+
 test('without a backup, the failure shows', async () => {
   delete process.env.ARC_RPC_FALLBACK_URL;
   await assert.rejects(verifyPayment(hash, payer));
+  assert.equal((await callRelay({ jsonrpc: '2.0', id: 1, method: 'eth_chainId' })).status, 503);
 });

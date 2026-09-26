@@ -595,10 +595,19 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard, IERC1155Receiver {
         totalPrincipalStaked += amount;
         totalWeightedSupply += weighted;
 
-        stakingToken.safeTransferFrom(staker, address(this), amount);
+        _pullSdoge(staker, amount);
         emit Staked(staker, stakeId, tier, amount, weighted, s.unlockTime, s.matureTime, earlyWithdrawPenaltyBps);
         if (boostBps > 0) emit NftStaked(staker, stakeId, designId, boostBps);
         _rollSdoge();
+    }
+
+    /// @dev Pulls exactly `amount` SDOGE in. Every balance here assumes a plain ERC-20: a token that
+    ///      took a fee on transfer would leave the pool owing more than it holds, so a shortfall
+    ///      reverts instead.
+    function _pullSdoge(address from, uint256 amount) internal {
+        uint256 before = stakingToken.balanceOf(address(this));
+        stakingToken.safeTransferFrom(from, address(this), amount);
+        require(stakingToken.balanceOf(address(this)) - before == amount, "SDOGE arrived short (transfer fee?)");
     }
 
     /// @dev Shared by withdraw() and exitStake(): settles the stake, applies the early-exit
@@ -777,7 +786,7 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard, IERC1155Receiver {
     function contributeTokens(uint256 amount) external nonReentrant {
         require(amount > 0, "cannot contribute 0");
         unallocatedSdoge += amount;
-        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        _pullSdoge(msg.sender, amount);
         emit TokensContributed(msg.sender, amount);
         _rollSdoge();
     }
@@ -805,7 +814,10 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard, IERC1155Receiver {
     ///         period's unstreamed remainder rolls in. While a period is running, a new one may not
     ///         pay out slower than the current one, so re-notifying can never postpone rewards
     ///         that were already promised.
-    function notifyRewardAmount() external payable onlyOwnerOrNotifier {
+    ///         nonReentrant: while an exit is returning an NFT or paying a reward, that reward is
+    ///         still counted as owed, and scheduling a period in the middle of it would promise it
+    ///         twice (found in the 2026-09-25 audit).
+    function notifyRewardAmount() external payable nonReentrant onlyOwnerOrNotifier {
         rewardsStarted = true;
         _notify();
     }
@@ -813,7 +825,7 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard, IERC1155Receiver {
     /// @notice Once the last USDC period has been over for IDLE_NOTIFY_DELAY, anyone can start a
     ///         new one from unallocatedUsdc. Keeps rewards flowing without the owner. The very
     ///         first period is always started by the owner or notifier.
-    function notifyUnallocated() external {
+    function notifyUnallocated() external nonReentrant {
         require(periodFinish != 0, "the owner starts the first period");
         require(block.timestamp >= periodFinish + IDLE_NOTIFY_DELAY, "owner or notifier schedules for now");
         require(totalWeightedSupply > 0, "nobody is staked");
@@ -849,7 +861,7 @@ contract SDOGEStaking is Ownable2Step, ReentrancyGuard, IERC1155Receiver {
         rewardsStarted = true;
         if (amount > 0) {
             unallocatedSdoge += amount;
-            stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+            _pullSdoge(msg.sender, amount);
         }
         _updateSdogeReward();
 

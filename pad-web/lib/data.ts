@@ -1,10 +1,11 @@
-import { createPublicClient, decodeEventLog, http, parseAbiItem, type Address } from 'viem';
+import { createPublicClient, decodeEventLog, parseAbiItem, type Address } from 'viem';
 import { arc } from './chain';
 import { CONFIG } from './config';
+import { arcTransport } from './rpc';
 import { poolManagerAbi, erc20Abi } from './abi';
 import { poolKeyFor, poolId, slot0Slot, decodeSlot0, priceFromSqrt, priceFromTick } from './pool';
 
-export const publicClient = createPublicClient({ chain: arc, transport: http(CONFIG.rpcUrl, { batch: true }) });
+export const publicClient = createPublicClient({ chain: arc, transport: arcTransport({ batch: true }) });
 
 export type Launch = {
   token: Address; creator: Address; locker: Address; splitter: Address; poolId: `0x${string}`;

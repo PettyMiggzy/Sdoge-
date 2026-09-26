@@ -200,6 +200,35 @@
     </aside>
   </section>
 
+  <!-- Unstake to up to 4 wallets (staking.js openSplit) -->
+  <div class="stk-modal" id="splitModal" role="dialog" aria-modal="true" aria-labelledby="splitTitle" hidden>
+    <div class="stk-card stk-modal__box">
+      <div class="stk-card__head">
+        <h2 class="stk-card__title stk-card__title--sm" id="splitTitle">Unstake to other wallets</h2>
+        <button type="button" class="stk-modal__close" id="splitClose" aria-label="Close">&times;</button>
+      </div>
+      <p class="stk-field__hint" id="splitInfo"></p>
+      <div class="stk-field">
+        <div class="stk-field__label">Amount to unstake</div>
+        <div class="stk-input">
+          <div class="stk-input__row">
+            <input type="text" inputmode="decimal" autocomplete="off" id="splitAmount" aria-label="Amount of SDOGE to unstake" />
+            <button class="stk-chip" id="splitMax" type="button">MAX</button>
+            <span class="stk-input__token">SDOGE</span>
+          </div>
+        </div>
+      </div>
+      <div class="stk-field">
+        <div class="stk-field__label">Send it to (up to 4 wallets)</div>
+        <div class="stk-split" id="splitRows"></div>
+        <button type="button" class="stk-btn stk-btn--soft stk-split__add" id="splitAddRow">+ Add a wallet</button>
+      </div>
+      <div class="stk-split__summary" id="splitSummary"></div>
+      <button type="button" class="stk-btn stk-btn--primary stk-btn--block" id="splitGo">Unstake and send</button>
+      <p class="stk-terms">Rewards, and the NFT of a stake this closes, go to your own wallet.</p>
+    </div>
+  </div>
+
   <p class="stk-wrap stk-notice" data-preview-copy>Staking opens soon: the contract is not live on Arc yet, so nothing on this page sends a transaction.</p>
 
   <!-- ===== WHY STAKE ===== -->
@@ -250,7 +279,7 @@
           </div>
           <div class="accordion__item">
             <button class="accordion__trigger" type="button">Can I unstake anytime? <span aria-hidden="true"></span></button>
-            <div class="accordion__panel"><p>Yes. After your stake matures it costs nothing. Before that, leaving costs 15% of what you take out, and that stake's unclaimed rewards are forfeited. None of it leaves the pool: it goes to the stakers who stay. The page shows you the exact cost and asks you to confirm first.</p></div>
+            <div class="accordion__panel"><p>Yes. After your stake matures it costs nothing. Before that, leaving costs 15% of what you take out, and that stake's unclaimed rewards are forfeited. None of it leaves the pool: it goes to the stakers who stay. The page shows you the exact cost and asks you to confirm first. You can also send what you unstake to up to 4 wallets, split any way you like, with "Send to other wallets".</p></div>
           </div>
           <div class="accordion__item">
             <button class="accordion__trigger" type="button">Where do the rewards come from? <span aria-hidden="true"></span></button>

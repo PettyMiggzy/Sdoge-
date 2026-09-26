@@ -1,5 +1,6 @@
-import { createConfig, http, cookieStorage, createStorage, type CreateConnectorFn } from 'wagmi';
+import { createConfig, cookieStorage, createStorage, type CreateConnectorFn } from 'wagmi';
 import { arc } from './chain';
+import { arcTransport } from './rpc';
 
 // Server-safe on purpose: app/layout.tsx (a server component) builds this with
 // no connectors just to read the wallet cookie via cookieToInitialState, which
@@ -10,7 +11,7 @@ export function makeWagmiConfig(connectors: CreateConnectorFn[] = []) {
   return createConfig({
     chains: [arc],
     connectors,
-    transports: { [arc.id]: http(arc.rpcUrls.default.http[0], { batch: true }) },
+    transports: { [arc.id]: arcTransport({ batch: true }) },
     ssr: true,
     storage: createStorage({ storage: cookieStorage }),
   });

@@ -42,9 +42,14 @@ for decisions to live in the repo so nothing depends on chat memory.
   store `sdoge-studio-ai`.
 - **Backup RPC:** `ARC_RPC_FALLBACK_URL` (the owner's Alchemy URL, key included) is set in both
   Vercel projects (sensitive) and used only when `rpc.mainnet.arc.io` fails. Never in the repo
-  and never sent to a browser.
+  and never sent to a browser: pages reach it through each site's read-only `/api/rpc` relay
+  (`api/rpc.mjs`, `pad-web/app/api/rpc/route.ts`). The buy bot and treasury script read the same
+  name from GitHub Actions secrets, which the owner sets.
 - **Vercel plan: Pro** (checked 2026-09-26). Every push rebuilds the pad (build minutes cost real
   money), so batch pushes.
+- **Unstaking can pay up to 4 wallets** (owner, 2026-09-26): the staking page's "Send to other
+  wallets" splits what's unstaked by percentage (the contract's `withdraw` with 1-4 recipients);
+  rewards and the NFT always go back to the staker.
 - **Staking an NFT boosts the stake**, by the Collectible design's tier
   (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%, placeholders until
   the owner decides). The owner can change them until `lockBoosts()`.
@@ -170,4 +175,5 @@ creator-set tax 0–10% per side.
   launchpad at SDOGE Pad instead.
 - `bot/`: the Telegram buy-alert bot (live in the Stable Doge group).
 - CI (`.github/workflows/ci.yml`) runs every suite on each push. Tests at last
-  count: Hardhat 232, launchpad Foundry 65, tgpad 141, SDOGE Pad 36 (+1 fork test).
+  count: Hardhat 262, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
+  SDOGE Pad 36 (+1 fork test).

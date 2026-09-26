@@ -29,6 +29,7 @@ const DEFAULT_TIER_MULT_BPS = [10000, 12000, 15000, 20000, 30000];
 const STAKING_ABI = [
   'function stake(uint8 tier, uint256 amount, uint256 expectedDuration, uint256 expectedMultiplierBps) returns (uint256 stakeId)',
   'function exitStake(uint256 stakeId, bool allowEarly) returns (uint256 payout, uint256 reward, uint256 sdogeReward)',
+  'function withdraw(uint256 stakeId, uint256 amount, address[] recipients, uint256[] splitAmounts, bool allowEarly) returns (uint256 payout, uint256 reward, uint256 sdogeReward)',
   'function claimReward(uint256 stakeId) returns (uint256 reward, uint256 sdogeReward)',
   'function claimDeferredRewards(address to) returns (uint256 amount)',
   'function claimDeferredNft(uint256 designId, address to)',
@@ -450,6 +451,7 @@ function stakeRowHtml(r) {
       <div class="stk-stake__actions">
         ${r.mature && hasReward ? `<button type="button" class="stk-btn stk-btn--soft" data-claim="${r.id}">Claim</button>` : ''}
         <button type="button" class="stk-btn ${r.mature ? 'stk-btn--ghost' : 'stk-btn--warn'}" data-exit="${r.id}">${r.mature ? 'Unstake' : 'Unstake early'}</button>
+        <button type="button" class="stk-btn stk-btn--ghost" data-split="${r.id}">Send to other wallets</button>
       </div>
     </div>`;
 }
@@ -517,6 +519,7 @@ async function refreshOverview() {
     const list = document.getElementById('myStakesList');
     list.innerHTML = html.length ? html.join('') : '<p class="stk-empty">No stakes yet.</p>';
     list.querySelectorAll('[data-exit]').forEach((b) => b.addEventListener('click', () => exitStake(BigInt(b.dataset.exit))));
+    list.querySelectorAll('[data-split]').forEach((b) => b.addEventListener('click', () => openSplit(BigInt(b.dataset.split))));
     list.querySelectorAll('[data-claim]').forEach((b) => b.addEventListener('click', () => claimOne(BigInt(b.dataset.claim))));
     list.querySelectorAll('[data-deferred]').forEach((b) => b.addEventListener('click', collectDeferred));
     list.querySelectorAll('[data-deferred-nft]').forEach((b) =>
@@ -615,6 +618,171 @@ async function exitStake(stakeId) {
   } catch (err) {
     console.error(err);
     if (!userRejected(err)) alert(`Unstake failed: ${errText(err)}`);
+  }
+}
+
+// ---------- unstake to up to 4 wallets ----------
+const MAX_SPLIT = 4;
+// The open "Send to other wallets" window: { id, stakeAmount, penaltyBps, matureTime, holdsNft, now, rows: [{ addr, pct }] }
+let splitState = null;
+
+// "33.33" -> 3333 (hundredths of a percent), or null.
+function pctToBps(p) {
+  const s = String(p ?? '').trim();
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(s)) return null;
+  const [whole, frac = ''] = s.split('.');
+  return BigInt(whole) * 100n + BigInt(`${frac}00`.slice(0, 2));
+}
+
+// Same parse as the stake form: "" when empty, null when it isn't an amount.
+function parseSdoge(value) {
+  const raw = String(value ?? '').trim().replace(/,/g, '');
+  if (!raw) return '';
+  if (!/^(\d+\.?\d{0,18}|\.\d{1,18})$/.test(raw)) return null;
+  return ethers.parseUnits(`0${raw}`.replace(/\.$/, ''), 18);
+}
+
+// What withdrawing `amountWei` pays out (after the penalty when it's early, exactly as the
+// contract computes it) and each wallet's share of it. The last wallet takes the rounding
+// remainder, so the shares add up to the payout exactly, as the contract requires.
+// { penalty, payout, recipients, amounts } or { error }.
+function splitPlan(amountWei, stakeAmount, penaltyBpsOfStake, early, rows) {
+  if (amountWei === '' || amountWei === null || amountWei <= 0n) return { error: 'Enter how much to unstake.' };
+  if (amountWei > stakeAmount) return { error: `This stake holds ${fmtSdoge(stakeAmount)}.` };
+  if (!rows.length || rows.length > MAX_SPLIT) return { error: 'Send it to 1 to 4 wallets.' };
+  for (const r of rows) {
+    const a = String(r.addr ?? '').trim();
+    if (!ethers.isAddress(a)) return { error: `${a ? `"${a}" isn't` : 'Fill in'} a wallet address.` };
+    if (/^0x0{40}$/i.test(a) || a.toLowerCase() === String(STAKING_CONTRACT_ADDRESS).toLowerCase()) return { error: "That address can't receive SDOGE." };
+  }
+  const bps = rows.map((r) => pctToBps(r.pct));
+  if (bps.some((b) => b === null || b === 0n)) return { error: 'Give every wallet a share above 0%, with at most two decimals.' };
+  const total = bps.reduce((s, b) => s + b, 0n);
+  if (total !== BPS) return { error: `The shares add up to ${bpsPct(total)}%, not 100%.` };
+  const penalty = early ? (amountWei * penaltyBpsOfStake) / BPS : 0n;
+  const payout = amountWei - penalty;
+  const amounts = bps.map((b) => (payout * b) / BPS);
+  amounts[amounts.length - 1] = payout - amounts.slice(0, -1).reduce((s, a) => s + a, 0n);
+  return { penalty, payout, recipients: rows.map((r) => ethers.getAddress(String(r.addr).trim())), amounts };
+}
+
+// Equal shares, the last one taking the remainder: 33.33 / 33.33 / 33.34.
+function evenShares() {
+  const n = BigInt(splitState.rows.length);
+  splitState.rows.forEach((r, i) => {
+    const b = i === splitState.rows.length - 1 ? BPS - (BPS / n) * (n - 1n) : BPS / n;
+    r.pct = bpsPct(b).replace(/,/g, '');
+  });
+}
+
+function renderSplitRows() {
+  const box = document.getElementById('splitRows');
+  box.innerHTML = splitState.rows
+    .map(
+      (r, i) => `
+      <div class="stk-split__row">
+        <input type="text" autocomplete="off" spellcheck="false" placeholder="0x... wallet address" aria-label="Wallet ${i + 1}" data-split-i="${i}" data-split-field="addr" value="${esc(r.addr)}" />
+        <span class="stk-split__pct"><input type="text" inputmode="decimal" autocomplete="off" aria-label="Share for wallet ${i + 1}, percent" data-split-i="${i}" data-split-field="pct" value="${esc(r.pct)}" /></span>
+        <button type="button" class="stk-chip" data-split-remove="${i}" aria-label="Remove wallet ${i + 1}"${splitState.rows.length === 1 ? ' disabled' : ''}>&times;</button>
+      </div>`
+    )
+    .join('');
+  box.querySelectorAll('[data-split-remove]').forEach((b) =>
+    b.addEventListener('click', () => {
+      splitState.rows.splice(Number(b.dataset.splitRemove), 1);
+      evenShares();
+      renderSplitRows();
+      updateSplitSummary();
+    })
+  );
+  document.getElementById('splitAddRow').disabled = splitState.rows.length >= MAX_SPLIT;
+}
+
+function currentSplitPlan() {
+  const early = splitState.now < splitState.matureTime;
+  const plan = splitPlan(parseSdoge(document.getElementById('splitAmount').value), splitState.stakeAmount, splitState.penaltyBps, early, splitState.rows);
+  return { ...plan, early };
+}
+
+function updateSplitSummary() {
+  if (!splitState) return;
+  const plan = currentSplitPlan();
+  setText(
+    'splitInfo',
+    plan.early
+      ? `This stake hasn't matured (it does in ${durationText(splitState.matureTime - splitState.now)}). Unstaking now leaves ${bpsPct(splitState.penaltyBps)}% of what you take out in the pool for the stakers who stay, and forfeits this stake's rewards.`
+      : 'This stake has matured: no penalty. Its rewards go to your own wallet.'
+  );
+  const el = document.getElementById('splitSummary');
+  el.innerHTML = plan.error
+    ? `<span class="is-bad">${esc(plan.error)}</span>`
+    : `Sends <b>${fmtSdoge(plan.payout, 4)}</b>${plan.penalty > 0n ? ` (${fmtSdoge(plan.penalty, 4)} stays in the pool)` : ''}:<br>` +
+      plan.recipients.map((a, i) => `${fmtSdoge(plan.amounts[i], 4)} to ${shortAddress(a)}`).join('<br>');
+  document.getElementById('splitGo').disabled = Boolean(plan.error);
+}
+
+async function openSplit(stakeId) {
+  if (!(await ready())) return;
+  let s;
+  let now;
+  try {
+    [s, now] = await arcRetry(() => Promise.all([stakingRead.getStake(stakeId), arcNow()]));
+  } catch (err) {
+    console.error(err);
+    return alert(`Could not read the stake: ${errText(err)}`);
+  }
+  if (s.closed) return alert('That stake is already closed.');
+  splitState = {
+    id: stakeId,
+    stakeAmount: s.amount,
+    penaltyBps: BigInt(s.penaltyBps),
+    matureTime: s.matureTime,
+    holdsNft: s.holdsNft,
+    now,
+    rows: [{ addr: '', pct: '100' }],
+  };
+  document.getElementById('splitAmount').value = ethers.formatUnits(s.amount, 18).replace(/\.0$/, '');
+  renderSplitRows();
+  updateSplitSummary();
+  document.getElementById('splitModal').hidden = false;
+}
+
+function closeSplit() {
+  splitState = null;
+  document.getElementById('splitModal').hidden = true;
+}
+
+async function submitSplit() {
+  if (!splitState || !(await ready())) return;
+  try {
+    // Maturity is decided by the chain's clock at the moment the transaction lands.
+    splitState.now = await arcRetry(arcNow);
+    const plan = currentSplitPlan();
+    if (plan.error) return alert(plan.error);
+    const amountWei = plan.payout + plan.penalty;
+    const closes = amountWei === splitState.stakeAmount;
+    const lines = plan.recipients.map((a, i) => `  ${fmtSdoge(plan.amounts[i], 4)} to ${a}`).join('\n');
+    const ok = confirm(
+      `Unstake ${fmtSdoge(amountWei, 4)} and send:\n${lines}\n\n` +
+        (plan.early
+          ? `This stake hasn't matured: ${fmtSdoge(plan.penalty, 4)} (${bpsPct(splitState.penaltyBps)}%) stays in the pool for the stakers who stay, and this stake's rewards are forfeited.\n`
+          : "This stake has matured: no penalty, and its rewards go to your own wallet.\n") +
+        (closes && splitState.holdsNft ? 'This closes the stake, and its NFT goes back to your own wallet.\n' : '') +
+        '\nGo ahead?'
+    );
+    if (!ok) return;
+    await (await stakingWrite.withdraw(splitState.id, amountWei, plan.recipients, plan.amounts, plan.early, arcTx())).wait();
+    closeSplit();
+    await refreshAll();
+  } catch (err) {
+    console.error(err);
+    if (userRejected(err)) return;
+    const msg = errText(err);
+    alert(
+      /split amounts must sum|exit would be early/.test(msg)
+        ? 'The stake matured while you were signing, so the amounts changed. Check them and send again.'
+        : `Unstake failed: ${msg}`
+    );
   }
 }
 
@@ -739,6 +907,33 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.stk-pcts button').forEach((btn) => btn.addEventListener('click', () => fillPercent(Number(btn.dataset.pct))));
   document.getElementById('stakeAmount').addEventListener('input', updateEstimates);
   document.getElementById('nftSelect').addEventListener('change', updateEstimates);
+
+  // Unstake to other wallets
+  document.getElementById('splitClose').addEventListener('click', closeSplit);
+  document.getElementById('splitGo').addEventListener('click', submitSplit);
+  document.getElementById('splitAmount').addEventListener('input', updateSplitSummary);
+  document.getElementById('splitMax').addEventListener('click', () => {
+    if (!splitState) return;
+    document.getElementById('splitAmount').value = ethers.formatUnits(splitState.stakeAmount, 18).replace(/\.0$/, '');
+    updateSplitSummary();
+  });
+  document.getElementById('splitAddRow').addEventListener('click', () => {
+    if (!splitState || splitState.rows.length >= MAX_SPLIT) return;
+    splitState.rows.push({ addr: '', pct: '' });
+    evenShares();
+    renderSplitRows();
+    updateSplitSummary();
+  });
+  document.getElementById('splitRows').addEventListener('input', (e) => {
+    const i = Number(e.target?.dataset?.splitI);
+    const field = e.target?.dataset?.splitField;
+    if (!splitState || !splitState.rows[i] || !field) return;
+    splitState.rows[i][field] = e.target.value;
+    updateSplitSummary();
+  });
+  document.getElementById('splitModal').addEventListener('click', (e) => {
+    if (e.target?.id === 'splitModal') closeSplit(); // a click outside the box
+  });
 
   document.querySelectorAll('.stk-seg__btn').forEach((tab) => {
     tab.addEventListener('click', () => {

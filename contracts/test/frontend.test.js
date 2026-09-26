@@ -834,6 +834,58 @@ describe("front end (assets/js)", function () {
       expect(await f.collectibles.balanceOf(f.alice.address, 2)).to.equal(1);
     });
 
+    it("unstakes to up to 4 wallets: exact shares, and the NFT comes back to the staker", async function () {
+      const f = await deployAll();
+      const p = await nftStake(f); // 1,000 SDOGE for 7 days with Space Doge
+      await network.provider.send("evm_increaseTime", [7 * 86400]);
+      await network.provider.send("evm_mine");
+      await new Promise((r) => setTimeout(r, 300)); // ethers answers repeated reads from a 250 ms cache
+      const [dave, erin] = (await ethers.getSigners()).slice(5, 7);
+      const before = await Promise.all([f.bob, f.carol, dave].map((w) => f.sdoge.balanceOf(w.address)));
+      await p.run("openSplit(1n)");
+      p.run(`splitState.rows = [{ addr: "${f.bob.address}", pct: "50" }, { addr: "${f.carol.address}", pct: "33.33" }, { addr: "${dave.address}", pct: "16.67" }]`);
+      await p.run("submitSplit()");
+      const asked = p.confirms.at(-1);
+      expect(asked).to.include(`500 SDOGE to ${f.bob.address}`);
+      expect(asked).to.include("no penalty");
+      expect(asked).to.include("its NFT goes back to your own wallet");
+      const after = await Promise.all([f.bob, f.carol, dave].map((w) => f.sdoge.balanceOf(w.address)));
+      expect(after.map((a, i) => a - before[i])).to.deep.equal([E("500"), E("333.3"), E("166.7")]);
+      expect((await f.staking.getStake(1)).closed).to.equal(true);
+      expect(await f.collectibles.balanceOf(f.alice.address, 2)).to.equal(1);
+      expect(p.sent.at(-1).chainId).to.equal(hex(31337));
+
+      // a fifth wallet, or shares that don't add up to 100%, never reach the wallet
+      const p2 = await page(f, STAKING_PAGE, f.alice);
+      await p2.ready();
+      expect(await p2.run("connectWallet()")).to.equal(true);
+      const plan = (rows) => p2.run(`splitPlan(1000n * 10n ** 18n, 1000n * 10n ** 18n, 1500n, false, ${JSON.stringify(rows)})`);
+      const w = (addr, pct) => ({ addr, pct });
+      expect(plan([w(f.bob.address, "60"), w(f.carol.address, "30")]).error).to.match(/add up to 90%/);
+      expect(plan([1, 2, 3, 4, 5].map(() => w(erin.address, "20"))).error).to.match(/1 to 4 wallets/);
+      expect(plan([w("0x1234", "100")]).error).to.match(/isn't a wallet address/);
+    });
+
+    it("an early split takes the penalty off first, and every wallet gets its share of the rest", async function () {
+      const f = await deployAll();
+      const address = await f.staking.getAddress();
+      await f.sdoge.connect(f.alice).approve(address, E("1000"));
+      await f.staking.connect(f.alice).stake(0, E("1000"), 7 * 86400, 10000);
+      const p = await page(f, STAKING_PAGE, f.alice);
+      await p.ready();
+      expect(await p.run("connectWallet()")).to.equal(true);
+      await p.run("openSplit(1n)");
+      p.el("splitAmount").value = "400"; // part of the stake
+      p.run(`splitState.rows = [{ addr: "${f.bob.address}", pct: "75" }, { addr: "${f.carol.address}", pct: "25" }]`);
+      const before = await Promise.all([f.bob, f.carol].map((w) => f.sdoge.balanceOf(w.address)));
+      await p.run("submitSplit()");
+      expect(p.confirms.at(-1)).to.include("60 SDOGE (15%) stays in the pool");
+      const after = await Promise.all([f.bob, f.carol].map((w) => f.sdoge.balanceOf(w.address)));
+      expect(after.map((a, i) => a - before[i])).to.deep.equal([E("255"), E("85")]); // 340 after the penalty
+      const s = await f.staking.getStake(1);
+      expect([s.amount, s.closed]).to.deep.equal([E("600"), false]);
+    });
+
     it("shows the pool's real numbers and an APR from the live reward rates", async function () {
       const f = await deployAll();
       const address = await f.staking.getAddress();
