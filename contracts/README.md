@@ -246,7 +246,7 @@ started. `verify-deployment.js` knows the handover: it fails until the owner has
 then expects the new owner.
 
 Before launch:
-- Settle the design prices and reserves in `nft/designs.json` and the boosts in
-  `nft/staking-boosts.json` (placeholders today).
+- The design prices in `nft/designs.json` and the boosts in `nft/staking-boosts.json` are
+  the owner's (confirmed 2026-09-26).
 - Check the packages, `poolShareBps` and `communityContractURI` in `nft/studio.json`.
 - Get an independent audit before real money flows through these contracts.

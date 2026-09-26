@@ -54,8 +54,9 @@ for decisions to live in the repo so nothing depends on chat memory.
   wallets" splits what's unstaked by percentage (the contract's `withdraw` with 1-4 recipients);
   rewards and the NFT always go back to the staker.
 - **Staking an NFT boosts the stake**, by the Collectible design's tier
-  (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%, placeholders until
-  the owner decides). The owner can change them until `lockBoosts()`.
+  (`nft/staking-boosts.json`: og/rare/epic/legendary +10/20/30/50%). The owner confirmed
+  these boosts and the $20/$30/$40/$50 mint prices on 2026-09-26. The owner can change
+  boosts until `lockBoosts()`, and a design's price while its sale is closed.
 - **SDOGE Studio minting is fully open, no review** (only encoding checks).
 - **Images are made with Venice, not Adobe.** The Venice API key never goes in the
   repo.

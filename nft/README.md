@@ -251,8 +251,8 @@ grey/silver husky base.
 
 ## Open questions
 
-- Final mint price and supply per design (`nft/designs.json` holds the $20-$50 placeholders).
-- Where the art and metadata get pinned (IPFS is assumed by the deploy script's checks).
+- Settled: the $20-$50 mint prices in `nft/designs.json` (owner, 2026-09-26), and the
+  art and metadata are served from www.stabledoge.site.
 - The Studio's SDOGE prices beyond the Single package, and the final `poolShareBps`.
 
 ## Bulk-generated assets

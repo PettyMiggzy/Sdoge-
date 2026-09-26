@@ -1,5 +1,5 @@
 {
-  "_comment": "How much staking one of the SDOGE Collectibles raises a stake's share of the rewards, by the design's tier in nft/designs.json, in basis points (1000 = +10%; the contract's maximum is 5000 = +50%). scripts/deploy-staking.js turns this into the setDesignBoosts call in the staking-setup Safe batch. Placeholders until the team decides: the Safe can change them until it calls lockBoosts(), and a stake keeps the boost it opened with.",
+  "_comment": "How much staking one of the SDOGE Collectibles raises a stake's share of the rewards, by the design's tier in nft/designs.json, in basis points (1000 = +10%; the contract's maximum is 5000 = +50%). scripts/deploy-staking.js turns this into the setDesignBoosts call in the staking-setup Safe batch. Confirmed by the owner (2026-09-26) and live on Arc mainnet: the owner can change them until it calls lockBoosts(), and a stake keeps the boost it opened with.",
   "tierBoostBps": {
     "og": 1000,
     "rare": 2000,

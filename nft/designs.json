@@ -1,5 +1,5 @@
 {
-  "_comment": "The 12 SDOGECollectibles designs, in creation order (design id = position). Prices and supplies are the placeholders from nft/README.md 'Open questions' until the team decides. scripts/setup-designs.js turns this into the createDesign batch; assets/js/nft.js ROSTER must match it (checked by the front-end tests).",
+  "_comment": "The 12 SDOGECollectibles designs, in creation order (design id = position). Prices confirmed by the owner (2026-09-26); these are live on Arc mainnet. scripts/setup-designs.js turns this into the createDesign batch; assets/js/nft.js ROSTER must match it (checked by the front-end tests).",
   "designs": [
     {
       "id": 1,
