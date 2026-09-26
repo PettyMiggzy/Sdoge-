@@ -116,7 +116,7 @@ function renderOwner() {
       ? `<a class="own-row__addr" href="${ARC_EXPLORER_URL}/address/${entry.address}" target="_blank" rel="noopener">${shortAddr(entry.address)}</a>`
       : '';
     const button = status.offered
-      ? `<button type="button" class="stk-btn stk-btn--primary" data-accept="${key}">Accept ownership</button>`
+      ? `<button type="button" class="stk-btn stk-btn--primary" data-accept="${key}"${ownerBusy ? ' disabled' : ''}>Accept ownership</button>`
       : '';
     return (
       `<div class="own-row${status.you ? ' is-yours' : ''}">` +
@@ -138,20 +138,29 @@ function renderOwner() {
   document.getElementById('stepRevenueState').textContent =
     `Studio: ${studioDone ? `${Number(ownerState.studioShare) / 100}% of credit sales` : 'not yet'} · ` +
     `Marketplace fees: ${marketDone ? 'to the stakers' : 'not yet'}`;
-  document.getElementById('ownerStartSdoge').disabled = !staking || !ownsIt('staking') || !seedDone;
-  document.getElementById('ownerStartUsdc').disabled = !staking || !ownsIt('staking') || !seedDone;
-  document.getElementById('ownerRouteStudio').disabled = !rewardsDone || studioDone || !ownsIt('studio');
-  document.getElementById('ownerRouteMarket').disabled = !rewardsDone || marketDone || !ownsIt('marketplace');
+  // One action at a time: every button waits while one is running (and the page re-reads).
+  document.getElementById('ownerStartSdoge').disabled = ownerBusy || !staking || !ownsIt('staking') || !seedDone;
+  document.getElementById('ownerStartUsdc').disabled = ownerBusy || !staking || !ownsIt('staking') || !seedDone;
+  document.getElementById('ownerRouteStudio').disabled = ownerBusy || !rewardsDone || studioDone || !ownsIt('studio');
+  document.getElementById('ownerRouteMarket').disabled = ownerBusy || !rewardsDone || marketDone || !ownsIt('marketplace');
+}
+
+function setOwnerBusy(busy) {
+  ownerBusy = busy;
+  document.getElementById('ownerNotice').textContent = busy ? 'Working on it: confirm in your wallet if it asks, then wait a few seconds.' : '';
+  renderOwner();
 }
 
 // Every owner action: connected, on Arc, one at a time, and the page re-read afterwards.
 async function ownerAction(fn) {
   if (ownerBusy) return false;
-  ownerBusy = true;
+  setOwnerBusy(true);
   try {
     if (!(await walletReady())) return false;
     await loadOwnerState();
     const done = await fn();
+    // Past the read provider's short cache, so the re-read sees the new block.
+    await arcSleep(1000);
     await loadOwnerState();
     return done;
   } catch (err) {
@@ -159,7 +168,7 @@ async function ownerAction(fn) {
     if (!userRejected(err)) alert(`That didn't go through: ${reason(err)}`);
     return false;
   } finally {
-    ownerBusy = false;
+    setOwnerBusy(false);
   }
 }
 
@@ -252,6 +261,10 @@ function ownerRoute(key) {
       return false;
     }
     const pool = stakingAddr();
+    if (sameAddr(key === 'studio' ? ownerState.studioPool : ownerState.marketPool, pool)) {
+      alert(`Already done: the ${label} contract already sends to the stakers.`);
+      return false;
+    }
     if (key === 'studio') {
       const pct = Number(OWNER_STUDIO_POOL_SHARE_BPS) / 100;
       if (!confirm(`Send ${pct}% of Studio credit sales to the stakers (staking contract ${pool})?`)) return false;

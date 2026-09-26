@@ -939,6 +939,14 @@ describe("front end (assets/js)", function () {
 
       const p = await ownerPage(f, f.alice);
       for (const key of KEYS) expect(p.el("ownerList").innerHTML).to.include(`data-accept="${key}"`);
+      // While one action runs, every button waits, and the page says why.
+      p.run("setOwnerBusy(true)");
+      expect(p.el("ownerList").innerHTML).to.include('data-accept="staking" disabled');
+      expect(p.el("ownerNotice").textContent).to.match(/Working on it/);
+      expect(await p.run("ownerAccept('staking')")).to.equal(false);
+      expect(p.sent.length).to.equal(0);
+      p.run("setOwnerBusy(false)");
+      expect(p.el("ownerList").innerHTML).to.not.include("disabled");
       for (const key of KEYS) await p.run(`ownerAccept('${key}')`);
       expect(p.confirms[0]).to.include("Accept ownership of the NFT collection contract");
       for (const c of [f.collectibles, f.staking, f.studio, f.marketplace]) expect(await c.owner()).to.equal(f.alice.address);
@@ -984,6 +992,10 @@ describe("front end (assets/js)", function () {
       expect(await f.marketplace.rewardsPool()).to.equal(staking);
       expect(p.el("stepRevenueState").textContent).to.equal("Studio: 50% of credit sales · Marketplace fees: to the stakers");
       expect([p.el("ownerRouteStudio").disabled, p.el("ownerRouteMarket").disabled]).to.deep.equal([true, true]);
+      const sentSoFar = p.sent.length;
+      await p.run("ownerRoute('marketplace')");
+      expect(p.alerts.at(-1)).to.match(/Already done: the Marketplace contract already sends to the stakers/);
+      expect(p.sent.length).to.equal(sentSoFar);
       expect(p.sent.every((tx) => tx.chainId === hex(31337))).to.equal(true);
 
       // Anyone else can look, not act.
