@@ -70,11 +70,47 @@ describe("Studio AI (studio-ai.js + api/ai)", function () {
       globals: { fetch: siteFetch(calls), localStorage: memoryStorage() },
     });
     await p.ready();
+    p.run("confirmAdult()"); // the 18+ button
     await p.run("loadAiQuote()");
     expect(await p.run("connectWallet()")).to.equal(true);
     await p.run("refreshAiCredits()");
     return { p, calls };
   }
+
+  it("stays closed until the visitor confirms they're 18 or older", async function () {
+    const erin = (await ethers.getSigners())[5];
+    const calls = [];
+    const storage = memoryStorage();
+    const open = async () => {
+      const p = await loadPage({
+        files: STUDIO_AI_PAGE,
+        hreProvider: network.provider,
+        account: erin.address,
+        globals: { fetch: siteFetch(calls), localStorage: storage },
+      });
+      await p.ready();
+      await p.run("loadAiQuote()");
+      return p;
+    };
+    const p = await open();
+    expect(p.el("aiAgeGate").hidden).to.equal(false);
+    expect(p.el("aiTools").hidden).to.equal(true);
+    expect(await p.run("connectWallet()")).to.equal(true);
+    await p.run("buyAiPack(0)");
+    p.el("aiPrompt").value = "a doge astronaut";
+    await p.run("createAiImage()");
+    expect(p.sent.length).to.equal(0);
+    expect(calls.some((c) => c.path === "generate")).to.equal(false);
+
+    p.run("confirmAdult()");
+    expect(p.el("aiAgeGate").hidden).to.equal(true);
+    expect(p.el("aiTools").hidden).to.equal(false);
+    await p.run("buyAiPack(0)");
+    expect(p.sent.length).to.equal(1);
+    // remembered in this browser
+    const again = await open();
+    expect(again.el("aiAgeGate").hidden).to.equal(true);
+  });
 
   it("buys credits with one plain USDC payment to the payee, marked as a Studio AI payment", async function () {
     const [, alice] = await ethers.getSigners();

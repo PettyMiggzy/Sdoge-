@@ -154,7 +154,16 @@
       </p>
       <p class="studio-note ai-status" id="aiStatus" data-js-managed></p>
 
-      <div class="app-grid">
+      <div class="panel ai-gate" id="aiAgeGate">
+        <div class="ai-gate__badge" aria-hidden="true">18+</div>
+        <div class="ai-gate__text">
+          <h3 class="ai-gate__title">Adults only</h3>
+          <p>Studio AI is uncensored: it can make nude and sexual images of adults. You must be 18 or older, and it must be legal where you are, to use it.</p>
+        </div>
+        <button class="btn btn--primary" id="aiAdultBtn" type="button">I'm 18 or older</button>
+      </div>
+
+      <div class="app-grid" id="aiTools" hidden>
         <div class="panel">
           <label class="studio-field">What should it look like?
             <textarea class="studio-input ai-prompt" id="aiPrompt" maxlength="1500" rows="4" placeholder="A doge astronaut relaxing on a pile of USDC coins on the moon, glossy 3D cartoon"></textarea>

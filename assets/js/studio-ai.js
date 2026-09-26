@@ -60,6 +60,34 @@ function aiStatus(text) {
   aiEl('aiStatus').textContent = text || '';
 }
 
+// Studio AI can make adult images, so its tools open only once the visitor confirms they're 18 or
+// older (remembered in this browser).
+let aiAdult = false;
+function aiAdultConfirmed() {
+  if (!aiAdult) {
+    try {
+      aiAdult = localStorage.getItem('sdoge-ai-adult') === '1';
+    } catch {
+      // private mode: asks again next visit
+    }
+  }
+  return aiAdult;
+}
+function showAiGate() {
+  const ok = aiAdultConfirmed();
+  aiEl('aiAgeGate').hidden = ok;
+  aiEl('aiTools').hidden = !ok;
+}
+function confirmAdult() {
+  aiAdult = true;
+  try {
+    localStorage.setItem('sdoge-ai-adult', '1');
+  } catch {
+    // private mode: works for this visit only
+  }
+  showAiGate();
+}
+
 // The exact text the server checks (api/_lib/config.mjs sessionMessage).
 function aiSessionMessage(address, expires) {
   return [
@@ -173,6 +201,7 @@ async function refreshAiCredits(extra = []) {
 }
 
 async function buyAiPack(i) {
+  if (!aiAdultConfirmed()) return showAiGate();
   if (!aiQuote?.available) return alert(aiQuote?.reason || "Studio AI isn't open right now.");
   if (!(await walletReady())) return;
   const pack = aiQuote.packs[i];
@@ -223,6 +252,7 @@ function showAiImage(url) {
 }
 
 async function createAiImage() {
+  if (!aiAdultConfirmed()) return showAiGate();
   const prompt = aiEl('aiPrompt').value.trim();
   if (!prompt) return alert('Describe the image you want.');
   if (!aiQuote?.available) return alert(aiQuote?.reason || "Studio AI isn't open right now.");
@@ -310,6 +340,8 @@ async function addAiPayment() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  showAiGate();
+  aiEl('aiAdultBtn').addEventListener('click', confirmAdult);
   loadAiQuote();
   aiShowCredits();
   aiEl('aiCreateBtn').addEventListener('click', createAiImage);

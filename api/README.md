@@ -5,6 +5,8 @@ functions of the main site's project (`sdoge`, serving stabledoge.site).
 
 ## How it works
 
+0. **18+.** The tools open only after the visitor clicks "I'm 18 or older" (remembered in that
+   browser); until then they can't buy credits or make images.
 1. **Buy credits.** The buyer pays native USDC on Arc to the owner's wallet (`AI_PAYEE`), with
    the memo `SDOGE Studio AI` as the transaction data. 1 credit is 0.25 USDC, 10 are 2 USDC and
    50 are 8 USDC. `POST /api/ai/credits` checks each payment on Arc (successful, to the payee,

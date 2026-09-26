@@ -37,7 +37,8 @@ for decisions to live in the repo so nothing depends on chat memory.
   it"). Uncensored except no sexual content with minors and no sexual images of real people.
   Those two blocks are enforced by three checks (word lists, two Venice text models on every
   prompt, two vision models on every adult image); they are a hard line, not a setting, and
-  Studio AI stays closed if they can't run. `VENICE_API_KEY` lives only in the `sdoge` Vercel
+  Studio AI stays closed if they can't run. Adult content of adults is allowed, behind an "I'm 18
+  or older" button (owner, 2026-09-26); the 18+ button never unlocks the two hard blocks. `VENICE_API_KEY` lives only in the `sdoge` Vercel
   project's env (sensitive; set 2026-09-26 at the owner's request); images go to the public Blob
   store `sdoge-studio-ai`.
 - **Backup RPC:** `ARC_RPC_FALLBACK_URL` (the owner's Alchemy URL, key included) is set in both
