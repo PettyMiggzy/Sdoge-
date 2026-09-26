@@ -557,7 +557,12 @@ describe("deploy scripts", function () {
       expect(await nonceOf(f.deployer)).to.equal(nonce);
 
       const { result, out } = await capture(() =>
-        deployStudio.run({ ...f.base, treasury: f.treasury.address, allowEmptyContractUri: true })
+        deployStudio.run({
+          ...f.base,
+          treasury: f.treasury.address,
+          manifest: { ...studioManifest, communityContractURI: "" },
+          allowEmptyContractUri: true,
+        })
       );
       expect(out).to.include("The Safe can set it later with setCommunityContractURI(uri)");
       const blank = await ethers.getContractAt("SDOGEStudioCollection", await result.studio.communityCollection());

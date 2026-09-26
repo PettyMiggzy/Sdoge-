@@ -211,7 +211,9 @@ file under `https://www.stabledoge.site/nft/reference/`, and the 8
 animated designs add an `animation_url` to their mp4. The `www` address,
 because the bare domain answers with a redirect. The owner can move them
 to IPFS later with `setURI` (until `freezeMetadata()`); until then,
-never rename or delete these files: every wallet reads them.
+never rename or delete these files: every wallet reads them. The same goes
+for `nft/community/collection.json`, the Studio's Community Art collection
+info (its `communityContractURI` in `nft/studio.json`).
 
 Two base characters run through the full-outfit designs (a grey/silver
 husky, an orange/tan shiba); `cap-doge` and `blazed-doge` are noticeably
