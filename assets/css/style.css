@@ -645,6 +645,9 @@ body.starfield::after { width: 420px; height: 420px; background: #0ea5e9; bottom
   font-size: 14px;
   font-weight: 600;
 }
+.callout code { word-break: break-all; font-size: 13px; color: #fff; }
+.step p a,
+.accordion__panel a { color: var(--gold); font-weight: 700; text-decoration: underline; }
 
 /* ===================== Chart ===================== */
 .chart-panel { margin-top: 40px; }

@@ -115,6 +115,27 @@ describe("front end (assets/js)", function () {
       }
       expect(checked).to.be.greaterThan(4);
     });
+
+    // Every Buy button opens the official $SDOGE page on Argus (fake copies of Argus drain
+    // wallets), for the token address arc.js uses, in a new tab.
+    it("every Buy button opens the official $SDOGE page", function () {
+      const arc = fs.readFileSync(path.join(ROOT, "assets", "js", "arc.js"), "utf8");
+      const token = arc.match(/token:\s*'(0x[0-9a-fA-F]{40})'/)[1].toLowerCase();
+      let buttons = 0;
+      for (const file of ["index.html", "staking.html", "nft.html", "studio.html", "owner.html"]) {
+        const html = fs.readFileSync(path.join(ROOT, file), "utf8");
+        for (const m of html.matchAll(/<a([^>]*)>\s*Buy \$?SDOGE\b/g)) {
+          buttons += 1;
+          const href = (m[1].match(/href="([^"]*)"/) || [])[1] || "";
+          const hit = href.match(/^https:\/\/argus\.world\/token\/(0x[0-9a-fA-F]{40})$/);
+          expect(hit, `${file}: ${href}`).to.not.equal(null);
+          expect(hit[1].toLowerCase(), file).to.equal(token);
+          expect(m[1], `${file}: opens in a new tab`).to.match(/target="_blank"/);
+          expect(m[1], `${file}: rel=noopener`).to.match(/rel="noopener"/);
+        }
+      }
+      expect(buttons).to.be.greaterThan(15);
+    });
   });
 
   describe("arc.js", function () {
