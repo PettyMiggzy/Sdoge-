@@ -229,10 +229,19 @@ creator-set tax 0–10% per side.
   `0x5899…5914` (`scripts/handover.js`). The owner accepts on `owner.html` (not in
   the nav, noindex), which also walks the seed stake → start rewards → route
   revenue steps in that order. Leftovers go back to `0x5899…5914`.
+- **Bridge prompt** (owner, 2026-09-27: "Ok build bridge"): Arc mainnet only opened on
+  2026-09-16, so most buyers arrive with no USDC on Arc. The site links Circle's official USDC
+  Bridge, `https://bridge.usdc.com/` (it lists Arc, and its fee covers the gas on Arc, so a
+  wallet needs nothing on Arc first). The Buy box shows a gold "Bridge USDC to Arc" prompt
+  when the connected wallet has under 1 USDC on Arc or less than the amount typed (buy side
+  only); the box's note, How to Buy step 2 and the FAQ link it too. Every bridge link on the
+  site must be exactly that URL, in a new tab (a front-end test checks it): fake bridges drain
+  wallets. The site sends people to Circle's own bridge rather than running one of its own, so
+  nothing of ours holds anyone's USDC in transit.
 - `launchpad/` (Foundry): the earlier meme launchpad with the meme vault.
   `tgpad/`: the Telegram bot for it. The owner may later point the Telegram
   launchpad at SDOGE Pad instead.
 - `bot/`: the Telegram buy-alert bot (live in the Stable Doge group).
 - CI (`.github/workflows/ci.yml`) runs every suite on each push. Tests at last
-  count: Hardhat 279, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
+  count: Hardhat 281, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
   SDOGE Pad 36 (+1 fork test).

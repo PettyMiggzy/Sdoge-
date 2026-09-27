@@ -26,6 +26,7 @@ const SWAP_TICK_SPACING = 200;
 const SWAP_POOL_ID = '0xbb2cff1ea59daa260919f3f579c32cc261eebeb69126ec2a5b3ea77018f3e8e2';
 const SWAP_USDC_DECIMALS = 6; // USDC's ERC-20 interface on Arc; the pool trades that
 const SWAP_GAS_RESERVE = 100000n; // Max on a buy leaves 0.10 USDC for gas (USDC is Arc's gas)
+const SWAP_LOW_USDC = 1000000n; // under 1 USDC on Arc, the box points the buyer at the bridge
 const SWAP_ALLOWANCE_SECONDS = 86400; // the router's Permit2 allowance expires after a day
 const SWAP_DEADLINE_SECONDS = 600;
 const SWAP_QUOTE_DELAY_MS = 350;
@@ -219,6 +220,22 @@ function swapRender() {
   go.disabled = swapState.busy || (!!userAddress && (swapState.amountIn === 0n || short || q === null || q === 0n));
   $('swapIn').disabled = swapState.busy;
   for (const pct of [25, 50, 75, 100]) $(`swapPct${pct}`).disabled = swapState.busy;
+
+  const bridge = swapBridgeHint();
+  $('swapBridge').hidden = bridge === null;
+  if (bridge !== null) $('swapBridgeTitle').textContent = bridge;
+}
+
+// Why this wallet should bridge USDC to Arc before buying, or null when it has enough. Arc is new,
+// so most buyers arrive with their USDC on another chain; the box then links Circle's bridge.
+function swapBridgeHint() {
+  const usdc = swapState.balances.usdc;
+  if (swapState.side !== 'buy' || !userAddress || usdc === null) return null;
+  const amount = swapAmountText(usdc, SWAP_USDC_DECIMALS, 2);
+  if (usdc === 0n) return 'No USDC on Arc in this wallet yet.';
+  if (swapState.amountIn > usdc) return `This wallet has ${amount} USDC on Arc, not enough for that.`;
+  if (usdc < SWAP_LOW_USDC) return `This wallet has only ${amount} USDC on Arc.`;
+  return null;
 }
 
 function swapStatus(text) {

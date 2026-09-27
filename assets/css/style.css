@@ -1553,6 +1553,16 @@ body.has-market-bar header[id] { scroll-margin-top: calc(88px + var(--market-bar
 .swap-status { min-height: 20px; margin: 12px 2px 0; font-size: 13.5px; color: var(--text-muted); line-height: 1.5; }
 .swap-status a { color: var(--blue-light); font-weight: 600; text-decoration: underline; }
 .swap-note { margin: 6px 2px 0; font-size: 12px; color: var(--text-muted); opacity: 0.8; }
+.swap-note a { color: var(--gold); font-weight: 700; text-decoration: underline; }
+/* "Bridge USDC to Arc first": shown when the connected wallet has too little USDC on Arc */
+.swap-bridge { margin: 0 0 14px; padding: 14px 16px; border-radius: var(--radius-md); background: rgba(242, 193, 78, 0.08); border: 1px solid rgba(242, 193, 78, 0.35); }
+.swap-bridge[hidden] { display: none; }
+.swap-bridge__title { margin: 0 0 4px; font-size: 14.5px; font-weight: 700; color: var(--gold-light); }
+.swap-bridge__text { margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; color: var(--text-muted); }
+.swap-bridge__text b { color: #fff; }
+.swap-bridge__btn { width: 100%; padding: 12px 20px; background: var(--gold); color: var(--navy-900); box-shadow: 0 12px 24px -12px rgba(242, 193, 78, 0.6); }
+.swap-bridge__btn:hover { box-shadow: 0 16px 28px -12px rgba(242, 193, 78, 0.8); }
+.swap-bridge__safe { margin: 10px 0 0; font-size: 12px; color: var(--text-muted); text-align: center; }
 
 @media (max-width: 900px) {
   .swap-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "card" "more"; grid-template-rows: auto; row-gap: 24px; margin-bottom: 72px; }

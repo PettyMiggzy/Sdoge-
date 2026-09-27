@@ -369,9 +369,16 @@
             <div><dt>Price impact</dt><dd id="swapImpact">—</dd></div>
             <div><dt><label for="swapSlippage">Slippage</label></dt><dd><select id="swapSlippage"><option value="50">0.5%</option><option value="100" selected>1%</option><option value="300">3%</option><option value="500">5%</option></select></dd></div>
           </dl>
+          <!-- Shown by swap.js when the connected wallet has too little USDC on Arc to buy. -->
+          <div id="swapBridge" class="swap-bridge" hidden>
+            <p id="swapBridgeTitle" class="swap-bridge__title" data-js-managed>No USDC on Arc in this wallet yet.</p>
+            <p class="swap-bridge__text">Bring USDC over from Ethereum, Base or another chain with Circle's official USDC Bridge. Pick <b>Arc</b> as the destination, then come back here to buy.</p>
+            <a class="btn swap-bridge__btn" href="https://bridge.usdc.com/" target="_blank" rel="noopener">Bridge USDC to Arc</a>
+            <p class="swap-bridge__safe">Only use bridge.usdc.com. Fake bridges drain wallets.</p>
+          </div>
           <button id="swapGo" class="btn btn--primary swap-go" type="button">Connect wallet</button>
           <p id="swapStatus" class="swap-status" aria-live="polite"></p>
-          <p class="swap-note">Prices include the pool fee and the token's trade tax. Gas is paid in USDC.</p>
+          <p class="swap-note">Prices include the pool fee and the token's trade tax. Gas is paid in USDC. No USDC on Arc? <a href="https://bridge.usdc.com/" target="_blank" rel="noopener">Bridge it here</a>.</p>
         </div>
         <div class="swap-more">
           <ul class="swap-points">
@@ -395,7 +402,7 @@
         <div class="step">
           <span class="step__number">2</span>
           <h3>Bridge to Arc</h3>
-          <p>Bridge or on-ramp your USDC to the Arc network.</p>
+          <p>Send USDC from Ethereum, Base or another chain with Circle's official <a href="https://bridge.usdc.com/" target="_blank" rel="noopener">USDC Bridge</a>, with Arc as the destination. Or withdraw USDC from an exchange that lists the Arc network.</p>
         </div>
         <div class="step">
           <span class="step__number">3</span>
@@ -410,8 +417,9 @@
       </div>
 
       <div class="callout">
-        Fake copies of Argus exist and drain wallets. Buy with the box on this page or
-        through the Argus link on it, and check the contract address is
+        Fake copies of Argus and of the USDC bridge exist and drain wallets. Buy with the box
+        on this page or through the Argus link on it, bridge only at bridge.usdc.com, and
+        check the contract address is
         <code>0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405</code> — never trust a link from
         a DM, comment, or search ad.
       </div>
@@ -495,6 +503,18 @@
             <p>Right here: the <a href="#buy">Buy box</a> trades the official $SDOGE/USDC pool on
             Arc directly, paying with USDC. The same pool is on the
             <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener">official $SDOGE page on Argus.world</a>.</p>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__trigger">I don't have USDC on Arc. How do I get it? <span>+</span></button>
+          <div class="accordion__panel">
+            <p>Use Circle's official <a href="https://bridge.usdc.com/" target="_blank" rel="noopener">USDC Bridge</a>:
+            connect your wallet, pick the chain your USDC is on (Ethereum, Base and others) as the
+            source and Arc as the destination, and send. The bridge's fee covers the gas on Arc, so
+            you don't need anything on Arc first, just a little gas on the chain you send from. It
+            usually lands in minutes. If your exchange lists the Arc network for USDC withdrawals,
+            you can withdraw straight to your wallet instead. Only use bridge.usdc.com: fake
+            bridges drain wallets.</p>
           </div>
         </div>
       </div>

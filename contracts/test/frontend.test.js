@@ -1137,12 +1137,12 @@ describe("front end (assets/js)", function () {
       return { alice, sdoge, usdc, permit2, router, hook };
     }
 
-    async function swapPage(s) {
+    async function swapPage(s, who = s.alice) {
       const p = await loadPage({
         files: SWAP_PAGE,
         contracts: { token: await s.sdoge.getAddress() },
         hreProvider: network.provider,
-        account: s.alice.address,
+        account: who.address,
         swapConfig: { router: await s.router.getAddress(), permit2: await s.permit2.getAddress(), usdc: await s.usdc.getAddress(), hook: s.hook },
       });
       await p.ready();
@@ -1243,6 +1243,49 @@ describe("front end (assets/js)", function () {
 
       expect(await p.run("swapTrade()")).to.equal(true); // the new price is now the one shown
       expect(await s.sdoge.balanceOf(s.alice.address)).to.equal(E(1400000));
+    });
+
+    // Arc is new: most buyers arrive with their USDC on another chain.
+    it("points a wallet without enough USDC on Arc at Circle's bridge, and only on the buy side", async function () {
+      const s = await deploySwap();
+      const p = await swapPage(s); // alice holds 100 USDC
+      expect(p.el("swapBridge").hidden).to.equal(true);
+      p.el("swapIn").value = "150";
+      await p.run("swapRequote()");
+      expect(p.el("swapGo").textContent).to.equal("Not enough USDC");
+      expect(p.el("swapBridge").hidden).to.equal(false);
+      expect(p.el("swapBridgeTitle").textContent).to.equal("This wallet has 100 USDC on Arc, not enough for that.");
+      p.run("swapSetSide('sell')"); // selling spends SDOGE, not USDC
+      expect(p.el("swapBridge").hidden).to.equal(true);
+
+      const [, , bob] = await ethers.getSigners();
+      const q = await swapPage(s, bob); // no USDC on Arc at all
+      expect(q.el("swapBridge").hidden).to.equal(false);
+      expect(q.el("swapBridgeTitle").textContent).to.equal("No USDC on Arc in this wallet yet.");
+      await s.usdc.mint(bob.address, U("0.4"));
+      await q.run("swapLoadBalances()");
+      expect(q.el("swapBridgeTitle").textContent).to.equal("This wallet has only 0.4 USDC on Arc.");
+      await s.usdc.mint(bob.address, U(5));
+      await q.run("swapLoadBalances()");
+      expect(q.el("swapBridge").hidden).to.equal(true);
+    });
+
+    // Fake bridges drain wallets: every bridge link on the site is Circle's own, in a new tab.
+    it("links only Circle's official USDC Bridge, from the box, How to Buy and the FAQ", function () {
+      let links = 0;
+      for (const file of ["index.html", "staking.html", "nft.html", "studio.html", "owner.html"]) {
+        const html = fs.readFileSync(path.join(ROOT, file), "utf8");
+        for (const m of html.matchAll(/href="(https?:\/\/[^"]*bridge[^"]*)"([^>]*)/gi)) {
+          links += 1;
+          expect(m[1], file).to.equal("https://bridge.usdc.com/");
+          expect(m[2], `${file}: opens in a new tab`).to.match(/target="_blank" rel="noopener"/);
+        }
+      }
+      expect(links).to.equal(4);
+      const index = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+      const box = index.slice(index.indexOf('<div class="swap-card">'), index.indexOf('<div class="swap-more">'));
+      expect(box).to.include('<div id="swapBridge" class="swap-bridge" hidden>');
+      expect(box).to.include('href="https://bridge.usdc.com/"');
     });
   });
 });
