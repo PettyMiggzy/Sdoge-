@@ -59,12 +59,12 @@
       <a href="https://pad.stabledoge.site" data-pad-link>Pad</a>
       <a href="/#roadmap">Roadmap</a>
       <a href="/#community">Community</a>
-      <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="site-nav__cta site-nav__cta--mobile">Buy SDOGE</a>
+      <a href="/#buy" class="site-nav__cta site-nav__cta--mobile">Buy SDOGE</a>
     </div>
 
     <div class="site-nav__right">
       <span class="site-nav__arc"><img src="assets/img/arc-mark.png" alt="" width="96" height="100" />ARC</span>
-      <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="site-nav__cta">Buy SDOGE</a>
+      <a href="/#buy" class="site-nav__cta">Buy SDOGE</a>
     </div>
   </div>
 </nav>
@@ -92,7 +92,7 @@
     </p>
 
     <div class="hero__cta">
-      <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="btn btn--primary">Buy $SDOGE</a>
+      <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
       <a href="#chart" class="btn btn--ghost">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         View Chart
@@ -209,7 +209,7 @@
       <p>$SDOGE combines the iconic Doge energy with a real treasury
       reserve, launched on Arc. A meme you can actually hold.</p>
       <div class="hero__cta">
-        <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="btn btn--primary">Buy $SDOGE</a>
+        <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
         <a href="https://t.me/stabledoge1" target="_blank" rel="noopener" class="btn btn--ghost">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 4 2 11.5l6 2M21 4 15 20l-7-6.5M21 4 8 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           Join Community
@@ -330,6 +330,59 @@
   <!-- ===== HOW TO BUY ===== -->
   <section class="section section--alt" id="how-to-buy">
     <div class="container">
+      <!-- ===== SWAP: buy and sell on this page (assets/js/swap.js) ===== -->
+      <div class="swap-layout" id="buy">
+        <div class="swap-head">
+          <p class="eyebrow">Buy &amp; Sell</p>
+          <h2 class="section__title">Trade $SDOGE right here.</h2>
+          <p class="swap-lead">This box trades the official $SDOGE/USDC pool on Arc directly: the same pool, price and fees as Argus, and every trade still feeds the Treasury.</p>
+        </div>
+        <div class="swap-card">
+          <div class="swap-tabs">
+            <button id="swapTabBuy" class="swap-tab is-active" type="button">Buy</button>
+            <button id="swapTabSell" class="swap-tab" type="button">Sell</button>
+          </div>
+          <div class="swap-field">
+            <div class="swap-field__top"><label for="swapIn">You pay</label><span id="swapBalance">Balance: —</span></div>
+            <div class="swap-field__row">
+              <input id="swapIn" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.00" />
+              <span class="swap-token"><img id="swapInIcon" src="assets/img/usdc.svg" alt="" width="26" height="26" /><b id="swapInToken">USDC</b></span>
+            </div>
+            <div class="swap-pcts">
+              <button id="swapPct25" type="button">25%</button>
+              <button id="swapPct50" type="button">50%</button>
+              <button id="swapPct75" type="button">75%</button>
+              <button id="swapPct100" type="button">Max</button>
+            </div>
+          </div>
+          <div class="swap-arrow" aria-hidden="true"><span><svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+          <div class="swap-field">
+            <div class="swap-field__top"><span>You get</span></div>
+            <div class="swap-field__row">
+              <output id="swapOut">0</output>
+              <span class="swap-token"><img id="swapOutIcon" src="assets/img/sdoge-icon.jpg" alt="" width="26" height="26" /><b id="swapOutToken">SDOGE</b></span>
+            </div>
+          </div>
+          <dl class="swap-info">
+            <div><dt>Price</dt><dd id="swapPrice">—</dd></div>
+            <div><dt>Minimum you get</dt><dd id="swapMin">—</dd></div>
+            <div><dt>Price impact</dt><dd id="swapImpact">—</dd></div>
+            <div><dt><label for="swapSlippage">Slippage</label></dt><dd><select id="swapSlippage"><option value="50">0.5%</option><option value="100" selected>1%</option><option value="300">3%</option><option value="500">5%</option></select></dd></div>
+          </dl>
+          <button id="swapGo" class="btn btn--primary swap-go" type="button">Connect wallet</button>
+          <p id="swapStatus" class="swap-status" aria-live="polite"></p>
+          <p class="swap-note">Prices include the pool fee and the token's trade tax. Gas is paid in USDC.</p>
+        </div>
+        <div class="swap-more">
+          <ul class="swap-points">
+            <li><b>Exact approvals.</b> The swap router can move this trade's amount and nothing more, for one day.</li>
+            <li><b>Checked first.</b> Every trade is simulated before your wallet asks you to sign.</li>
+            <li><b>Minimum guaranteed.</b> You get at least the minimum shown, or the trade doesn't happen.</li>
+          </ul>
+          <p class="swap-alt">Prefer Argus? Open the <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener">official $SDOGE page on Argus</a>.</p>
+        </div>
+      </div>
+
       <p class="eyebrow">How to Buy</p>
       <h2 class="section__title">Four steps. No excuses.</h2>
 
@@ -346,8 +399,8 @@
         </div>
         <div class="step">
           <span class="step__number">3</span>
-          <h3>Head to Argus</h3>
-          <p>Tap <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener">Buy $SDOGE</a> on this site: it opens the official $SDOGE page on Argus.world. Connect your wallet there.</p>
+          <h3>Buy right here</h3>
+          <p>Use the <a href="#buy">Buy box above</a>: it trades the official $SDOGE/USDC pool on Arc directly. Connect, enter an amount, confirm.</p>
         </div>
         <div class="step">
           <span class="step__number">4</span>
@@ -357,14 +410,14 @@
       </div>
 
       <div class="callout">
-        Fake copies of Argus exist and drain wallets. Only use the Buy button on this
-        site, and check the contract address is
+        Fake copies of Argus exist and drain wallets. Buy with the box on this page or
+        through the Argus link on it, and check the contract address is
         <code>0xf8df98fda14cabb2e8b6efe920081ffcbb0bb405</code> — never trust a link from
         a DM, comment, or search ad.
       </div>
 
       <div class="chart-panel" id="chart">
-        <div id="buy" class="chart-panel__frame-wrap">
+        <div class="chart-panel__frame-wrap">
           <iframe
             class="chart-panel__frame"
             src="https://dexscreener.com/arc/0xbb2cff1ea59daa260919f3f579c32cc261eebeb69126ec2a5b3ea77018f3e8e2?embed=1&theme=dark&trades=0&info=0"
@@ -439,8 +492,9 @@
         <div class="accordion__item">
           <button class="accordion__trigger">Where do I buy? <span>+</span></button>
           <div class="accordion__panel">
-            <p>On the <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener">official $SDOGE page on Argus.world</a>,
-            paying with USDC on Arc. Use the Buy button on this site so you land on the real page.</p>
+            <p>Right here: the <a href="#buy">Buy box</a> trades the official $SDOGE/USDC pool on
+            Arc directly, paying with USDC. The same pool is on the
+            <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener">official $SDOGE page on Argus.world</a>.</p>
           </div>
         </div>
       </div>
@@ -453,7 +507,7 @@
     <div class="cta-banner__overlay"></div>
     <div class="container cta-banner__inner">
       <h2>A more stable tomorrow.</h2>
-      <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="btn btn--primary">Buy $SDOGE</a>
+      <a href="#buy" class="btn btn--primary">Buy $SDOGE</a>
     </div>
   </section>
 
@@ -492,7 +546,7 @@
       </a>
     </div>
 
-    <a href="https://argus.world/token/0xf8dF98Fda14CABB2e8b6efE920081ffCBB0BB405" target="_blank" rel="noopener" class="btn btn--primary btn--small">Buy $SDOGE</a>
+    <a href="#buy" class="btn btn--primary btn--small">Buy $SDOGE</a>
   </div>
 
   <div class="container">
@@ -513,5 +567,9 @@
 
 <script src="assets/js/main.js"></script>
 <script src="assets/js/pad-ticker.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
+<script src="assets/js/arc.js"></script>
+<script src="assets/js/wallet.js"></script>
+<script src="assets/js/swap.js"></script>
 </body>
 </html>

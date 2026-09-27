@@ -116,25 +116,41 @@ describe("front end (assets/js)", function () {
       expect(checked).to.be.greaterThan(4);
     });
 
-    // Every Buy button opens the official $SDOGE page on Argus (fake copies of Argus drain
-    // wallets), for the token address arc.js uses, in a new tab.
-    it("every Buy button opens the official $SDOGE page", function () {
+    // Every Buy button goes to the swap box on the home page, and every link to Argus is the
+    // official $SDOGE page (fake copies of Argus drain wallets) for the token arc.js uses.
+    it("every Buy button goes to the swap box, and Argus links are the official page", function () {
       const arc = fs.readFileSync(path.join(ROOT, "assets", "js", "arc.js"), "utf8");
       const token = arc.match(/token:\s*'(0x[0-9a-fA-F]{40})'/)[1].toLowerCase();
       let buttons = 0;
+      let argus = 0;
       for (const file of ["index.html", "staking.html", "nft.html", "studio.html", "owner.html"]) {
         const html = fs.readFileSync(path.join(ROOT, file), "utf8");
         for (const m of html.matchAll(/<a([^>]*)>\s*Buy \$?SDOGE\b/g)) {
           buttons += 1;
           const href = (m[1].match(/href="([^"]*)"/) || [])[1] || "";
-          const hit = href.match(/^https:\/\/argus\.world\/token\/(0x[0-9a-fA-F]{40})$/);
-          expect(hit, `${file}: ${href}`).to.not.equal(null);
+          expect(href, file).to.equal(file === "index.html" && !/site-nav__cta/.test(m[1]) ? "#buy" : "/#buy");
+        }
+        for (const m of html.matchAll(/href="(https?:\/\/[^"]*argus[^"]*)"([^>]*)/g)) {
+          argus += 1;
+          const hit = m[1].match(/^https:\/\/argus\.world\/token\/(0x[0-9a-fA-F]{40})$/);
+          expect(hit, `${file}: ${m[1]}`).to.not.equal(null);
           expect(hit[1].toLowerCase(), file).to.equal(token);
-          expect(m[1], `${file}: opens in a new tab`).to.match(/target="_blank"/);
-          expect(m[1], `${file}: rel=noopener`).to.match(/rel="noopener"/);
+          expect(m[2], `${file}: opens in a new tab`).to.match(/target="_blank" rel="noopener"/);
         }
       }
       expect(buttons).to.be.greaterThan(15);
+      expect(argus).to.be.greaterThan(1);
+      const index = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+      expect(index.match(/id="buy"/g)).to.have.length(1);
+      expect(index).to.match(/<div class="swap-layout" id="buy">/);
+      // The swap box's scripts, in order, after ethers.
+      const scripts = [...index.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+      expect(scripts.slice(-4)).to.deep.equal([
+        "https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js",
+        "assets/js/arc.js",
+        "assets/js/wallet.js",
+        "assets/js/swap.js",
+      ]);
     });
   });
 
@@ -1087,6 +1103,146 @@ describe("front end (assets/js)", function () {
       await bob.run("ownerStartSdogeRewards()");
       expect(bob.alerts.at(-1)).to.match(/Only the staking contract.s owner can start rewards/);
       expect(bob.sent.length).to.equal(0);
+    });
+  });
+
+  // The swap box on the home page, against stand-ins for the Universal Router and Permit2 that
+  // take exactly the input Arc's router takes (MockSwapRouter.sol). The real router, pool and
+  // hook were exercised on a fork of Arc mainnet when this was built.
+  describe("swap.js", function () {
+    const SWAP_PAGE = ["arc.js", "wallet.js", "swap.js"];
+    const U = (n) => ethers.parseUnits(String(n), 6);
+
+    async function deploySwap() {
+      const [, alice] = await ethers.getSigners();
+      const sdoge = await (await ethers.getContractFactory("MockERC20")).deploy("Stable Doge", "SDOGE");
+      const usdc = await (await ethers.getContractFactory("MockUsdc6")).deploy();
+      const permit2 = await (await ethers.getContractFactory("MockPermit2")).deploy();
+      const hook = ethers.Wallet.createRandom().address;
+      const [u, t] = [await usdc.getAddress(), await sdoge.getAddress()];
+      const usdcIsZero = BigInt(u) < BigInt(t);
+      const key = usdcIsZero ? [u, t] : [t, u];
+      const poolId = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["address", "address", "uint24", "int24", "address"], [key[0], key[1], 10000, 200, hook])
+      );
+      const router = await (await ethers.getContractFactory("MockSwapRouter")).deploy(await permit2.getAddress(), poolId);
+      // 1 USDC buys 150,000 SDOGE; 160,000 SDOGE sell for 1 USDC.
+      const buy = [E(150000), U(1)];
+      const sell = [U(1), E(160000)];
+      const [zeroForOne, oneForZero] = usdcIsZero ? [buy, sell] : [sell, buy];
+      await router.setRates(zeroForOne[0], zeroForOne[1], oneForZero[0], oneForZero[1]);
+      await usdc.mint(alice.address, U(100));
+      await usdc.mint(await router.getAddress(), U(1000000));
+      await sdoge.mint(await router.getAddress(), E(10n ** 12n));
+      return { alice, sdoge, usdc, permit2, router, hook };
+    }
+
+    async function swapPage(s) {
+      const p = await loadPage({
+        files: SWAP_PAGE,
+        contracts: { token: await s.sdoge.getAddress() },
+        hreProvider: network.provider,
+        account: s.alice.address,
+        swapConfig: { router: await s.router.getAddress(), permit2: await s.permit2.getAddress(), usdc: await s.usdc.getAddress(), hook: s.hook },
+      });
+      await p.ready();
+      expect(await p.run("connectWallet()")).to.equal(true);
+      await p.run("swapLoadBalances()");
+      return p;
+    }
+
+    it("trades the official $SDOGE/USDC pool: its key hashes to the pool the page's chart shows", async function () {
+      const [a] = await ethers.getSigners();
+      const p = await loadPage({ files: SWAP_PAGE, hreProvider: network.provider, account: a.address });
+      expect(p.run("swapPoolId()")).to.equal(p.run("SWAP_POOL_ID"));
+      expect(p.run("swapLeg('buy').zeroForOne")).to.equal(true); // USDC (0x3600...) is currency0
+      expect(fs.readFileSync(path.join(ROOT, "index.html"), "utf8")).to.include(p.run("SWAP_POOL_ID"));
+    });
+
+    it("buys at the router's exact quote, with exact approvals, a one-day router allowance and the slippage minimum", async function () {
+      const s = await deploySwap();
+      const p = await swapPage(s);
+      expect(p.el("swapBalance").textContent).to.equal("Balance: 100 USDC");
+      p.el("swapIn").value = "10";
+      expect(await p.run("swapRequote()")).to.equal(E(1500000));
+      expect(p.el("swapOut").textContent).to.equal("1,500,000");
+      expect(p.el("swapMin").textContent).to.equal("1,485,000 SDOGE"); // 1% slippage by default
+      expect(p.el("swapGo").textContent).to.equal("Buy SDOGE");
+
+      expect(await p.run("swapTrade()")).to.equal(true);
+      expect(p.sent.length).to.equal(3); // USDC -> Permit2, Permit2 -> router, the swap
+      expect(await s.sdoge.balanceOf(s.alice.address)).to.equal(E(1500000));
+      expect(await s.usdc.balanceOf(s.alice.address)).to.equal(U(90));
+      expect(await s.router.lastMinOut()).to.equal(E(1485000));
+      // Exact approvals: nothing is left approved afterwards, and the router's expired in a day.
+      expect(await s.usdc.allowance(s.alice.address, await s.permit2.getAddress())).to.equal(0n);
+      const [left, expiry] = await s.permit2.allowance(s.alice.address, await s.usdc.getAddress(), await s.router.getAddress());
+      expect(left).to.equal(0n);
+      const now = BigInt((await ethers.provider.getBlock("latest")).timestamp);
+      expect(expiry).to.be.within(now + 86400n - 30n, now + 86400n);
+      expect(p.el("swapStatus").innerHTML).to.match(/^Done: you got 1,500,000 SDOGE\./);
+      expect(p.alerts).to.deep.equal([]);
+    });
+
+    it("sells SDOGE for USDC, and Max on a buy leaves 0.10 USDC for gas", async function () {
+      const s = await deploySwap();
+      await s.sdoge.mint(s.alice.address, E(320000));
+      const p = await swapPage(s);
+      p.run("swapSetSide('sell')");
+      expect(p.el("swapInToken").textContent).to.equal("SDOGE");
+      expect(p.el("swapBalance").textContent).to.equal("Balance: 320,000 SDOGE");
+      expect(await p.run("swapSetPct(50)")).to.equal(U(1));
+      expect(p.el("swapIn").value).to.equal("160000");
+      expect(p.el("swapOut").textContent).to.equal("1");
+
+      expect(await p.run("swapTrade()")).to.equal(true);
+      expect(await s.usdc.balanceOf(s.alice.address)).to.equal(U(101));
+      expect(await s.sdoge.balanceOf(s.alice.address)).to.equal(E(160000));
+      expect(p.el("swapStatus").innerHTML).to.match(/^Done: you got 1 USDC\./);
+
+      await p.run("swapLoadBalances()");
+      p.run("swapSetSide('buy')");
+      await p.run("swapSetPct(100)");
+      expect(p.el("swapIn").value).to.equal("100.9"); // 101 USDC, less the 0.10 kept for gas
+    });
+
+    it("stops a trade the router would fill below the minimum before the wallet signs the swap", async function () {
+      const s = await deploySwap();
+      const p = await swapPage(s);
+      p.el("swapIn").value = "10";
+      await p.run("swapRequote()");
+      await s.router.setExecuteHaircutBps(200); // pays 2% less than it quotes: past 1% slippage
+
+      expect(await p.run("swapTrade()")).to.equal(false);
+      expect(p.alerts.at(-1)).to.match(/This trade would fail, so nothing was sent: The price moved past your slippage/);
+      expect(p.sent.length).to.equal(2); // the two exact approvals, and no swap
+      expect(await s.router.swaps()).to.equal(0n);
+
+      p.el("swapSlippage").value = "300"; // 3%: now it goes through
+      expect(await p.run("swapTrade()")).to.equal(true);
+      expect(p.sent.length).to.equal(3); // the approvals were still there: only the swap
+      expect(await s.sdoge.balanceOf(s.alice.address)).to.equal((E(1500000) * 9800n) / 10000n);
+    });
+
+    it("asks before trading at a worse price than the quote shown", async function () {
+      const s = await deploySwap();
+      const p = await swapPage(s);
+      p.el("swapIn").value = "10";
+      await p.run("swapRequote()"); // shows 1,500,000 SDOGE
+      const [u, t] = [await s.usdc.getAddress(), await s.sdoge.getAddress()];
+      const worse = [E(140000), U(1)]; // the price moved 6.7% against the buyer
+      const sell = [U(1), E(160000)];
+      const [zeroForOne, oneForZero] = BigInt(u) < BigInt(t) ? [worse, sell] : [sell, worse];
+      await s.router.setRates(zeroForOne[0], zeroForOne[1], oneForZero[0], oneForZero[1]);
+
+      p.answers.confirm.push(false);
+      expect(await p.run("swapTrade()")).to.equal(false);
+      expect(p.confirms.at(-1)).to.equal("The price moved since your quote: you'd now get about 1,400,000 SDOGE instead of 1,500,000. Trade anyway?");
+      expect(p.sent.length).to.equal(0);
+      expect(p.el("swapOut").textContent).to.equal("1,400,000");
+
+      expect(await p.run("swapTrade()")).to.equal(true); // the new price is now the one shown
+      expect(await s.sdoge.balanceOf(s.alice.address)).to.equal(E(1400000));
     });
   });
 });

@@ -208,6 +208,18 @@ creator-set tax 0–10% per side.
   wallet's own Arc RPC hiccuped (2026-09-26). Error alerts use `arcErrorText`, which
   shows what the wallet actually said. Unstaking never depends on the site: the
   staking FAQ links the contract's Write tab on the explorer.
+- **On-site swap** (owner, 2026-09-27: "buy and sell through the same place Argus does"):
+  the home page's `#buy` box (`assets/js/swap.js`) buys and sells $SDOGE on the official
+  SDOGE/USDC Uniswap v4 pool (id `0xbb2c…e8e2`: USDC `0x3600…` as currency0, 1% fee, tick
+  spacing 200, the launch hook `0x572c…a044`) through Arc's Universal Router
+  `0x4fcA…9Fb1` and Permit2, the same router Argus and the pad use. Exact approvals only
+  (token → Permit2 for the trade, Permit2 → router for the same amount, expiring in a day),
+  a simulation before every send, and the router enforces the slippage minimum. Quotes are
+  exact: an eth_call that reverts with `V4TooLittleReceived`. Every Buy button goes to
+  `#buy`; the official Argus page (`argus.world/token/<CA>`) stays linked as the
+  alternative. Tested with stand-ins (`MockSwapRouter`, `MockPermit2`) in frontend.test.js
+  and end to end on an anvil fork of Arc (anvil can't move Arc's native USDC, so that run
+  swaps `0x3600` for a plain 6-decimal ERC-20 holding the same balances).
 
   Treasury and fee recipient: `0x5899…5914`. There's no Safe, so the launch is
   supervised (owner said go live, 2026-09-26): a throwaway deploy wallet
@@ -222,5 +234,5 @@ creator-set tax 0–10% per side.
   launchpad at SDOGE Pad instead.
 - `bot/`: the Telegram buy-alert bot (live in the Stable Doge group).
 - CI (`.github/workflows/ci.yml`) runs every suite on each push. Tests at last
-  count: Hardhat 270, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
+  count: Hardhat 279, Studio AI server 16 (`npm test` at the root), launchpad Foundry 65, tgpad 141,
   SDOGE Pad 36 (+1 fork test).

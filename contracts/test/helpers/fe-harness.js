@@ -131,8 +131,9 @@ async function startLimitedRpc(hreProvider, { perSecond = 20 } = {}) {
  * search:     location.search (for studio.html?drop=0x...)
  * rpc:        "limited" to read through the page's own provider and a rate-limited relay
  * globals:    extra browser globals for the page (e.g. fetch, localStorage)
+ * swapConfig: SWAP_CONFIG overrides for swap.js, e.g. { router: '0x...', permit2: '0x...' }
  */
-async function loadPage({ files, contracts = {}, hreProvider, account, search = "", rpc = "direct", globals = {} }) {
+async function loadPage({ files, contracts = {}, hreProvider, account, search = "", rpc = "direct", globals = {}, swapConfig = {} }) {
   const elements = {};
   const alerts = [];
   const confirms = [];
@@ -213,6 +214,14 @@ async function loadPage({ files, contracts = {}, hreProvider, account, search = 
       for (const [key, value] of Object.entries(all)) {
         const re = new RegExp(`^(\\s*${key}: )'[^']*',$`, "m");
         if (!re.test(src)) throw new Error(`no ${key} in SDOGE_CONTRACTS`);
+        src = src.replace(re, `$1'${value}',`);
+      }
+    }
+    // The swap box's router, Permit2, USDC and hook: the stand-ins a test deployed.
+    if (f === "swap.js") {
+      for (const [key, value] of Object.entries(swapConfig)) {
+        const re = new RegExp(`^(\\s*${key}: )'[^']*',$`, "m");
+        if (!re.test(src)) throw new Error(`no ${key} in SWAP_CONFIG`);
         src = src.replace(re, `$1'${value}',`);
       }
     }
